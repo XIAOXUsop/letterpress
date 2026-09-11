@@ -182,6 +182,59 @@ if (doubled.size === 0) {
   }
 }
 
+/**
+ * ── 查纯文本产物里的链接 ────────────────────────────────────────
+ *
+ * 这是**第三类载体**了，每一类都是踩过之后才补上的：
+ *
+ *   一、`href` / `src` 属性      —— 最初的检查只覆盖这类
+ *   二、`<script>` 内的路径       —— 搜索脚本的 `import()` 漏网
+ *   三、`llms.txt` 这类纯文本     —— 它的 URL 是**拼出来的**，
+ *                                  既不进属性也不进脚本
+ *
+ * llms.txt 的坑还格外隐蔽：`siteOrigin()` 剥掉重复的部署前缀是对的，
+ * 但剥完**没把 base 加回来**，于是 8 条链接全部指向域名根。
+ * 而它是**给 agent 读的**——一份死链清单比没有这份清单更糟。
+ */
+const textLinkProblems = [];
+
+for (const name of ['llms.txt', 'llms-full.txt']) {
+  let text;
+  try {
+    text = await readFile(join(dist, name), 'utf8');
+  } catch {
+    textLinkProblems.push(`${name} 不存在`);
+    continue;
+  }
+
+  // markdown 链接与裸 URL 都算
+  const urls = [
+    ...[...text.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]),
+    ...[...text.matchAll(/(?:^|\s)(https?:\/\/\S+)/gm)].map((m) => m[1]),
+  ];
+
+  for (const url of urls) {
+    if (!url.startsWith('http')) continue;
+    const path = new URL(url).pathname;
+
+    // 站点自己的地址（含 base）应当且仅应当出现一次 base
+    if (url.includes(`${FAKE_BASE}${FAKE_BASE}`)) {
+      textLinkProblems.push(`${name}: 前缀翻倍 ${url}`);
+    } else if (url.includes('xiaoxusop.github.io') && !path.startsWith(`${FAKE_BASE}/`)) {
+      textLinkProblems.push(`${name}: 缺 base 前缀 ${url}`);
+    }
+  }
+}
+
+console.log('\n检查纯文本产物里的链接');
+if (textLinkProblems.length === 0) {
+  console.log('  ✓ llms.txt / llms-full.txt 里的链接前缀正确');
+} else {
+  for (const p of textLinkProblems) problems.set(p, ['纯文本产物']);
+  console.log(`  ✗ ${textLinkProblems.length} 处问题：`);
+  for (const p of textLinkProblems.slice(0, 8)) console.log(`      ${p}`);
+}
+
 console.log('\n检查脚本里的资源路径是否带 base 前缀');
 if (scriptProblems.size === 0) {
   console.log('  ✓ 脚本里的资源路径都带 base 前缀');

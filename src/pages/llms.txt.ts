@@ -7,7 +7,7 @@
  */
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
-import { siteOrigin } from '../lib/url.js';
+import { siteOrigin, basePath } from '../lib/url.js';
 import { loadContent, reportIssues } from '../lib/content.js';
 import { buildLlmsTxt } from '../lib/wiki/llms.js';
 
@@ -22,7 +22,12 @@ export const GET: APIRoute = async () => {
      * 而 site.url 本身就含子路径——两处相加就是前缀翻倍，
      * llms.txt 里 8 条 URL 全部 404。
      */
-    siteUrl: siteOrigin(site.url),
+    /*
+     * `siteOrigin` 剥掉重复的部署路径，`basePath` 再把它加回来一次——
+     * 合起来就是「域名 + 且仅一个部署前缀」。
+     * 少了后半截，llms.txt 里所有链接都会指向域名根。
+     */
+    siteUrl: siteOrigin(site.url) + basePath(),
     tagline: site.tagline,
     notes: [
       /*
