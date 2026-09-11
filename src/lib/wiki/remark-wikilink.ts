@@ -24,7 +24,7 @@
  * 重复的部分被 `slug.test.ts` 与端到端构建测试同时覆盖。
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, type Dirent } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { Root, Text } from 'mdast';
 import { visit } from 'unist-util-visit';
@@ -57,9 +57,11 @@ function frontmatterField(source: string, field: string): string | null {
 }
 
 function collectFiles(dir: string): string[] {
-  let entries: ReturnType<typeof readdirSync>;
+  // 显式用 string 版的 Dirent：默认重载会推出 Buffer 版本，
+  // 而 entry.name 在那种类型下是 NonSharedBuffer，赋给 string 会报错
+  let entries: Dirent<string>[];
   try {
-    entries = readdirSync(dir, { withFileTypes: true });
+    entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' });
   } catch {
     return []; // 目录不存在是合法状态（比如关掉了知识层）
   }

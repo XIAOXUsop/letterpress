@@ -1,0 +1,71 @@
+---
+/**
+ * 文章归档（分页）。
+ *
+ * 路由用 `[...page]` 而不是 `[page]`：前者让第一页落在 `/posts/`
+ * 而不是 `/posts/1/`，URL 更干净，也不会出现「同一份内容两个地址」
+ * （那会让搜索引擎当成重复内容）。
+ */
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostList from '../../components/PostList.astro';
+import { site } from '../../config.js';
+import { loadContent, publishedPosts, reportIssues } from '../../lib/content.js';
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const content = await loadContent();
+  reportIssues(content.issues);
+
+  return paginate(publishedPosts(content), {
+    pageSize: site.pagination.postsPerPage,
+  });
+}) satisfies GetStaticPaths;
+
+const { page } = Astro.props;
+const content = await loadContent();
+
+const current = page.currentPage;
+const total = page.lastPage;
+---
+
+<BaseLayout
+  title={current > 1 ? `文章 · 第 ${current} 页` : '文章'}
+  description="按时间排列的全部文章。"
+>
+  <div class="page-header">
+    <h1 class="page-header__title">文章</h1>
+    <p class="page-header__lead">
+      按时间倒序。想按主题找东西，去<a href="/wiki/">知识库</a>；想按年份翻，去<a href="/archive/">归档</a>。
+    </p>
+  </div>
+
+  <PostList docs={page.data} content={content} />
+
+  {
+    total > 1 && (
+      <nav class="pagination" aria-label="分页">
+        {page.url.prev ? (
+          <a class="pagination__link" href={page.url.prev} rel="prev">
+            ← 更新的
+          </a>
+        ) : (
+          /* 不可用时用 span 而不是禁用的 a：禁用链接仍会被读屏念出来，
+             而且它不可聚焦，键盘用户会以为那里什么都没有 */
+          <span class="pagination__disabled">← 更新的</span>
+        )}
+
+        <span>
+          第 {current} / {total} 页
+        </span>
+
+        {page.url.next ? (
+          <a class="pagination__link" href={page.url.next} rel="next">
+            更早的 →
+          </a>
+        ) : (
+          <span class="pagination__disabled">更早的 →</span>
+        )}
+      </nav>
+    )
+  }
+</BaseLayout>

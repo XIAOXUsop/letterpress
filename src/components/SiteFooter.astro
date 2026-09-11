@@ -27,7 +27,21 @@ const year = new Date().getFullYear();
     {
       site.footer.credit && (
         <p style="margin-block-start: var(--space-2)">
-          由 <a href="https://github.com/XIAOXUsop/letterpress">letterpress</a> 驱动
+          {/*
+            只有在配置了仓库地址时才渲染成链接。
+
+            早先这里硬编码了一个仓库地址，而那个仓库当时并不存在——
+            结果是**每一个使用者的站上都带着一个 404 的死链**。
+            模板里的外链默认值必须指向确定存在的东西，
+            否则它会跟着被复制到所有下游站点上。
+          */}
+          {site.footer.repoUrl ? (
+            <>
+              由 <a href={site.footer.repoUrl}>letterpress</a> 驱动
+            </>
+          ) : (
+            '由 letterpress 驱动'
+          )}
         </p>
       )
     }

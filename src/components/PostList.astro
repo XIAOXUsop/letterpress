@@ -5,18 +5,26 @@
  * 用规则线分隔的行，不用卡片网格。原因不是审美偏好：
  * 等高卡片会把「篇幅」「时效」「主题」这些差别全部抹平，
  * 读者失去判断先读哪篇的依据。行式列表能容纳不等长的信息。
+ *
+ * 两种变体：
+ * - `default`：文章。缩略图 + 日期 + 标题摘要，信息全
+ * - `compact`：知识层条目。没有日期（知识层不看时效），排得更紧
+ *
+ * 分成两种而不是复用一种，是因为**同一页上出现两次相同布局会显得单调**。
+ * 首页同时有文章与条目两个区块，它们需要在视觉上可区分。
  */
 import type { Doc } from '../lib/wiki/graph.js';
-import { dateOfDoc, tagsOf, type SiteContent } from '../lib/content.js';
+import { coverOf, dateOfDoc, tagsOf, type SiteContent } from '../lib/content.js';
+import Cover from './Cover.astro';
 
 interface Props {
   docs: readonly Doc[];
   content: SiteContent;
-  /** 是否显示日期列。知识层条目没有日期 */
-  showDates?: boolean;
+  variant?: 'default' | 'compact';
 }
 
-const { docs, content, showDates = true } = Astro.props;
+const { docs, content, variant = 'default' } = Astro.props;
+const compact = variant === 'compact';
 
 const formatDate = (date: Date): string =>
   new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -26,24 +34,54 @@ const formatDate = (date: Date): string =>
   docs.length === 0 ? (
     <p style="color: var(--color-text-muted)">还没有内容。在 src/content/ 里新建一个 .md 文件即可。</p>
   ) : (
-    <ul class="post-list">
+    <ul class:list={['post-list', compact && 'post-list--compact']}>
       {docs.map((doc) => {
-        const date = showDates ? dateOfDoc(content, doc.slug) : null;
+        const date = dateOfDoc(content, doc.slug);
         const tags = tagsOf(content, doc.slug);
         const href = doc.kind === 'wiki' ? `/wiki/${doc.slug}/` : `/${doc.slug}/`;
+        const cover = coverOf(content, doc.slug);
+        const withCover = !compact && doc.kind === 'post';
 
         return (
           <li class="post-list__item">
-            <a class="post-list__link" href={href}>
-              <span class="meta">
-                {date ? formatDate(date) : doc.kind === 'wiki' ? '条目' : ''}
-              </span>
-              <span>
+            <a
+              class:list={['post-list__link', withCover && 'post-list__link--with-cover']}
+              href={href}
+            >
+              {withCover && (
+                <Cover
+                  slug={doc.slug}
+                  title={doc.title}
+                  cover={cover?.src}
+                  coverAlt={cover?.alt}
+                  thumbnail
+                  class="cover cover--thumb"
+                />
+              )}
+              {!compact && (
+                <span class="meta">{date ? formatDate(date) : ''}</span>
+              )}
+              <span class="post-list__body">
                 <span class="post-list__title">{doc.title}</span>
-                {doc.summary && <span class="post-list__summary" style="display: block">{doc.summary}</span>}
+                {doc.summary && (
+                  <span class="post-list__summary" style="display: block">
+                    {doc.summary}
+                  </span>
+                )}
+                {/*
+                  标签做成可点的链接。纯文本的标签在列表里只是装饰——
+                  读者看到「排版」想找同类文章时点不动，等于把分类能力浪费了。
+                */}
                 {tags.length > 0 && (
                   <span class="meta" style="margin-block-start: var(--space-2)">
-                    {tags.join(' · ')}
+                    {tags.map((tag, i) => (
+                      <>
+                        {i > 0 && <span class="meta__sep"> · </span>}
+                        <a href={`/tags/${encodeURIComponent(tag)}/`} class="post-list__tag">
+                          {tag}
+                        </a>
+                      </>
+                    ))}
                   </span>
                 )}
               </span>

@@ -1,0 +1,45 @@
+---
+/**
+ * 上一篇 / 下一篇。
+ *
+ * 按**发布时间**排序决定，而不是文件顺序或字母序——读者心里的「上一篇」
+ * 就是「我上一次读到的那篇」。
+ *
+ * 只在一侧有内容时，另一侧留空而不是把仅有的那篇居中：
+ * 居中会让人以为它是「下一篇」，而位置本身就是信息。
+ */
+interface NavItem {
+  slug: string;
+  title: string;
+}
+
+interface Props {
+  prev: NavItem | null;
+  next: NavItem | null;
+}
+
+const { prev, next } = Astro.props;
+---
+
+{
+  (prev || next) && (
+    <nav class="post-nav" aria-label="文章导航">
+      {prev ? (
+        <a class="post-nav__link" href={`/${prev.slug}/`} rel="prev">
+          <span class="post-nav__label">← 上一篇</span>
+          <span class="post-nav__title">{prev.title}</span>
+        </a>
+      ) : (
+        <span />
+      )}
+      {next ? (
+        <a class="post-nav__link post-nav__item--next" href={`/${next.slug}/`} rel="next">
+          <span class="post-nav__label">下一篇 →</span>
+          <span class="post-nav__title">{next.title}</span>
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+  )
+}

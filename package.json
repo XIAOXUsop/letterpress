@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && pagefind --site dist",
+    "build:noindex": "astro build",
     "preview": "astro preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -29,7 +30,11 @@
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
+    "pagefind": "^1.5.2",
+    "typescript": "^6.0.3",
     "vite": "^8.0.13",
     "vitest": "^5.0.0"
   },

@@ -11,10 +11,29 @@
 
 import { negotiate } from '../src/lib/negotiate/edge';
 
+/**
+ * ── 为什么不装 `@cloudflare/workers-types` ──────────────────────────
+ *
+ * 那是个几百 KB 的类型包，而这里只用到它的两个形状。
+ * 一个主张「依赖面小、十年后还能构建」的模板，不该为了三行胶水
+ * 引入一整个平台的类型依赖——尤其是绝大多数使用者只会用到其中一个平台。
+ *
+ * 代价是失去自动补全。但下面这两个 interface 已经把用到的部分写清楚了，
+ * 真要扩展时照着 Cloudflare 文档补字段即可。
+ */
 interface Env {
   /** Pages 的静态资源绑定 */
   ASSETS: { fetch: (input: RequestInfo | URL) => Promise<Response> };
 }
+
+/** Cloudflare Pages Functions 的处理器签名。 */
+interface PagesContext<E> {
+  request: Request;
+  env: E;
+  next: () => Promise<Response>;
+}
+
+type PagesFunction<E> = (context: PagesContext<E>) => Promise<Response> | Response;
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url);

@@ -42,6 +42,17 @@ export interface SiteConfig {
     readonly text: string;
     /** 是否显示「由 letterpress 驱动」的署名 */
     readonly credit: boolean;
+    /**
+     * 署名链接的目标地址。
+     *
+     * **默认为空，此时只渲染文字、不渲染链接。**
+     * 硬编码一个地址会在仓库还没发布时产出死链，而页脚的链接
+     * 会跟着每一个使用者的站点扩散出去——宁可没有链接，
+     * 也不要一个 404。
+     *
+     * 发布仓库后填成真实地址即可。
+     */
+    readonly repoUrl?: string;
   };
   /**
    * 知识层开关。
@@ -62,6 +73,19 @@ export interface SiteConfig {
     /** 有 error 级问题时是否让构建失败。CI 里应当开启 */
     readonly failOnError: boolean;
   };
+  /** 列表每页显示多少条 */
+  readonly pagination: {
+    readonly postsPerPage: number;
+  };
+  /**
+   * 搜索。
+   *
+   * 关闭后不生成搜索页与索引，导航里也不出现入口——
+   * 而不是留一个点了 404 的链接。索引由构建后的 `pagefind` 步骤生成。
+   */
+  readonly search: {
+    readonly enabled: boolean;
+  };
 }
 
 export const site: SiteConfig = {
@@ -81,6 +105,7 @@ export const site: SiteConfig = {
   nav: [
     { label: '文章', href: '/posts/' },
     { label: '知识库', href: '/wiki/' },
+    { label: '归档', href: '/archive/' },
     { label: '关于', href: '/about/' },
   ],
 
@@ -98,6 +123,14 @@ export const site: SiteConfig = {
   lint: {
     failOnError: true,
   },
+
+  pagination: {
+    postsPerPage: 10,
+  },
+
+  search: {
+    enabled: true,
+  },
 };
 
 /** 供页面引用的派生值，避免各处重复拼字符串。 */
@@ -106,3 +139,35 @@ export const absoluteUrl = (path: string): string => {
   const base = site.url.replace(/\/$/, '');
   return path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
 };
+
+/**
+ * 出厂默认值。用来判断「用户还没改过」。
+ *
+ * 保留这些常量而不是到处硬编码字符串：判断逻辑与默认值必须同步，
+ * 改了一处忘了另一处就会出现「明明配好了却还提示未配置」。
+ */
+const DEFAULTS = {
+  authorName: '你的名字',
+  authorUrl: 'https://github.com/your-name',
+} as const;
+
+/**
+ * 站点是否还没配置。
+ *
+ * 关于页据此显示一份「还需要改什么」的清单，而不是把
+ * 「一句话介绍自己」当成正经内容展示出来。
+ *
+ * 这比在 README 里写「记得改配置」有用得多——**用户不会在读 README 的时候
+ * 顺手改配置，但一定会打开自己的关于页**。
+ */
+export function unconfiguredFields(): string[] {
+  const missing: string[] = [];
+  if (site.author.name === DEFAULTS.authorName) missing.push('site.author.name：你的名字');
+  if (site.author.bio.trim() === '' || site.author.bio.includes('一句话介绍自己')) {
+    missing.push('site.author.bio：一句话介绍你自己');
+  }
+  if (site.author.url === DEFAULTS.authorUrl) missing.push('site.author.url：你的主页');
+  if (site.url === '') missing.push('site.url：你的域名（不填就没有 sitemap 与分享图）');
+  if (site.title === '此间札记') missing.push('site.title：你的站名');
+  return missing;
+}

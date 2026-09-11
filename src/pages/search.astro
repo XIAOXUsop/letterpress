@@ -1,0 +1,215 @@
+---
+/**
+ * 搜索页。
+ *
+ * ── 为什么自己写界面而不用 Pagefind 的默认 UI ──────────────────────
+ *
+ * `@pagefind/default-ui` 自带一整套样式与 DOM 结构。放进这套瑞士排版里
+ * 会像贴了一块外来物：圆角、阴影、系统字体、它自己的间距刻度，
+ * 全都与设计令牌冲突。改它的 CSS 变量只能改颜色，改不了结构与节奏。
+ *
+ * 用它的 JS API 自己写大约八十行，换来的是**设计上完全一致**，
+ * 而且没有引入一个会把样式注入页面的运行时依赖。
+ *
+ * ── 中文搜索的实情 ──────────────────────────────────────────────────
+ *
+ * Pagefind 对 zh-cn 不做词干提取（构建时会打印提示）。中文本来就没有
+ * 词形变化，所以这不影响正确性，**但会影响召回**：
+ * 「排版」能搜到，而「网页排版」不一定能命中包含「排版」的段落。
+ * 这是静态站搜索的固有限制，不是本项目的实现问题——在 README 里如实标注。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../config.js';
+---
+
+<BaseLayout title="搜索" description={`在${site.title}内搜索文章与知识库条目。`}>
+  <div class="page-header">
+    <h1 class="page-header__title">搜索</h1>
+    <p class="page-header__lead">全文检索文章与知识库条目。</p>
+  </div>
+
+  {/* 搜索页自身不该被索引——搜「搜索」时冒出来自己很蠢 */}
+  <div class="search" id="search" data-pagefind-ignore>
+    <form class="search__form" role="search" id="search-form">
+      <label class="search__label" for="search-input">关键词</label>
+      <input
+        class="search__input"
+        type="search"
+        id="search-input"
+        name="q"
+        autocomplete="off"
+        placeholder="输入关键词…"
+        style="font-size: max(16px, var(--text-base))"
+      />
+      {/*
+        上面的 style 是为了 iOS Safari：输入框字号小于 16px 时，
+        聚焦会强制放大整个页面，把布局毁掉。这不是可选的美化。
+      */}
+    </form>
+
+    <p class="search__status" id="search-status" role="status" aria-live="polite"></p>
+    <ol class="search__results" id="search-results"></ol>
+  </div>
+
+  <noscript>
+    <p style="color: var(--color-text-muted); margin-block-start: var(--space-5)">
+      搜索需要 JavaScript。没有它也能正常阅读——<a href="/posts/">看全部文章</a>。
+    </p>
+  </noscript>
+</BaseLayout>
+
+<script>
+  type PagefindResult = {
+    data: () => Promise<{
+      url: string;
+      meta: { title?: string; image?: string };
+      excerpt: string;
+      content?: string;
+    }>;
+  };
+
+  const form = document.getElementById('search-form') as HTMLFormElement | null;
+  const input = document.getElementById('search-input') as HTMLInputElement | null;
+  const status = document.getElementById('search-status');
+  const results = document.getElementById('search-results');
+
+  /*
+   * TS 的窄化在闭包里会失效——`if (form && input && …)` 之后定义了函数，
+   * 而函数体里的 `input` 仍被视作 `HTMLInputElement | null`。
+   *
+   * 所以这里显式取成新常量：窄化只做一次，闭包里用的一定是非空版本。
+   * 这比在每个使用处加 `!` 好——后者会把「我确定非空」这个断言
+   * 散布到十几处，将来某处真的可能为空时就没人能发现了。
+   */
+  if (form && input && status && results) {
+    const formEl: HTMLFormElement = form;
+    const inputEl: HTMLInputElement = input;
+    const statusEl: HTMLElement = status;
+    const resultsEl: HTMLElement = results;
+
+    let pagefind: {
+      search: (q: string) => Promise<{ results: PagefindResult[] }>;
+    } | null = null;
+
+    /** 首次搜索时才加载索引——不搜索的人不该为它下载任何东西。 */
+    async function load() {
+      if (pagefind) return pagefind;
+      try {
+        /*
+         * 这个模块是 **Pagefind 在构建后生成的**，源码树里根本不存在，
+         * 所以 TS 报 `Cannot find module`。用 @ts-expect-error 而不是
+         * @ts-ignore：前者在将来某天它真的被解析到时**会报错提醒**，
+         * 后者会一直沉默。
+         */
+        // @ts-expect-error 由 pagefind 在构建后生成，源码里没有
+        pagefind = await import(/* @vite-ignore */ '/pagefind/pagefind.js');
+        return pagefind;
+      } catch {
+        return null;
+      }
+    }
+
+    function setStatus(text: string) {
+      statusEl.textContent = text;
+    }
+
+    function render(items: { url: string; title: string; excerpt: string }[]) {
+      resultsEl.innerHTML = '';
+      for (const item of items) {
+        const li = document.createElement('li');
+        li.className = 'search__item';
+
+        const a = document.createElement('a');
+        a.className = 'search__link';
+        a.href = item.url;
+
+        const h = document.createElement('span');
+        h.className = 'search__title';
+        h.textContent = item.title;
+
+        const p = document.createElement('span');
+        p.className = 'search__excerpt';
+        // Pagefind 的 excerpt 里含 <mark> 标记，是它自己生成的、内容可控，
+        // 但仍做一次白名单过滤——只保留 <mark>，其余标签一律转义。
+        p.innerHTML = sanitizeExcerpt(item.excerpt);
+
+        a.append(h, p);
+        li.append(a);
+        resultsEl.append(li);
+      }
+    }
+
+    /** 只允许 `<mark>` 通过，其余一律转义。 */
+    function sanitizeExcerpt(html: string): string {
+      return html
+        .replace(/<(?!\/?mark\b)[^>]*>/gi, (tag) => tag.replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+        .replace(/&(?!(amp|lt|gt|quot|#\d+);)/g, '&amp;');
+    }
+
+    let timer: number | undefined;
+    let seq = 0;
+
+    async function run(query: string) {
+      const q = query.trim();
+      if (q === '') {
+        resultsEl.innerHTML = '';
+        setStatus('');
+        return;
+      }
+
+      const pf = await load();
+      if (!pf) {
+        setStatus('搜索索引不可用（开发模式下不会生成索引，请先 npm run build）。');
+        return;
+      }
+
+      const mine = ++seq;
+      setStatus('搜索中…');
+
+      const search = await pf.search(q);
+      // 竞态：慢的请求可能后返回，用序号丢弃过期结果
+      if (mine !== seq) return;
+
+      if (search.results.length === 0) {
+        setStatus(`没有找到与「${q}」相关的内容。换个词试试，或者去翻全部文章。`);
+        resultsEl.innerHTML = '';
+        return;
+      }
+
+      const top = search.results.slice(0, 20);
+      const items = await Promise.all(
+        top.map(async (r) => {
+          const d = await r.data();
+          return {
+            url: d.url,
+            title: d.meta.title ?? d.url,
+            excerpt: d.excerpt,
+          };
+        }),
+      );
+
+      if (mine !== seq) return;
+
+      setStatus(`找到 ${search.results.length} 条结果`);
+      render(items);
+    }
+
+    formEl.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void run(inputEl.value);
+    });
+
+    inputEl.addEventListener('input', () => {
+      // 输入防抖 200ms——比常见的 300ms 稍快，本地索引查询本身很快
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void run(inputEl.value), 200);
+    });
+
+    // 支持 /search/?q=关键词 直接进入
+    const initial = new URLSearchParams(location.search).get('q');
+    if (initial) {
+      inputEl.value = initial;
+      void run(initial);
+    }
+  }
+</script>

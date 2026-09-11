@@ -8,8 +8,20 @@
  * （Request / Response / URL），所以共享逻辑无需任何改动。
  */
 
-import type { Config, Context } from '@netlify/edge-functions';
 import { negotiate } from '../../src/lib/negotiate/edge.ts';
+
+/*
+ * 就地声明而非安装 `@netlify/edge-functions`——理由同 Cloudflare 垫片：
+ * 只用到两个形状，不值得引入一整个平台的类型包。
+ */
+interface Context {
+  next: () => Promise<Response>;
+}
+
+interface Config {
+  path: string;
+  [key: string]: unknown;
+}
 
 export default async (request: Request, context: Context): Promise<Response> => {
   const url = new URL(request.url);

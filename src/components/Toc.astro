@@ -1,0 +1,38 @@
+---
+/**
+ * 文章目录。
+ *
+ * 用 `<details>` 而不是自己写折叠逻辑：原生元素自带键盘交互、
+ * 读屏支持与「查找页面内容时自动展开」，用 JS 重写一遍只会更差。
+ * 桌面端默认展开、移动端默认收起——用 CSS 控制 `open` 做不到，
+ * 所以这里由调用方传入。
+ */
+import type { TocEntry } from '../lib/toc.js';
+
+interface Props {
+  entries: readonly TocEntry[];
+  /** 是否默认展开。移动端传 false */
+  open?: boolean;
+}
+
+const { entries, open = true } = Astro.props;
+---
+
+{
+  entries.length > 0 && (
+    <nav class="toc" aria-labelledby="toc-title">
+      <details open={open}>
+        <summary class="toc__summary" id="toc-title">
+          目录
+        </summary>
+        <ol class="toc__list">
+          {entries.map((entry) => (
+            <li class:list={['toc__item', `toc__item--h${entry.depth}`]}>
+              <a href={`#${entry.id}`}>{entry.text}</a>
+            </li>
+          ))}
+        </ol>
+      </details>
+    </nav>
+  )
+}

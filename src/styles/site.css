@@ -93,6 +93,39 @@
     align-items: center;
     gap: var(--space-5);
     font-size: var(--text-sm);
+    /* 导航项在窄屏上会被 nowrap 的站名挤压，逐字换行成一列。
+       `flex-shrink: 0` 让它们保持自身宽度，溢出由下面的断点处理。 */
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+
+  /*
+   * 窄屏：页头折成两行，站名一行、导航一行。
+   *
+   * 实测 390px 视口下，站名（84px）+ 五个导航项 + 主题切换需要约 350px，
+   * 而可用宽度只有 327px——不折行的话导航会被压成一字一行。
+   *
+   * 同时**取消粘性定位**：两行页头大约 100px 高，粘在顶部会吃掉
+   * 小屏本就不多的可视区域。博客的页头不需要一直可见。
+   */
+  @media (max-width: 599px) {
+    .site-header {
+      position: static;
+    }
+
+    .site-header__inner {
+      flex-wrap: wrap;
+      row-gap: var(--space-3);
+      padding-block: var(--space-3);
+    }
+
+    .site-nav {
+      /* 占满第二行，左对齐与站名对齐 */
+      width: 100%;
+      justify-content: flex-start;
+      gap: var(--space-4);
+    }
   }
 
   .site-nav a {
@@ -125,6 +158,69 @@
     color: var(--color-text-muted);
   }
 
+  /* ── 代码块的暗色主题 ─────────────────────────────────────── */
+
+  /*
+   * ── 这里曾经有一个 bug，值得写下来 ──────────────────────────────
+   *
+   * `astro.config.mjs` 里配了 Shiki 双主题（github-light / github-dark-dimmed），
+   * 段落注释还写着「单一主题在暗色模式下会出现亮底代码块嵌在暗色页面里」。
+   *
+   * **但那条注释描述的正是当时实际发生的事。**
+   *
+   * Shiki 的双主题只在 `<pre>` 上输出 `--shiki-dark` / `--shiki-dark-bg`
+   * 这两个自定义属性，**它不会自己应用**——需要下面这段 CSS 把它们映射回
+   * `color` / `background-color`。少了它，代码块永远是亮色主题，
+   * 在暗色页面里像五个发光的洞。
+   *
+   * 教训是：**配了「双主题」不等于「有两套主题」**。前者是数据，
+   * 后者需要有人把数据用起来。这类「配置到位但没接线」的 bug
+   * 在这个项目里出现过好几次（fonts.css 没被 import、cover.ts 没被引用），
+   * 所以 `npm run verify` 里有一条针对代码块底色的断言。
+   */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .astro-code,
+    :root:not([data-theme='light']) .astro-code span {
+      color: var(--shiki-dark) !important;
+      background-color: var(--shiki-dark-bg) !important;
+      font-style: var(--shiki-dark-font-style) !important;
+      font-weight: var(--shiki-dark-font-weight) !important;
+      text-decoration: var(--shiki-dark-text-decoration) !important;
+    }
+  }
+
+  :root[data-theme='dark'] .astro-code,
+  :root[data-theme='dark'] .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+    text-decoration: var(--shiki-dark-text-decoration) !important;
+  }
+
+  /* ── 表格的滚动容器 ───────────────────────────────────────── */
+
+  /*
+   * 由 rehype 插件包上，见 src/lib/rehype-table-wrap.ts。
+   *
+   * 表格本身保持 display: table（语义完整），外层 div 负责在窄屏滚动。
+   * `width: max-content; min-width: 100%` 让表格既能撑到内容宽度，
+   * 又在内容窄时铺满容器。
+   */
+  .table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+    margin-block: var(--space-5);
+    /* 让键盘聚焦时能看出这是可滚动区域 */
+    scrollbar-width: thin;
+  }
+
+  .table-wrap > table {
+    width: max-content;
+    min-width: 100%;
+    margin-block: 0;
+  }
+
   /* ── 元信息 ────────────────────────────────────────────────── */
 
   /*
@@ -146,6 +242,20 @@
   .meta__sep {
     color: var(--color-border-strong);
     user-select: none;
+  }
+
+  /*
+   * 段落标题。
+   *
+   * 用一条下压的规则线而不是放大字号来建立层级——首页已经有 h1，
+   * 段落标题再放大就会和主标题打架。线是更安静的分隔方式。
+   */
+  .section-title {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-block-end: var(--space-4);
+    padding-block-end: var(--space-2);
+    border-block-end: 1px solid var(--color-border-strong);
   }
 
   /* ── 文章列表 ──────────────────────────────────────────────── */
@@ -183,10 +293,79 @@
   @media (min-width: 768px) {
     .post-list__link {
       /* 日期窄列 + 标题与摘要宽列的非对称结构 */
-      grid-template-columns: 8rem minmax(0, 1fr);
+      grid-template-columns: 7rem minmax(0, 1fr);
       gap: var(--space-5);
       align-items: baseline;
     }
+
+    /*
+     * 有缩略图时：缩略图在最左，日期紧随其后，然后是正文。
+     *
+     * 早先把缩略图放最右，配合 `1fr` 的文本列，结果是文字与图之间
+     * 空出一大片——图看起来像贴上去的。放最左则形成一条清晰的
+     * 起始线，缩略图成为扫描的锚点而不是尾巴。
+     *
+     * 日期列从 7rem 收到 5.5rem：`2026/09/12` 用等宽字体排出来
+     * 就是这个宽度，原来给多了，多出来的空白把标题推得很远。
+     */
+    .post-list__link--with-cover {
+      grid-template-columns: 9rem 5.5rem minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  .post-list__body {
+    /* 网格子项默认可收缩，否则长标题会把列撑破；上限避免摘要排成很长一行 */
+    min-width: 0;
+    max-width: var(--measure);
+  }
+
+  /*
+   * 紧凑变体：知识层条目。
+   *
+   * 桌面端排成两列——条目没有日期与封面，单列会显得空。
+   * 两列同时让它与「文章」区块在视觉上区分开，
+   * 避免首页两个区块长得一模一样。
+   */
+  .post-list--compact {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 768px) {
+    .post-list--compact {
+      grid-template-columns: 1fr 1fr;
+      column-gap: var(--space-6);
+    }
+  }
+
+  .post-list--compact .post-list__link {
+    /*
+     * **必须显式重置列定义。**
+     *
+     * 基础样式在桌面端把每个链接设成了 `7rem minmax(0, 1fr)` 的两列网格。
+     * 紧凑条目没有封面也没有日期列，只有一个子元素——它会落进那个 7rem
+     * 的第一列，正文被挤成一百来像素宽的窄条，每行只放得下三四个字。
+     * 只覆盖 gap 与 padding 不够，列定义得一起改。
+     */
+    grid-template-columns: 1fr;
+    padding-block: var(--space-3);
+    gap: 0;
+  }
+
+  .post-list--compact .post-list__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .post-list--compact .post-list__summary {
+    font-size: var(--text-sm);
+    /* 条目摘要在两列布局里要克制，否则两列高度差太大 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .post-list__link:hover {
@@ -226,7 +405,9 @@
 
   .page-header__title {
     font-size: var(--text-4xl);
-    font-weight: 600;
+    /* 大字号用更轻的字重来平衡视觉重量——50px 的 700 会显得笨重。
+       这是排版惯例（大字用轻、小字用重），与 base.css 里的 600 不冲突。 */
+    font-weight: 500;
     max-width: 20ch;
   }
 
@@ -248,6 +429,19 @@
 
   .prose {
     max-width: var(--measure);
+    /*
+     * 超长不可断的字符串（URL、哈希、连续英文单词）会撑破任何容器。
+     * `anywhere` 让它们在该断的地方断，而不是把版面推宽。
+     *
+     * 只加在正文上，不加在全局——`anywhere` 会影响 min-content 的计算，
+     * 用在 flex/grid 容器上会让收缩行为变得难以预测。
+     */
+    overflow-wrap: anywhere;
+  }
+
+  /* 代码块不适用上面的规则：代码本来就不该自动断行，横向滚动更合适 */
+  .prose pre {
+    overflow-wrap: normal;
   }
 
   .prose h2,
@@ -312,7 +506,8 @@
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-muted);
-    border: 1px solid var(--color-border);
+    /* 边框是标签唯一的可点击标识（它没有下划线），所以必须达 3:1 */
+    border: 1px solid var(--color-border-interactive);
     padding: 0.15rem var(--space-2);
     text-decoration: none;
     transition:
@@ -395,7 +590,7 @@
 
   .theme-toggle {
     background: none;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-interactive);
     color: var(--color-text-muted);
     padding: var(--space-1) var(--space-2);
     font-size: var(--text-xs);
@@ -423,5 +618,384 @@
     border: 1px solid var(--color-border);
     padding: var(--space-4);
     overflow-x: auto;
+  }
+
+  /* ── 封面 ──────────────────────────────────────────────────── */
+
+  /*
+   * 生成封面是内联 SVG，默认会按自身比例撑满宽度。
+   * 用 aspect-ratio 固定比例，保证用户换成真实图片（尺寸各异）时版式不跳。
+   */
+  .cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background-color: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+  }
+
+  .cover svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* 列表里的缩略图。固定宽度，避免每行因标题长短而参差 */
+  .cover--thumb {
+    width: 8rem;
+    flex: none;
+  }
+
+  @media (max-width: 599px) {
+    /* 窄屏下列表本来就挤，缩略图只会压缩标题的可读宽度 */
+    .cover--thumb {
+      display: none;
+    }
+  }
+
+  /* 文章头图 */
+  .cover--hero {
+    margin-block-end: var(--space-6);
+  }
+
+  /* ── 目录 ──────────────────────────────────────────────────── */
+
+  .toc {
+    margin-block: var(--space-6);
+    padding-block: var(--space-4);
+    border-block: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+
+  .toc__summary {
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    letter-spacing: var(--tracking-wide);
+    /* 去掉浏览器默认的三角标记，用自定义符号——默认样式与整套设计不搭 */
+    list-style: none;
+    user-select: none;
+  }
+
+  .toc__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .toc__summary::after {
+    content: ' ▾';
+  }
+
+  .toc details:not([open]) .toc__summary::after {
+    content: ' ▸';
+  }
+
+  .toc__list {
+    list-style: none;
+    padding: 0;
+    margin-block: var(--space-3) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* 三级标题缩进，层级靠位置而非字号——目录里再变字号会太吵 */
+  .toc__item--h3 {
+    padding-inline-start: var(--space-5);
+  }
+
+  .toc__item a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+
+  .toc__item a:hover {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+
+  /* ── 搜索 ──────────────────────────────────────────────────── */
+
+  .search {
+    max-width: var(--measure-wide);
+  }
+
+  .search__label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    margin-block-end: var(--space-2);
+  }
+
+  .search__input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--color-surface);
+    /* 输入框的边界是识别「这里可以输入」的唯一视觉线索，需 3:1 */
+    border: 1px solid var(--color-border-interactive);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    transition: border-color var(--duration-fast) var(--ease-out);
+  }
+
+  .search__input:focus {
+    border-color: var(--color-accent);
+  }
+
+  .search__status {
+    margin-block-start: var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+    min-height: 1.5em; /* 预留高度，避免结果出现时下方内容跳动（CLS） */
+  }
+
+  .search__results {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-4) 0 0;
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .search__item {
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  .search__link {
+    display: block;
+    padding-block: var(--space-4);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .search__title {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--color-text);
+  }
+
+  .search__link:hover .search__title {
+    color: var(--color-accent);
+  }
+
+  .search__excerpt {
+    display: block;
+    margin-block-start: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  /* Pagefind 用 <mark> 标出命中词 */
+  .search__excerpt mark {
+    background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    color: inherit;
+    padding-inline: 0.1em;
+  }
+
+  /* ── 上一篇 / 下一篇 ───────────────────────────────────────── */
+
+  .post-nav {
+    margin-block-start: var(--space-8);
+    padding-block-start: var(--space-5);
+    border-block-start: 1px solid var(--color-border);
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 640px) {
+    .post-nav {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .post-nav__link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+
+  .post-nav__label {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    display: block;
+    margin-block-end: var(--space-1);
+  }
+
+  .post-nav__title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    line-height: var(--leading-snug);
+    text-wrap: balance;
+  }
+
+  .post-nav__link:hover .post-nav__title {
+    color: var(--color-accent);
+  }
+
+  /* 下一篇靠右——方向本身传达「下一个」 */
+  .post-nav__item--next {
+    text-align: end;
+  }
+
+  /* ── 分页 ──────────────────────────────────────────────────── */
+
+  .pagination {
+    margin-block-start: var(--space-7);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pagination__link {
+    text-decoration: none;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border-interactive);
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+  }
+
+  .pagination__link:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  /* 不可用时用 span 而不是禁用的 a——禁用链接仍会被读屏念出来，且不可聚焦 */
+  .pagination__disabled {
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-subtle);
+    border: 1px solid transparent;
+  }
+
+  /* ── 首页的置顶文章 ───────────────────────────────────────── */
+
+  .featured {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+    padding-block-end: var(--space-6);
+    margin-block-end: var(--space-6);
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  @media (min-width: 768px) {
+    .featured {
+      /* 非对称：图占 7 列、文字 5 列。等比分割看起来像卡片，不像版面 */
+      grid-template-columns: 7fr 5fr;
+      align-items: center;
+      gap: var(--space-6);
+    }
+  }
+
+  .featured__title {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    line-height: var(--leading-tight);
+    text-wrap: balance;
+  }
+
+  .featured__link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .featured__link:hover .featured__title {
+    color: var(--color-accent);
+  }
+
+  .featured__summary {
+    margin-block-start: var(--space-3);
+    color: var(--color-text-muted);
+    text-wrap: pretty;
+  }
+
+  .featured__meta {
+    margin-block-start: var(--space-4);
+  }
+
+  /* ── 按年归档 ──────────────────────────────────────────────── */
+
+  .archive-year {
+    margin-block-end: var(--space-7);
+  }
+
+  .archive-year__label {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+    font-variant-numeric: tabular-nums;
+    padding-block-end: var(--space-2);
+    border-block-end: 1px solid var(--color-border-strong);
+    margin-block-end: var(--space-3);
+  }
+
+  .archive-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .archive-list__item {
+    display: flex;
+    gap: var(--space-4);
+    align-items: baseline;
+    padding-block: var(--space-2);
+  }
+
+  .archive-list__date {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    font-variant-numeric: tabular-nums;
+    flex: none;
+    width: 3.5rem;
+  }
+
+  /* ── 代码块复制按钮 ───────────────────────────────────────── */
+
+  .code-copy {
+    position: absolute;
+    inset-block-start: var(--space-2);
+    inset-inline-end: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    padding: var(--space-1) var(--space-2);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border-interactive);
+    color: var(--color-text-muted);
+    /* 默认隐藏，键盘聚焦或悬停时出现——静态截图里不喧宾夺主 */
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-out);
+  }
+
+  .prose pre:hover .code-copy,
+  .code-copy:focus-visible {
+    opacity: 1;
+  }
+
+  /* 触屏没有 hover，按钮必须常驻 */
+  @media (hover: none) {
+    .code-copy {
+      opacity: 1;
+    }
+  }
+
+  .code-copy[data-copied='true'] {
+    border-color: var(--color-success);
+    color: var(--color-success);
+  }
+
+  .prose pre {
+    position: relative;
   }
 }

@@ -8,11 +8,12 @@ const path = Astro.url.pathname;
 const isCurrent = (href: string): boolean =>
   href === '/' ? path === '/' : path === href || path.startsWith(href);
 
-// 配置里关掉知识层时，导航里也不该出现它的入口——
+// 配置里关掉某项功能时，导航里也不该出现它的入口——
 // 留一个指向 404 的链接比不显示更糟。
-const nav = site.wiki.enabled
-  ? site.nav
-  : site.nav.filter((item) => !item.href.startsWith('/wiki'));
+const nav = [
+  ...site.nav,
+  ...(site.search.enabled ? [{ label: '搜索', href: '/search/' }] : []),
+].filter((item) => site.wiki.enabled || !item.href.startsWith('/wiki'));
 ---
 
 <header class="site-header">

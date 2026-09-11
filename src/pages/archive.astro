@@ -1,0 +1,69 @@
+---
+/**
+ * 按年归档。
+ *
+ * 与 `/posts/` 的分工：那边是「最近写了什么」（倒序、带摘要与封面），
+ * 这边是「我一共写过什么」（按年分组、只有标题）。
+ *
+ * 写成紧凑的年份列表而不是复刻一遍文章列表——归档的用途是**找**，
+ * 不是**读**。把摘要和封面也搬过来只会让页面变长而没增加信息。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../config.js';
+import { dateOfDoc, loadContent, publishedPosts, reportIssues } from '../lib/content.js';
+
+const content = await loadContent();
+reportIssues(content.issues);
+
+const posts = publishedPosts(content);
+
+/** 按年分组。用 Map 而不是对象，避免数字键被重排。 */
+const byYear = new Map<string, typeof posts>();
+for (const post of posts) {
+  const date = dateOfDoc(content, post.slug);
+  const year = date ? String(date.getFullYear()) : '未标日期';
+  const list = byYear.get(year) ?? [];
+  list.push(post);
+  byYear.set(year, list);
+}
+
+// 年份倒序。「未标日期」永远排在最后——它不是最新的一年
+const years = [...byYear.keys()].sort((a, b) => {
+  if (a === '未标日期') return 1;
+  if (b === '未标日期') return -1;
+  return Number(b) - Number(a);
+});
+
+const fmtDay = (d: Date): string =>
+  new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(d);
+---
+
+<BaseLayout title="归档" description={`${site.title}的全部文章，按年份排列。`}>
+  <div class="page-header">
+    <h1 class="page-header__title">归档</h1>
+    <p class="page-header__lead">全部 {posts.length} 篇，按年份排列。</p>
+  </div>
+
+  {
+    years.length === 0 ? (
+      <p style="color: var(--color-text-muted)">还没有文章。</p>
+    ) : (
+      years.map((year) => (
+        <section class="archive-year">
+          <h2 class="archive-year__label">{year}</h2>
+          <ul class="archive-list">
+            {(byYear.get(year) ?? []).map((doc) => {
+              const date = dateOfDoc(content, doc.slug);
+              return (
+                <li class="archive-list__item">
+                  <span class="archive-list__date">{date ? fmtDay(date) : '—'}</span>
+                  <a href={`/${doc.slug}/`}>{doc.title}</a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))
+    )
+  }
+</BaseLayout>

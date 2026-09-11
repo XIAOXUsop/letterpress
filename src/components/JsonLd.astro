@@ -1,0 +1,104 @@
+---
+/**
+ * JSON-LD 结构化数据。
+ *
+ * 竞品普遍把它当成「SEO 加分项」，但 2026 年的实际作用是**给 AI 检索用的**：
+ * 搜索引擎和 LLM 都靠它确认「这是谁写的、什么时候发的、讲的是什么」。
+ * 一段可信的 BlogPosting 比一屏 meta 标签有效得多。
+ *
+ * 只输出**页面上确实存在的信息**。编造 author.url 或凭空添一个 publisher
+ * 会让结构化数据从「信号」变成「噪声」——校验器不报错，但搜索引擎会降权。
+ */
+import { site } from '../config.js';
+
+interface Props {
+  type: 'website' | 'article' | 'note';
+  title: string;
+  description: string;
+  url: string;
+  /** 文章专用 */
+  publishedTime?: Date;
+  modifiedTime?: Date;
+  tags?: readonly string[];
+  /** 文章有封面时传，用于分享卡片 */
+  image?: string;
+}
+
+const { type, title, description, url, publishedTime, modifiedTime, tags = [], image } = Astro.props;
+
+/**
+ * ── 站点地址为空时，绝不回退到 `Astro.url.origin` ──────────────────
+ *
+ * 构建期的 `Astro.url.origin` 是 `http://localhost:4321`——**那个值会被
+ * 原样写进产物**，于是线上页面的结构化数据里声明自己是 localhost。
+ *
+ * 搜索引擎拿到这种数据会直接判定为无效，而这比没有结构化数据更糟：
+ * 没有至少是中性的，错的会主动传递错误信息。
+ *
+ * 所以 `site.url` 为空时改用**相对路径**——搜索引擎会按页面地址解析。
+ * 不是最优解，但方向是对的。
+ */
+const base = site.url.replace(/\/$/, '');
+const absolute = (p: string): string => (p.startsWith('http') ? p : `${base}${p}`);
+
+/** `@id` 需要绝对地址才有意义，没有站点域名时干脆不输出。 */
+const idFor = (fragment: string): string | undefined =>
+  base ? `${base}/${fragment}` : undefined;
+
+const websiteId = idFor('#website');
+const personId = idFor('#person');
+
+/**
+ * 用 @graph 把多个实体放在一个 script 里。
+ *
+ * 比在每个页面重复 `publisher` 之类的共有信息更省，而且实体之间可以
+ * 用 `@id` 互相引用——搜索引擎能因此把「这个作者的所有文章」连起来。
+ */
+const graph: Record<string, unknown>[] = [
+  {
+    '@type': 'WebSite',
+    ...(websiteId ? { '@id': websiteId } : {}),
+    name: site.title,
+    description: site.tagline,
+    ...(base ? { url: base } : {}),
+    inLanguage: site.lang,
+    ...(personId ? { publisher: { '@id': personId } } : {}),
+  },
+  {
+    '@type': 'Person',
+    ...(personId ? { '@id': personId } : {}),
+    name: site.author.name,
+    description: site.author.bio,
+    // 只在真的填了主页时才输出 url——空字符串会让校验器报错
+    ...(site.author.url ? { url: site.author.url } : {}),
+  },
+];
+
+if (type === 'article' && publishedTime) {
+  const articleId = base ? `${absolute(url)}#article` : undefined;
+
+  graph.push({
+    '@type': 'BlogPosting',
+    ...(articleId ? { '@id': articleId } : {}),
+    headline: title,
+    description,
+    ...(base ? { url: absolute(url), mainEntityOfPage: { '@id': articleId } } : { mainEntityOfPage: url }),
+    datePublished: publishedTime.toISOString(),
+    /*
+     * `dateModified` 用 `updated` 字段，没有则退回发布时间。
+     *
+     * 这一条对搜索引擎是**实质性信号**：能区分「刚发布」与「发布后大改过」。
+     * 竞品里 astro-paper 与 PaperMod 都输出它，而 `updated` 这个数据
+     * 本项目早就有、只是没往外输出。
+     */
+    dateModified: (modifiedTime ?? publishedTime).toISOString(),
+    ...(personId ? { author: { '@id': personId }, publisher: { '@id': personId } } : {}),
+    inLanguage: site.lang,
+    ...(image && base ? { image: absolute(image) } : {}),
+    ...(tags.length > 0 ? { keywords: tags.join(', ') } : {}),
+    ...(websiteId ? { isPartOf: { '@id': websiteId } } : {}),
+  });
+}
+---
+
+<script type="application/ld+json" is:inline set:html={JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })} />

@@ -58,14 +58,27 @@ export function urlOf(doc: Doc): string {
   return doc.kind === 'wiki' ? `/wiki/${doc.slug}/` : `/${doc.slug}/`;
 }
 
+export interface GraphOptions {
+  /**
+   * 是否让草稿参与链接图。
+   *
+   * 默认 `false`：草稿不该被别的文章链接，也不该出现在「孤儿页」统计里——
+   * 否则每写一篇草稿都会制造一条假告警。
+   *
+   * 但**开发模式下要打开**：作者在 `npm run dev` 里预览未完成的文章时，
+   * 那篇文章里的 `[[链接]]` 也需要被解析。不开的话，草稿正文里所有
+   * 链接都会显示成方括号，看起来像功能坏了。
+   */
+  readonly includeDrafts?: boolean;
+}
+
 /**
  * 构建链接图。
  *
- * 只有**非草稿**文档参与：草稿不该被别的文章链接，也不该出现在
- * 「孤儿页」统计里——否则每写一篇草稿都会制造一条假告警。
+ * 默认只有**非草稿**文档参与，理由见 `GraphOptions.includeDrafts`。
  */
-export function buildGraph(docs: readonly Doc[]): LinkGraph {
-  const published = docs.filter((d) => !d.draft);
+export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): LinkGraph {
+  const published = options.includeDrafts ? [...docs] : docs.filter((d) => !d.draft);
   const bySlug = new Map<string, Doc>();
   const lookup = new Map<string, string>();
 

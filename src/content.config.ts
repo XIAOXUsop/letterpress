@@ -38,8 +38,33 @@ const posts = defineCollection({
     /** 显式指定 URL 片段。中文标题留空会自动生成中文 URL（合法，但复制出去很长） */
     slug: z.string().optional(),
     tags: z.array(z.string()).default([]),
-    /** 标记为草稿后不进构建、不进列表、不进 llms.txt */
-    draft: z.boolean().default(false),
+    /**
+     * 封面图路径，相对 `public/`，例如 `/covers/my-post.svg`。
+     *
+     * **不填也好看**：留空时会由标题与 slug 确定性地生成一张几何封面
+     * （见 `src/lib/cover.ts`）。这样零配置的站点也有视觉层次，
+     * 而不是一列纯文字——同时保留了想用真实配图的出口。
+     */
+    cover: z.string().optional(),
+    /** 封面图的替代文本。有 `cover` 时就该填，否则读屏用户只听到「图片」 */
+    coverAlt: z.string().optional(),
+    /**
+     * 分享图，用于 og:image。
+     *
+     * **不填也有**：会由 slug 确定性地生成一张 1200×630 的 PNG
+     * （见 `src/lib/og.ts`）。填了就用你的——注意社交平台
+     * **不接受 SVG**，必须是 PNG 或 JPG。
+     */
+    ogImage: z.string().optional(),
+    /** 置顶。首页会优先展示，列表页也会排在最前 */
+    featured: z.boolean().default(false),
+    /**
+     * 是否在文章页显示目录。
+     *
+     * 默认 `true`，但只在正文有 3 个以上二级标题时才真的渲染——
+     * 两三个小节的短文加目录反而增加噪声。
+     */
+    toc: z.boolean().default(true),
   }),
 });
 

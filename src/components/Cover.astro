@@ -1,0 +1,53 @@
+---
+/**
+ * 封面。
+ *
+ * 两种来源：
+ * 1. 用户提供了 `cover` 字段 → 用真实图片
+ * 2. 没提供 → 由 slug 确定性地生成一张几何封面
+ *
+ * 第 2 条是这个组件存在的理由。竞品都「支持」封面图，但新建博客的人
+ * 手里没有配图，于是首页就是一列纯文字——看起来像技术演示而非产品。
+ * 自动生成的封面让零配置也有视觉层次，而且它不是占位符：
+ * 是真正的设计元素，与整套设计同源。
+ */
+import { generateCover, generateThumbnail } from '../lib/cover.js';
+
+interface Props {
+  slug: string;
+  title: string;
+  /** 用户提供的封面路径，相对 public/ */
+  cover?: string | undefined;
+  coverAlt?: string | undefined;
+  /** 缩略图模式：用于列表，线更粗、元素更少 */
+  thumbnail?: boolean;
+  /** 图片的 CSS 类，由调用方控制尺寸 */
+  class?: string;
+}
+
+const { slug, title, cover, coverAlt, thumbnail = false, class: className = '' } = Astro.props;
+
+const generated = thumbnail ? generateThumbnail(slug, title) : generateCover(slug, title);
+---
+
+{
+  cover ? (
+    <img
+      class={className}
+      src={cover}
+      alt={coverAlt ?? ''}
+      loading="lazy"
+      decoding="async"
+      /* 显式尺寸防止加载完成时顶动下方内容（CLS）。16:9 与生成封面一致。 */
+      width="1200"
+      height="675"
+    />
+  ) : (
+    <div
+      class={className}
+      /* 生成封面是纯装饰——标题就在旁边，念一遍只是噪声 */
+      aria-hidden="true"
+      set:html={generated}
+    />
+  )
+}

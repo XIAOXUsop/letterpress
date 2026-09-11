@@ -15,6 +15,7 @@
 import { site, absoluteUrl } from '../config.js';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
+import CodeCopy from '../components/CodeCopy.astro';
 // 顺序有讲究：
 // fonts.css 必须先于 tokens.css —— 它定义 @font-face，而令牌里的字体栈引用这些族名
 import '../styles/fonts.css';
@@ -29,9 +30,20 @@ interface Props {
   type?: 'website' | 'article';
   /** 文章页传入发布时间 */
   publishedTime?: Date;
+  /** 文章页传入最后修改时间。竞品普遍输出它，能区分「刚发布」与「发布后大改」 */
+  modifiedTime?: Date;
+  /** 分享图路径（相对本站）。不传则用站点默认图 `/og.png` */
+  ogImage?: string;
 }
 
-const { title, description = site.tagline, type = 'website', publishedTime } = Astro.props;
+const {
+  title,
+  description = site.tagline,
+  type = 'website',
+  publishedTime,
+  modifiedTime,
+  ogImage,
+} = Astro.props;
 
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? `https://example.com`).href;
@@ -39,6 +51,20 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? `https://example.com
 // 同 URL 的 markdown 版本。给人和 agent 都留一个显式入口，
 // 而不是让他们猜「带上 Accept 头会怎样」。
 const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
+
+/**
+ * 分享图的绝对地址。
+ *
+ * **必须是绝对 URL**——社交平台不会去猜相对路径该拼在哪，
+ * 给相对地址等于没有。而绝对地址需要知道站点域名，所以
+ * `site.url` 为空时**干脆不输出 og:image**，而不是输出一个
+ * 指向 localhost 的地址（那会在生产环境里变成坏图）。
+ *
+ * 构建时已经有警告提示用户去填 site.url，这里不重复提醒。
+ */
+const shareImage = site.url
+  ? new URL(ogImage ?? '/og.png', site.url.replace(/\/$/, '')).href
+  : null;
 ---
 
 <!doctype html>
@@ -50,6 +76,14 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
 
+    {/*
+      favicon 必须显式引用。
+      浏览器只会隐式请求 /favicon.ico，而 `public/favicon.svg` 不会被自动加载——
+      少了这一行，那个 SVG 文件永远不会被用到。
+    */}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+
     <!--
       告诉 agent 这里还有一份 markdown 版本。
       rel="alternate" 是标准做法，比在页面里塞说明文字可靠。
@@ -60,8 +94,25 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:site_name" content={site.title} />
+
+    {/*
+      有分享图才用大卡片。写死 `summary_large_image` 而没有图，
+      Twitter 会退回一张灰色的空卡片，比小卡片更难看。
+    */}
+    {shareImage ? (
+      <>
+        <meta property="og:image" content={shareImage} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={shareImage} />
+      </>
+    ) : (
+      <meta name="twitter:card" content="summary" />
+    )}
     {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
+    {modifiedTime && <meta property="article:modified_time" content={modifiedTime.toISOString()} />}
 
     <link rel="alternate" type="application/rss+xml" title={site.title} href={absoluteUrl('/rss.xml')} />
     {site.url && <link rel="sitemap" type="application/xml" href={absoluteUrl('/sitemap-index.xml')} />}
@@ -92,5 +143,6 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
       </div>
     </main>
     <SiteFooter />
+    <CodeCopy />
   </body>
 </html>

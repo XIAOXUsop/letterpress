@@ -9,11 +9,11 @@
 import { render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Backlinks from '../../components/Backlinks.astro';
-import { site } from '../../config.js';
 import {
   updatedOfDoc,
   kindOf,
   loadContent,
+  ogImageOf,
   publishedWiki,
   reportIssues,
   type SiteContent,
@@ -60,7 +60,13 @@ const outgoing = [...(content.graph.outbound.get(doc.slug) ?? [])]
 const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
 ---
 
-<BaseLayout title={doc.title} description={doc.summary} type="article">
+<BaseLayout
+  title={doc.title}
+  description={doc.summary}
+  type="article"
+  modifiedTime={updated ?? undefined}
+  ogImage={ogImageOf(content, doc.slug)}
+>
   <article>
     <header class="post-header">
       <h1 class="post-header__title">{doc.title}</h1>

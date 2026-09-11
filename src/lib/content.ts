@@ -11,6 +11,16 @@ import { site } from '../config.js';
 import { buildGraph, type Doc, type LinkGraph } from './wiki/graph.js';
 import { hasErrors, lint, type Issue } from './wiki/lint.js';
 import { resolveSlug } from './wiki/slug.js';
+/**
+ * 是否处于开发模式。
+ *
+ * 开发模式下**草稿也参与构建**，这样 `npm run dev` 里能直接预览未完成的文章。
+ * 生产构建仍然会把它们排除在外。
+ *
+ * 少了这一条，作者必须每次把 `draft: true` 改成 `false` 才能看效果——
+ * 而忘记改回去就会把半成品发上线。这是新用户很容易踩、又很难自己发现的坑。
+ */
+const IS_DEV = import.meta.env.DEV;
 
 export interface SiteContent {
   readonly docs: readonly Doc[];
@@ -50,7 +60,8 @@ function toDoc(
     summary: data.summary,
     body,
     explicitSlug: explicit,
-    draft: data.draft,
+    // posts 与 wiki 的 schema 不同，astropy 的联合类型推不出共有字段
+    draft: (data as { draft?: boolean }).draft ?? false,
   };
 }
 
@@ -66,13 +77,24 @@ export async function loadContent(): Promise<SiteContent> {
     site.wiki.enabled ? getCollection('wiki') : Promise.resolve([]),
   ]);
 
-  const docs: Doc[] = [
+  const allDocs: Doc[] = [
     ...postEntries.map((e) => toDoc(e, 'post')),
     ...wikiEntries.map((e) => toDoc(e, 'wiki')),
   ];
 
-  const graph = buildGraph(docs);
-  const issues = lint(docs, graph, { warnOnCjkSlug: site.wiki.hintCjkSlugs });
+  // 开发模式下保留草稿：作者要能看到自己正在写的东西。
+  // 生产构建仍然排除——草稿不该出现在任何产物里。
+  const docs = IS_DEV ? allDocs : allDocs.filter((d) => !d.draft);
+
+  // 开发模式下草稿也要进链接图，否则文章里的 [[链接]] 会对着草稿报断链
+  const graph = buildGraph(docs, { includeDrafts: IS_DEV });
+  const issues = lint(docs, graph, {
+    warnOnCjkSlug: site.wiki.hintCjkSlugs,
+    // 关掉知识层时，`[[链接]]` 就只是一串方括号，不该判为断链。
+    // 少了这两个开关，`wiki.enabled: false` 这个文档承诺的出口会让构建失败。
+    checkWikilinks: site.wiki.enabled,
+    checkOrphans: site.wiki.enabled,
+  });
 
   const entries = new Map<string, CollectionEntry<'posts'> | CollectionEntry<'wiki'>>();
   for (const entry of postEntries) entries.set(toDoc(entry, 'post').slug, entry);
@@ -84,7 +106,7 @@ export async function loadContent(): Promise<SiteContent> {
 /** 已发布文章，按日期倒序（新的在前）。 */
 export function publishedPosts(content: SiteContent): Doc[] {
   return content.docs
-    .filter((d) => d.kind === 'post' && !d.draft)
+    .filter((d) => d.kind === 'post')
     .sort((a, b) => {
       const da = dateOf(content, a.slug);
       const db = dateOf(content, b.slug);
@@ -96,7 +118,7 @@ export function publishedPosts(content: SiteContent): Doc[] {
 /** 已发布知识库条目，按标题排序（知识层不是流，不该按时间排）。 */
 export function publishedWiki(content: SiteContent): Doc[] {
   return content.docs
-    .filter((d) => d.kind === 'wiki' && !d.draft)
+    .filter((d) => d.kind === 'wiki')
     .sort((a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
 }
 
@@ -132,6 +154,53 @@ export function kindOf(content: SiteContent, slug: string): 'concept' | 'entity'
   const entry = content.entries.get(slug);
   if (!entry || !('kind' in entry.data)) return null;
   return (entry.data as { kind: 'concept' | 'entity' | 'synthesis' }).kind;
+}
+
+/**
+ * 文章封面。用户提供时返回其路径与替代文本；没提供时返回 `null`，
+ * 由 `Cover` 组件回落到确定性生成的几何封面。
+ */
+export function coverOf(
+  content: SiteContent,
+  slug: string,
+): { src: string; alt: string } | null {
+  const entry = content.entries.get(slug);
+  if (!entry) return null;
+  const data = entry.data as { cover?: string; coverAlt?: string; title?: string };
+  if (!data.cover) return null;
+  return {
+    src: data.cover,
+    // 缺 alt 时退回标题——比空字符串好，读屏用户至少知道图在讲什么。
+    // 但仍然不如显式写：lint 会提示。
+    alt: data.coverAlt ?? data.title ?? '',
+  };
+}
+
+/**
+ * 分享图地址。
+ *
+ * 优先级：frontmatter 的 `ogImage` > `cover` > 由 slug 生成的默认图。
+ * 社交平台**不接受 SVG**，所以不提供 `cover` 时必须回落到生成的 PNG，
+ * 而不是回落到页面上那张 SVG 封面。
+ */
+export function ogImageOf(content: SiteContent, slug: string): string {
+  const entry = content.entries.get(slug);
+  const data = entry?.data as { ogImage?: string; cover?: string } | undefined;
+  return data?.ogImage ?? data?.cover ?? `/og/${slug}.png`;
+}
+
+/** 是否置顶。 */
+export function isFeatured(content: SiteContent, slug: string): boolean {
+  const entry = content.entries.get(slug);
+  if (!entry) return false;
+  return Boolean((entry.data as { featured?: boolean }).featured);
+}
+
+/** 该文章是否要显示目录。 */
+export function tocEnabled(content: SiteContent, slug: string): boolean {
+  const entry = content.entries.get(slug);
+  if (!entry) return true;
+  return (entry.data as { toc?: boolean }).toc !== false;
 }
 
 /**

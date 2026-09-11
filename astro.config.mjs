@@ -4,6 +4,7 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import { unified } from '@astrojs/markdown-remark';
 import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
+import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
 
 /**
  * 站点根地址从 `src/config.ts` 读——那里是用户唯一要改的文件，
@@ -81,7 +82,15 @@ export default defineConfig({
      * 当语法树传给 transformer，抛出一个 `Cannot use 'in' operator ...` ——
      * 而那个报错里一个字都不会提到 unified，极难反推。
      */
-    processor: unified({ remarkPlugins: [remarkWikilink] }),
+    processor: unified({
+      remarkPlugins: [remarkWikilink],
+      /*
+       * 宽表格必须包一层可滚动容器，否则在窄屏上会把整页撑出横向滚动条。
+       * 实测：一张三列对照表在 375px 视口下宽 383px。
+       * 详见 rehype-table-wrap.ts 里关于「为什么不直接用 CSS」的说明。
+       */
+      rehypePlugins: [rehypeTableWrap],
+    }),
     shikiConfig: {
       // 双主题：Shiki 会输出 CSS 变量，由页面样式决定用哪套。
       // 单一主题在暗色模式下会出现「亮底代码块嵌在暗色页面里」。

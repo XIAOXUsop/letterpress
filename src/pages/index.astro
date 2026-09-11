@@ -6,63 +6,110 @@
  * 那个结构是 AI 生成页面的第一识别特征，而且它传达的信息量为零：
  * 居中不等于重要，大字号也不等于重要。
  *
- * 这里首页直接就是内容——最近的文章 + 知识层入口。
+ * 这里首页直接就是内容——置顶一篇 + 最近的列表 + 知识层入口。
  * 读者来这里是为了读东西，不是为了看一句口号。
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PostList from '../components/PostList.astro';
+import Cover from '../components/Cover.astro';
+import JsonLd from '../components/JsonLd.astro';
 import { site } from '../config.js';
-import { loadContent, publishedPosts, publishedWiki, reportIssues } from '../lib/content.js';
+import {
+  coverOf,
+  dateOfDoc,
+  isFeatured,
+  loadContent,
+  publishedPosts,
+  publishedWiki,
+  reportIssues,
+} from '../lib/content.js';
 
 const content = await loadContent();
 reportIssues(content.issues);
 
-const posts = publishedPosts(content).slice(0, 8);
-const wiki = publishedWiki(content).slice(0, 6);
+const allPosts = publishedPosts(content);
+
+/**
+ * 置顶文章：显式标了 `featured: true` 的取最新一篇；
+ * 一篇都没有时不硬凑——没有置顶就正常列出来，不要拿一篇普通文章充当。
+ */
+const featured = allPosts.find((doc) => isFeatured(content, doc.slug)) ?? null;
+const rest = featured ? allPosts.filter((d) => d.slug !== featured.slug) : allPosts;
+
+const posts = rest.slice(0, 8);
+const wiki = site.wiki.enabled ? publishedWiki(content).slice(0, 6) : [];
+
+const featuredDate = featured ? dateOfDoc(content, featured.slug) : null;
+const featuredCover = featured ? coverOf(content, featured.slug) : null;
+
+const formatDate = (d: Date): string =>
+  new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(d);
 ---
 
 <BaseLayout description={site.tagline}>
+  <JsonLd type="website" title={site.title} description={site.tagline} url="/" />
+
   <div class="page-header">
     <h1 class="page-header__title">{site.title}</h1>
     <p class="page-header__lead">{site.tagline}</p>
   </div>
 
-  <div class="grid">
-    <section style="grid-column: span 8" aria-labelledby="recent-title">
-      <h2 id="recent-title" style="font-size: var(--text-xl); margin-block-end: var(--space-4)">
-        最近写的
-      </h2>
-      <PostList docs={posts} content={content} />
-      {
-        posts.length > 0 && (
-          <p style="margin-block-start: var(--space-4)">
-            <a href="/posts/">全部文章 →</a>
+  {
+    featured && (
+      <article class="featured">
+        <a class="featured__link" href={`/${featured.slug}/`} aria-hidden="true" tabindex="-1">
+          <Cover
+            slug={featured.slug}
+            title={featured.title}
+            cover={featuredCover?.src}
+            coverAlt={featuredCover?.alt}
+            class="cover"
+          />
+        </a>
+        <div>
+          <p class="meta" style="margin-block-end: var(--space-3)">
+            <span>置顶</span>
+            {featuredDate && (
+              <>
+                <span class="meta__sep">·</span>
+                <time datetime={featuredDate.toISOString()}>{formatDate(featuredDate)}</time>
+              </>
+            )}
           </p>
-        )
-      }
-    </section>
-
-    {
-      site.wiki.enabled && wiki.length > 0 && (
-        <aside style="grid-column: span 4" aria-labelledby="wiki-title">
-          <h2 id="wiki-title" style="font-size: var(--text-xl); margin-block-end: var(--space-4)">
-            {site.wiki.label}
+          <h2 class="featured__title">
+            <a class="featured__link" href={`/${featured.slug}/`}>
+              {featured.title}
+            </a>
           </h2>
-          <ul class="backlinks__list">
-            {wiki.map((doc) => (
-              <li>
-                <a href={`/wiki/${doc.slug}/`}>{doc.title}</a>
-                <span style="display: block; color: var(--color-text-subtle); font-size: var(--text-sm)">
-                  {doc.summary}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p style="margin-block-start: var(--space-4)">
-            <a href="/wiki/">全部条目 →</a>
-          </p>
-        </aside>
+          <p class="featured__summary">{featured.summary}</p>
+        </div>
+      </article>
+    )
+  }
+
+  <section aria-labelledby="recent-title">
+    <h2 id="recent-title" class="section-title">最近写的</h2>
+    <PostList docs={posts} content={content} />
+    {
+      rest.length > posts.length && (
+        <p style="margin-block-start: var(--space-4)">
+          <a href="/posts/">全部 {allPosts.length} 篇 →</a>
+        </p>
       )
     }
-  </div>
+  </section>
+
+  {
+    wiki.length > 0 && (
+      <section aria-labelledby="wiki-title" style="margin-block-start: var(--space-8)">
+        <h2 id="wiki-title" class="section-title">
+          {site.wiki.label}
+        </h2>
+        <PostList docs={wiki} content={content} variant="compact" />
+        <p style="margin-block-start: var(--space-4)">
+          <a href="/wiki/">全部条目 →</a>
+        </p>
+      </section>
+    )
+  }
 </BaseLayout>

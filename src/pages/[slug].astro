@@ -9,33 +9,51 @@
 import { render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Backlinks from '../components/Backlinks.astro';
+import Cover from '../components/Cover.astro';
+import JsonLd from '../components/JsonLd.astro';
+import PostNav from '../components/PostNav.astro';
+import Toc from '../components/Toc.astro';
 import { site, absoluteUrl } from '../config.js';
 import {
+  coverOf,
   dateOfDoc,
   loadContent,
+  ogImageOf,
   publishedPosts,
   reportIssues,
   tagsOf,
+  tocEnabled,
   updatedOfDoc,
   type SiteContent,
 } from '../lib/content.js';
+import { extractToc, shouldShowToc } from '../lib/toc.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
   reportIssues(content.issues);
 
-  return publishedPosts(content).map((doc) => ({
+  const posts = publishedPosts(content);
+
+  return posts.map((doc, index) => ({
     params: { slug: doc.slug },
-    props: { doc, content },
+    props: {
+      doc,
+      content,
+      // 列表按日期倒序（新→旧），所以 index-1 是更新的那篇 = 下一篇
+      prev: index + 1 < posts.length ? posts[index + 1]! : null,
+      next: index > 0 ? posts[index - 1]! : null,
+    },
   }));
 }
 
 interface Props {
   doc: (Awaited<ReturnType<typeof loadContent>>)['docs'][number];
   content: SiteContent;
+  prev: { slug: string; title: string } | null;
+  next: { slug: string; title: string } | null;
 }
 
-const { doc, content } = Astro.props;
+const { doc, content, prev, next } = Astro.props;
 const entry = content.entries.get(doc.slug);
 
 if (!entry) {
@@ -46,6 +64,10 @@ const { Content } = await render(entry);
 const date = dateOfDoc(content, doc.slug);
 const updated = updatedOfDoc(content, doc.slug);
 const tags = tagsOf(content, doc.slug);
+const cover = coverOf(content, doc.slug);
+
+const tocEntries = tocEnabled(content, doc.slug) ? extractToc(entry.body ?? '') : [];
+const showToc = shouldShowToc(tocEntries);
 
 const formatDate = (d: Date): string =>
   new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(d);
@@ -53,8 +75,7 @@ const formatDate = (d: Date): string =>
 /**
  * 阅读时长。
  *
- * 用中英分别计数而不是单纯按字符除：中文一个字约 1 token，
- * 西文一个词约 1.3 token，直接按字符数算会严重高估。
+ * 中文一个字约 1 token，西文一个词约 1.3 token，直接按字符数算会严重高估。
  * 300 字/分钟的基准取自中文阅读研究的常见区间。
  */
 const plain = entry.body ?? '';
@@ -70,7 +91,20 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
   description={doc.summary}
   type="article"
   publishedTime={date ?? undefined}
+  modifiedTime={updated ?? undefined}
+  ogImage={ogImageOf(content, doc.slug)}
 >
+  <JsonLd
+    type="article"
+    title={doc.title}
+    description={doc.summary}
+    url={Astro.url.pathname}
+    publishedTime={date ?? undefined}
+    modifiedTime={updated ?? undefined}
+    tags={tags}
+    image={ogImageOf(content, doc.slug)}
+  />
+
   <article>
     <header class="post-header">
       <h1 class="post-header__title">{doc.title}</h1>
@@ -103,8 +137,26 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
     </header>
 
     <div class="prose">
+      {/*
+        文章头图**只在用户真的提供了图片时**才显示。
+
+        自动生成的几何封面是为「发现」服务的——它在列表里帮助扫描、
+        让零配置的首页不显得空。但在文章页，它只是一块 500px 高的
+        装饰，会把正文推到折叠线以下，而读者来这一页是为了读字。
+
+        换句话说：生成封面负责让列表好看，真实封面负责让文章好看。
+        两者服务的目标不同，所以出现的位置也不同。
+      */}
+      {cover && (
+        <Cover slug={doc.slug} title={doc.title} cover={cover.src} coverAlt={cover.alt} class="cover cover--hero" />
+      )}
+
+      {showToc && <Toc entries={tocEntries} open={true} />}
+
       <Content />
     </div>
+
+    <PostNav prev={prev} next={next} />
 
     <Backlinks slug={doc.slug} graph={content.graph} />
 

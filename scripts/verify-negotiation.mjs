@@ -17,7 +17,7 @@
  */
 
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { negotiate } from '../src/lib/negotiate/edge.ts';
 import { estimateTokens } from '../src/lib/negotiate/accept.ts';
@@ -155,8 +155,18 @@ console.log('\n[1b] wiki 链接渲染契约');
     const res = await fetch(`${base}${page}`, { headers: { Accept: 'text/html' } });
     const html = await res.text();
 
-    // 去掉代码块——里面的方括号**本就该**保持原样
-    const prose = html.replace(/<code[^>]*>[\s\S]*?<\/code>/g, '').replace(/<pre[^>]*>[\s\S]*?<\/pre>/g, '');
+    /*
+     * 去掉三类内容再看：
+     *   - 代码块与行内代码：里面的方括号本就该保持原样
+     *   - 目录：它的文字来自**标题**，而标题里可能正当地包含
+     *     `[[方括号]]` 这个字面量（讲语法的文章就是这样）。
+     *     实测 `how-this-works` 的标题「用 `[[方括号]]` 连起来」
+     *     会让这条检查误报。
+     */
+    const prose = html
+      .replace(/<code[^>]*>[\s\S]*?<\/code>/g, '')
+      .replace(/<pre[^>]*>[\s\S]*?<\/pre>/g, '')
+      .replace(/<nav class="toc"[\s\S]*?<\/nav>/g, '');
 
     const leftover = prose.match(/\[\[[^\]]{0,30}\]\]/g) ?? [];
     check(leftover.length === 0, `${page} 正文无未解析的方括号`, `残留：${leftover.slice(0, 3).join(' ')}`);
@@ -181,7 +191,6 @@ console.log('\n[1b] wiki 链接渲染契约');
  */
 console.log('\n[1c] 字体加载契约');
 {
-  const { readdir } = await import('node:fs/promises');
   const astroDir = join(DIST, '_astro');
 
   let files = [];
@@ -236,6 +245,61 @@ console.log('\n[1c] 字体加载契约');
       decl === '' ? '未找到该令牌' : `${latin}@${idxLatin} PingFang@${idxCjk}`,
     );
   }
+}
+
+// ── 1d. 源码卫生 ───────────────────────────────────────────────────
+/**
+ * 源码里不该出现字面 NUL 字节。
+ *
+ * 这条是踩坑补上的：`lint.ts` 里一个复合键的分隔符不知怎么变成了**裸的
+ * NUL 字节**（U+0000）而不是转义序列 `\u0000`。它在运行时行为完全正确，
+ * 编辑器里也看不出来——但 diff 会把它当二进制、某些工具会截断文件、
+ * 而且用文本编辑器搜索永远搜不到。
+ *
+ * 项目里唯一该出现 NUL 的地方是**运行时构造的字符串**，不是源文件本身。
+ */
+console.log('\n[1d] 源码卫生');
+{
+  const roots = ['src', 'scripts', 'functions', 'netlify'];
+  let bad = 0;
+  let scanned = 0;
+
+  const walk = async (dir) => {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return; // 该目录不存在（比如没用到某个平台），跳过是合理的
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (/\.(ts|astro|css|mjs|js|json|md)$/.test(entry.name)) {
+        scanned++;
+        const buf = await readFile(full);
+        if (buf.includes(0)) {
+          bad++;
+          console.log(`  ✗ ${full} 含裸 NUL 字节`);
+        }
+      }
+    }
+  };
+
+  for (const root of roots) await walk(join(process.cwd(), root));
+
+  /*
+   * **扫到 0 个文件必须判失败。**
+   *
+   * 这条检查曾经「通过」过——因为 `readdir` 在另一个代码块里导入，
+   * 作用域不在这里，调用抛 ReferenceError 被 catch 吞掉，
+   * 于是它扫了 0 个文件然后报告「无裸 NUL 字节」。
+   *
+   * **一个没有真正检查任何东西、却报告通过的检查，比没有检查更糟**——
+   * 它会让人相信某件事已经被验证过了。所以这里把「扫描量」也纳入断言。
+   */
+  check(scanned > 20, `扫描 ${scanned} 个源文件`, '扫描量太少，检查可能没真正执行');
+  check(bad === 0, `无裸 NUL 字节`, `${bad} 个文件有问题`);
 }
 
 // ── 2. 七个 agent 的真实请求头 ──────────────────────────────────────

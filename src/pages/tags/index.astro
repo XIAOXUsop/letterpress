@@ -1,0 +1,55 @@
+---
+/**
+ * 标签索引。
+ *
+ * 少了这一页，标签就是个**死胡同**：从文章点进 `/tags/xxx/` 之后，
+ * 除了浏览器后退没有别的路可走。索引页是那个出口。
+ *
+ * 顺带把每个标签的文章数标出来——只有一个标签的孤岛话题和
+ * 有二十篇的主线话题，读者想找的东西不一样。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { loadContent, publishedPosts, reportIssues, tagsOf } from '../../lib/content.js';
+
+const content = await loadContent();
+reportIssues(content.issues);
+
+const posts = publishedPosts(content);
+
+const counts = new Map<string, number>();
+for (const post of posts) {
+  for (const tag of tagsOf(content, post.slug)) {
+    counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+}
+
+// 按文章数倒序，同数量按名称。热门标签排前面，因为那多半是主线话题
+const tags = [...counts.entries()].sort((a, b) =>
+  a[1] === b[1] ? (a[0] < b[0] ? -1 : 1) : b[1] - a[1],
+);
+---
+
+<BaseLayout title="标签" description="全部标签，按文章数排列。">
+  <div class="page-header">
+    <h1 class="page-header__title">标签</h1>
+    <p class="page-header__lead">共 {tags.length} 个标签。</p>
+  </div>
+
+  {
+    tags.length === 0 ? (
+      <p style="color: var(--color-text-muted)">
+        还没有标签。在文章的 frontmatter 里加 <code>tags: [标签一, 标签二]</code> 即可。
+      </p>
+    ) : (
+      <ul class="tags" style="gap: var(--space-3)">
+        {tags.map(([tag, count]) => (
+          <li>
+            <a class="tag" href={`/tags/${encodeURIComponent(tag)}/`}>
+              {tag} <span style="color: var(--color-text-subtle)">{count}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</BaseLayout>

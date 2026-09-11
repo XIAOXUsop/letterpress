@@ -314,6 +314,27 @@ describe('buildGraph', () => {
     expect(graph.backlinks.get('b')).toHaveLength(1);
   });
 
+  /**
+   * 开发模式下草稿要参与链接图。
+   *
+   * 作者在 `npm run dev` 里预览未完成的文章时，那篇文章正文里的
+   * `[[链接]]` 也必须被解析——否则草稿页面上所有链接都显示成方括号，
+   * 看起来像功能坏了，而实际只是「草稿被排除了」。
+   */
+  it('includeDrafts 打开时草稿参与链接图', () => {
+    const docs = [
+      doc({ slug: 'draft-post', kind: 'post', draft: true, body: '指向 [[target]]' }),
+      doc({ slug: 'target' }),
+    ];
+
+    const without = buildGraph(docs);
+    expect(without.bySlug.has('draft-post')).toBe(false);
+
+    const withDrafts = buildGraph(docs, { includeDrafts: true });
+    expect(withDrafts.bySlug.has('draft-post')).toBe(true);
+    expect(withDrafts.broken).toHaveLength(0);
+  });
+
   it('草稿不参与链接图', () => {
     const graph = buildGraph([
       doc({ slug: 'a', draft: true, body: '[[b]]' }),

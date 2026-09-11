@@ -22,6 +22,12 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      # 类型检查要放在最前面：它最快，也最容易在重构后第一时间抓到问题。
+      # 注意 @astrojs/check 与 typescript 是 devDependencies——
+      # 少了它们，astro check 会弹一个交互式安装提示，在 CI 里直接卡死。
+      - name: 类型检查
+        run: npm run check
+
       # 单元测试覆盖纯逻辑：Accept 解析、slug 生成、链接图、体检规则。
       # 全部离线，不依赖网络也不依赖构建产物。
       - name: 单元测试

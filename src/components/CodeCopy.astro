@@ -1,0 +1,57 @@
+---
+/**
+ * 代码块复制按钮。
+ *
+ * 用事件委托在 document 上挂一个监听，而不是给每个代码块都加按钮节点——
+ * 后者需要遍历 DOM 并逐个插入，在长文里会造成一次不必要的重排（CLS 来源之一）。
+ *
+ * 按钮是**渐进增强**：脚本没跑或 JS 被禁用时，代码照常显示、照常可选中复制，
+ * 只是没有那个便捷按钮。不做成「没有 JS 就不能复制」的样子。
+ */
+---
+
+<script>
+  (() => {
+    /** 给每个 <pre> 挂一个按钮。按钮是装饰性的，读屏不会念它。 */
+    function setup(): void {
+      const blocks = document.querySelectorAll<HTMLPreElement>('.prose pre');
+      if (blocks.length === 0) return;
+
+      for (const pre of blocks) {
+        // 防止重复挂载（Astro 的视图切换会重新执行脚本）
+        if (pre.querySelector('.code-copy')) continue;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'code-copy';
+        button.textContent = '复制';
+        button.setAttribute('aria-label', '复制这段代码');
+
+        button.addEventListener('click', async () => {
+          const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
+          try {
+            await navigator.clipboard.writeText(code);
+            button.textContent = '已复制';
+            button.dataset.copied = 'true';
+          } catch {
+            // 剪贴板 API 需要安全上下文（https 或 localhost），
+            // 且可能被权限策略拒绝。失败时给出可操作的提示而不是静默。
+            button.textContent = '复制失败';
+          }
+          window.setTimeout(() => {
+            button.textContent = '复制';
+            delete button.dataset.copied;
+          }, 2000);
+        });
+
+        pre.append(button);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setup);
+    } else {
+      setup();
+    }
+  })();
+</script>

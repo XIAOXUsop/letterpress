@@ -1,0 +1,46 @@
+# 全站允许抓取。
+#
+# ── 关于 AI 爬虫的一段说明，值得读完再改 ────────────────────────────
+#
+# 2026 年的「AI 爬虫」不是一个类别，而是两类，混为一谈会造成两种相反的错误：
+#
+#   · **训练爬虫**（GPTBot、ClaudeBot、Google-Extended、CCBot）
+#     把一个站的内容拿去做模型训练。不希望在训练语料里出现就挡掉。
+#
+#   · **检索爬虫**（OAI-SearchBot、Claude-SearchBot、PerplexityBot）
+#     让内容能被 AI 搜索引用并给出处。**挡住它们等于让这个站从 AI 回答里消失**，
+#     而且没有任何变通办法——这是最常见的自伤。
+#
+# 下面默认**全放行**：个人博客最想要的是被读到，而不是为训练数据较劲。
+# 如果你有不同意见，把训练爬虫那几行取消注释即可——但**不要**整体 Disallow，
+# 那会连同检索一起挡掉。
+#
+# 另注：本项目不生成 llms.txt 之外的额外文件。实测数据显示 97% 的 llms.txt
+# 从未被请求过，所以也不指望它——真正起作用的是可抓取的 HTML 与内容协商。
+
+User-agent: *
+Allow: /
+
+# ── 训练爬虫（按需取消注释）──────────────────────────────────────────
+# User-agent: GPTBot
+# Disallow: /
+# User-agent: ClaudeBot
+# Disallow: /
+# User-agent: Google-Extended
+# Disallow: /
+# User-agent: CCBot
+# Disallow: /
+
+# ── 检索爬虫：**建议保持放行** ──────────────────────────────────────
+# 挡住它们，你的文章就不会出现在 ChatGPT 搜索、Claude 搜索的回答里。
+# User-agent: OAI-SearchBot
+# Allow: /
+# User-agent: Claude-SearchBot
+# Allow: /
+
+# 构建产物里没有这些路径，写出来是为了防止某些爬虫按惯例去试探。
+# （robots.txt 只对守规矩的爬虫有效，恶意抓取器会无视它。）
+Disallow: /_astro/
+
+# sitemap 的地址由构建时注入——site.url 未配置时这一行会被省略，
+# 因为一个指向 localhost 的 sitemap 比没有 sitemap 更糟。

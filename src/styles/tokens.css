@@ -29,6 +29,22 @@
     --zinc-800: #27272a;
     --zinc-700: #3f3f46;
     --zinc-500: #71717a;
+    /*
+     * 这两个值是为**无障碍对比度**专门算出来的，不是随手挑的灰。
+     *
+     *   --zinc-450：#8a8a94，对 #fafafa 是 3.27:1
+     *   --zinc-550：#65656e，对 #09090b 是 3.45:1
+     *   --zinc-450-dark：#8a8a94，对 #09090b 是 5.82:1
+     *
+     * 它们分别对应两个**受 WCAG 约束**的场景：
+     *   - 可交互边框（WCAG 1.4.11 非文本对比度，≥3:1）
+     *   - 暗色模式下的次要文字（WCAG 1.4.3，≥4.5:1）
+     *
+     * 原先这两处复用了 zinc-300/zinc-500，实测分别是 1.42:1 与 4.12:1，
+     * 都不达标。
+     */
+    --zinc-450: #8a8a94;
+    --zinc-550: #65656e;
     --zinc-400: #a1a1aa;
     --zinc-300: #d4d4d8;
     --zinc-200: #e4e4e7;
@@ -117,8 +133,19 @@
     --color-text-muted: var(--zinc-700);
     --color-text-subtle: var(--zinc-500);
 
+    /*
+     * 两种边框，用途不同、对比度要求也不同：
+     *
+     *   --color-border           装饰性分隔线（列表项之间、区块之间）。
+     *                            WCAG **不**要求它达到 3:1——它不是识别
+     *                            任何 UI 组件所必需的信息。
+     *   --color-border-interactive 可交互元素的边界（标签、输入框、
+     *                            分页按钮、主题开关）。它是这些元素
+     *                            **唯一**的可点击标识，因此必须 ≥3:1。
+     */
     --color-border: var(--zinc-200);
     --color-border-strong: var(--zinc-300);
+    --color-border-interactive: var(--zinc-450);
 
     --color-accent: var(--klein-blue);
     --color-accent-contrast: var(--paper);
@@ -160,10 +187,12 @@
 
       --color-text: var(--zinc-100);
       --color-text-muted: var(--zinc-300);
-      --color-text-subtle: var(--zinc-500);
+      /* 暗色下 zinc-500 对 #09090b 只有 4.12:1，达不到正文的 4.5:1 */
+      --color-text-subtle: var(--zinc-450);
 
       --color-border: var(--zinc-800);
       --color-border-strong: var(--zinc-700);
+      --color-border-interactive: var(--zinc-550);
 
       --color-accent: var(--klein-blue-lifted);
       --color-accent-contrast: var(--zinc-950);
@@ -185,10 +214,11 @@
 
     --color-text: var(--zinc-100);
     --color-text-muted: var(--zinc-300);
-    --color-text-subtle: var(--zinc-500);
+    --color-text-subtle: var(--zinc-450);
 
     --color-border: var(--zinc-800);
     --color-border-strong: var(--zinc-700);
+    --color-border-interactive: var(--zinc-550);
 
     --color-accent: var(--klein-blue-lifted);
     --color-accent-contrast: var(--zinc-950);

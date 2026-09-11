@@ -3,6 +3,8 @@ title: 你的博客该不该给 AI 一份 markdown
 summary: 内容协商是 HTTP 自带的能力，但博客圈几乎没人用。三个 agent 会主动要 markdown，四个不会——而现有工具都跳过了最难的那一步。
 date: 2026-09-12
 tags: [web, agent, http]
+featured: true
+coverAlt: 蓝底白色几何构图
 ---
 
 一个 AI agent 抓取你的网页时，看到的东西和你看到的不一样。它看到的是两万个

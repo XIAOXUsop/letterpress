@@ -1,12 +1,14 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { site } from '../config.js';
-import { loadContent, reportIssues, stats } from '../lib/content.js';
+import { site, unconfiguredFields } from '../config.js';
+import { loadContent, reportIssues } from '../lib/content.js';
 import { stats as knowledgeStats } from '../lib/wiki/llms.js';
 
 const content = await loadContent();
 reportIssues(content.issues);
 const s = knowledgeStats(content.docs, content.graph);
+
+const todo = unconfiguredFields();
 ---
 
 <BaseLayout title="关于" description={site.author.bio}>
@@ -14,11 +16,42 @@ const s = knowledgeStats(content.docs, content.graph);
     <h1 class="page-header__title">关于</h1>
   </div>
 
+  {/*
+    还没配置时，先给一份可执行的清单。
+
+    比在 README 里写「记得改配置」有用得多——**用户不会在读 README 时
+    顺手改配置，但一定会打开自己的关于页**。而且它避免了在正式页面上
+    展示「一句话介绍自己」这种明显的占位文案。
+  */}
+  {
+    todo.length > 0 && (
+      <section
+        class="setup-notice"
+        aria-labelledby="setup-title"
+        style="margin-block-end: var(--space-7); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-inline-start-width: 3px; border-inline-start-color: var(--color-accent)"
+      >
+        <h2 id="setup-title" style="font-size: var(--text-base); font-weight: 600">
+          这个站还没配置
+        </h2>
+        <p style="margin-block: var(--space-3); color: var(--color-text-muted); font-size: var(--text-sm)">
+          下面的字段还是出厂默认值。改 <code>src/config.ts</code> 即可，改完这条提示会自动消失。
+        </p>
+        <ul style="margin: 0; padding-inline-start: var(--space-5); font-size: var(--text-sm)">
+          {todo.map((item) => (
+            <li style="margin-block-start: var(--space-1)">
+              <code>{item}</code>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
   <div class="prose">
     <p>{site.author.bio}</p>
 
     {
-      site.author.url && (
+      site.author.url && todo.length === 0 && (
         <p>
           找到我：<a href={site.author.url}>{site.author.url}</a>
         </p>
@@ -27,8 +60,13 @@ const s = knowledgeStats(content.docs, content.graph);
 
     <h2>这个站</h2>
     <p>
-      用 <a href="https://github.com/XIAOXUsop/letterpress">letterpress</a> 搭建。
-      内容放在 Git 仓库里，构建出静态文件，不需要数据库，也不需要常驻服务。
+      用{' '}
+      {site.footer.repoUrl ? (
+        <a href={site.footer.repoUrl}>letterpress</a>
+      ) : (
+        'letterpress'
+      )}{' '}
+      搭建。内容放在 Git 仓库里，构建出静态文件，不需要数据库，也不需要常驻服务。
     </p>
 
     <h2>给机器的入口</h2>
