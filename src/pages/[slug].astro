@@ -118,7 +118,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
   <article data-pagefind-body>
     <header class="post-header">
       <h1 class="post-header__title" data-pagefind-meta="title">{doc.title}</h1>
-      <div class="meta post-header__meta">
+      <div class="meta post-header__meta" data-pagefind-ignore>
         {date && <time datetime={date.toISOString()}>{formatDate(date)}</time>}
         <span class="meta__sep">·</span>
         <span>约 {minutes} 分钟</span>
@@ -133,7 +133,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
       </div>
       {
         tags.length > 0 && (
-          <ul class="tags" style="margin-block-start: var(--space-4)">
+          <ul class="tags" style="margin-block-start: var(--space-4)" data-pagefind-ignore>
             {tags.map((tag) => (
               <li>
                 <a class="tag" href={path(`/tags/${encodeURIComponent(tag)}/`)}>
@@ -166,11 +166,14 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
       <Content />
     </div>
 
-    <PostNav prev={prev} next={next} />
+    {/* 导航块不是正文，不该进搜索摘要 */}
+    <div data-pagefind-ignore>
+        <Backlinks slug={doc.slug} graph={content.graph} />
+    </div>
 
     <Backlinks slug={doc.slug} graph={content.graph} />
 
-    <p class="md-available">
+    <p class="md-available" data-pagefind-ignore>
       这一页也有 markdown 版本：<a href={markdownHref}>{markdownHref}</a>
       <br />
       请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。

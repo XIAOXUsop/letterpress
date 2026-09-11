@@ -80,7 +80,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
   <article data-pagefind-body>
     <header class="post-header">
       <h1 class="post-header__title" data-pagefind-meta="title">{doc.title}</h1>
-      <div class="meta post-header__meta">
+      <div class="meta post-header__meta" data-pagefind-ignore>
         <span>{kind ? KIND_LABELS[kind] ?? kind : '条目'}</span>
         <span class="meta__sep">·</span>
         <span>{doc.slug}</span>
@@ -123,7 +123,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
 
     <Backlinks slug={doc.slug} graph={content.graph} />
 
-    <p class="md-available">
+    <p class="md-available" data-pagefind-ignore>
       这一页也有 markdown 版本：<a href={markdownHref}>{markdownHref}</a>
       <br />
       请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。
