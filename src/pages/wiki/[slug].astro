@@ -104,7 +104,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
 
     {
       outgoing.length > 0 && (
-        <section class="backlinks" aria-labelledby="outgoing-title">
+        <section class="backlinks" aria-labelledby="outgoing-title" data-pagefind-ignore>
           <h2 class="backlinks__title" id="outgoing-title">
             这一条指向（{outgoing.length}）
           </h2>
@@ -121,7 +121,9 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
       )
     }
 
-    <Backlinks slug={doc.slug} graph={content.graph} />
+    <div data-pagefind-ignore>
+      <Backlinks slug={doc.slug} graph={content.graph} />
+    </div>
 
     <p class="md-available" data-pagefind-ignore>
       这一页也有 markdown 版本：<a href={markdownHref}>{markdownHref}</a>

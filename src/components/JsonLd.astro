@@ -81,7 +81,8 @@ const graph: Record<string, unknown>[] = [
     ...(websiteId ? { '@id': websiteId } : {}),
     name: site.title,
     description: site.tagline,
-    ...(base ? { url: base } : {}),
+    // 必须带上部署路径：少了它，@id 与 url 会指向两个不同的地址
+    ...(base ? { url: `${base}${deployBase}` } : {}),
     inLanguage: site.lang,
     ...(personId ? { publisher: { '@id': personId } } : {}),
   },

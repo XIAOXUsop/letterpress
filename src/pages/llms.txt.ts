@@ -39,7 +39,7 @@ export const GET: APIRoute = async () => {
        * 自己先犯这个错很难看。
        */
       `本站以 ${site.lang} 为主。`,
-      '每个页面都有一个 .md 孪生文件：把页面 URL 结尾加上 .md 即可。',
+      '下面这些条目每一条都有 .md 孪生文件：把它的 URL 结尾加上 .md 即可。',
       '请求时带上 `Accept: text/markdown` 头，会直接拿到 markdown 版本而不是 HTML。',
     ],
   });

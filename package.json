@@ -19,7 +19,8 @@
     "verify": "npm run clean && npm run build && node scripts/bundle-and-verify.mjs",
     "verify:only": "node scripts/bundle-and-verify.mjs",
     "verify:base": "node scripts/check-base.mjs",
-    "verify:all": "npm run check && npm test && npm run verify && npm run verify:base"
+    "verify:all": "npm run check && npm test && npm run verify && npm run verify:base && npm run verify:formats",
+    "verify:formats": "node scripts/check-formats.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",

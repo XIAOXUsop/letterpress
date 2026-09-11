@@ -473,6 +473,48 @@ console.log('\n[4b] SEO / 分享 / 无障碍契约');
   }
 }
 
+// ── 4c. 页面结构：同一区块不得渲染两遍 ──────────────────────────────
+/**
+ * 这条是**踩坑之后补的**，而且它暴露了整套检查的一个盲区。
+ *
+ * 当时为了把「被这些页面引用」排除出搜索索引，给它套了一层
+ * `<div data-pagefind-ignore>`——**却忘了删掉原来那一份**。
+ * 于是每篇有反向链接的文章页，那块内容连印两遍，中间隔约 80px 空白。
+ *
+ * **56 条断言全部通过。** 因为它们检查的都是「某元素存在吗」
+ * 「文字对不对」「href 对不对」——**没有任何一条问「它出现了几次」**。
+ * 一个元素出现两次，前面所有问题都会给出「正常」的答案。
+ */
+console.log('\n[4c] 页面结构：区块不得重复');
+{
+  // 每个页面里，这些「一页只该有一处」的区块出现次数
+  const singletons = [
+    ['被这些页面引用', /被这些页面引用/g],
+    ['这一条指向', /这一条指向/g],
+    ['markdown 版本提示', /class="md-available"/g],
+    ['文章头', /class="post-header"/g],
+  ];
+
+  const pages = [
+    '/markdown-for-agents/',
+    '/cjk-web-typography/',
+    '/how-this-works/',
+    '/wiki/content-negotiation/',
+    '/wiki/letterpress/',
+  ];
+
+  for (const page of pages) {
+    const res = await fetch(`${base}${page}`, { headers: { Accept: 'text/html' } });
+    const html = await res.text();
+
+    for (const [label, pattern] of singletons) {
+      const n = (html.match(pattern) ?? []).length;
+      // 0 是允许的（这一页可能本来就没有这块），但 ≥2 一定是渲染重复
+      check(n <= 1, `${page} 的「${label}」不重复`, `出现 ${n} 次`);
+    }
+  }
+}
+
 // ── 5. 实测收益 ─────────────────────────────────────────────────────
 console.log('\n[5] 实测收益（同一页面的 HTML vs markdown）');
 console.log(

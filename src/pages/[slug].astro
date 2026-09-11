@@ -171,7 +171,6 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
         <Backlinks slug={doc.slug} graph={content.graph} />
     </div>
 
-    <Backlinks slug={doc.slug} graph={content.graph} />
 
     <p class="md-available" data-pagefind-ignore>
       这一页也有 markdown 版本：<a href={markdownHref}>{markdownHref}</a>

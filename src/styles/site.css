@@ -207,12 +207,34 @@
    * `width: max-content; min-width: 100%` 让表格既能撑到内容宽度，
    * 又在内容窄时铺满容器。
    */
+  /*
+   * ── 可滚动区域必须**看得出来**可以滚 ────────────────────────────
+   *
+   * 窄屏上宽表格会横向溢出，`overflow-x: auto` 防住了页面级横向滚动——
+   * 代价是**右边的列被从字符中间切断，而没有任何线索表明可以滑**。
+   * 实测 390px 下 agent 对照表的第三列显示成 `text/markd`，
+   * 读者只会以为内容就是这样。
+   *
+   * 下面这套是 CSS 的「滚动阴影」技巧：四层背景里，两层 `local`（跟着
+   * 内容滚、滚到底就滑走）、两层 `scroll`（贴着容器、只在有溢出时露出）。
+   * 于是**有溢出才显示阴影**，纯 CSS 判定，不需要 JS。
+   */
   .table-wrap {
     overflow-x: auto;
     max-width: 100%;
     margin-block: var(--space-5);
     /* 让键盘聚焦时能看出这是可滚动区域 */
     scrollbar-width: thin;
+
+    background:
+      linear-gradient(to right, var(--color-canvas) 30%, transparent) left center / 40px 100%
+        no-repeat local,
+      linear-gradient(to left, var(--color-canvas) 30%, transparent) right center / 40px 100%
+        no-repeat local,
+      radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--color-text) 18%, transparent), transparent)
+        left center / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--color-text) 18%, transparent), transparent)
+        right center / 14px 100% no-repeat scroll;
   }
 
   .table-wrap > table {
@@ -305,8 +327,22 @@
     transition: background-color var(--duration-fast) var(--ease-out);
   }
 
+  /*
+   * 悬停时**必须同时加深文字**。
+   *
+   * 悬停背景是锌-100，而日期/标签用的是弱化色锌-500：两者相叠只有
+   * **4.39:1**，低于正文要求的 4.5:1。而 `contrast.test.ts` 里恰好把
+   * 「锌-500 落在锌-100 上」作为反例记录在案——记了却没检查这个组合。
+   *
+   * 改成悬停时文字提到次要色（锌-700 落在锌-100 上是 10:1）。
+   */
   .post-list__row:hover {
     background-color: var(--color-surface-sunken);
+  }
+
+  .post-list__row:hover .meta,
+  .post-list__row:hover .post-list__tag {
+    color: var(--color-text-muted);
   }
 
   /* 链接本身只包住标题，但 ::after 把它撑满整行 */

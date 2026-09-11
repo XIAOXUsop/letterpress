@@ -58,7 +58,17 @@ const {
 } = Astro.props;
 
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
-const canonical = new URL(Astro.url.pathname, Astro.site ?? `https://example.com`).href;
+/*
+ * 404 页的 canonical 要指向站点首页。
+ *
+ * 指向 `/404/` 的话，那个地址本身返回 404——canonical 的作用是告诉搜索
+ * 引擎「哪个才是正本」，而指向一个不存在的地址等于把它引向死路。
+ * 对不存在的内容，正确做法是「这一页没有正本」或指向上一级。
+ */
+const isNotFound = Astro.url.pathname.replace(/\/$/, '').endsWith('/404');
+const canonical = isNotFound
+  ? absolute('/', site.url) || `https://example.com/`
+  : new URL(Astro.url.pathname, Astro.site ?? `https://example.com`).href;
 
 // 同 URL 的 markdown 版本。给人和 agent 都留一个显式入口，
 // 而不是让他们猜「带上 Accept 头会怎样」。

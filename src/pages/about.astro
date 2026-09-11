@@ -92,9 +92,9 @@ const onGitHubPages = site.url.includes('github.io');
       </li>
     </ul>
     <p>
-      另外，每个页面都有一个 <code>.md</code> 孪生文件（把页面 URL 结尾加
-      <code>.md</code> 即可）。请求时带上 <code>Accept: text/markdown</code>
-      头，会直接拿到 markdown 版本而不是 HTML。
+      另外，<strong>文章与知识库条目</strong>都有一个 <code>.md</code> 孪生文件
+      （把页面 URL 结尾加 <code>.md</code> 即可）。请求时带上
+      <code>Accept: text/markdown</code> 头，会直接拿到 markdown 版本而不是 HTML。
     </p>
     {/*
       Demo 与「模板能做什么」是两件事。
@@ -112,7 +112,7 @@ const onGitHubPages = site.url.includes('github.io');
       </p>
     )}
     <p>
-      需要说明的是：<code>llms.txt</code> 的实际效果被高估了——
+      另外，<code>llms.txt</code> 的实际效果被高估了——
       有实测显示 97% 的 llms.txt 从未被请求过。这里生成它是因为零成本，
       但真正起作用的是内容协商。
     </p>

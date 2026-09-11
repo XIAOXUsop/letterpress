@@ -55,7 +55,7 @@ export const site: SiteConfig = {
 | 📡 **订阅** | RSS **全文输出**（含分类与作者）、sitemap、robots.txt |
 | 🌏 **中文** | 行高 1.75、标题字重按中文字体特性选、行宽 `34em`、`text-autospace` 中西文自动间距、中文不用斜体 |
 | ♿ **无障碍** | 跳转链接、100% 可见焦点、`prefers-reduced-motion`；**对比度有自动化测试**（解析 `tokens.css` 逐对验算，亮暗双模式） |
-| 🤖 **给机器** | 每个页面有 `.md` 孪生文件；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt` |
+| 🤖 **给机器** | **文章与知识库条目**有 `.md` 孪生文件；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt` |
 | 🧠 **知识层** | 用 `[[方括号]]` 互链的独立知识库；断链**会让构建失败**；每次构建出体检报告 |
 | 🌗 **主题** | 三态（跟随系统 / 亮 / 暗），无闪烁（恢复脚本在 `<head>` 同步执行） |
 | 📦 **交付** | 纯静态，零外部 JS 文件；CSS 单文件 21.1 KB（gzip 4.5 KB）；字体只含拉丁子集 100 KB |
@@ -216,7 +216,9 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
 | `npm test` | **215 项**单元测试，全部离线 |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 56 项契约 |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 76 项契约 |
+| `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物，四类载体） |
+| `npm run verify:formats` | 内容格式探针：真的放一个 .md 与 .mdx 进去，看能不能产出页面 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/` 与 `dist/` |
 
@@ -255,7 +257,7 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 | 项 | 结果 |
 |---|---|
 | 单元测试 | **215 项**，全部离线，无网络依赖 |
-| 端到端契约 | **56 项**，打在真实构建产物上 |
+| 端到端契约 | **76 项**，打在真实构建产物上 |
 | 构建 | 23 页约 **1.4 秒** |
 | 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
 | CSS | 单文件 **21.1 KB / gzip 4.5 KB** |

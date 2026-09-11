@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import mdx from '@astrojs/mdx';
 import { unified } from '@astrojs/markdown-remark';
 import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
 import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
@@ -58,6 +59,17 @@ export default defineConfig({
   },
 
   integrations: [
+    /*
+     * ── MDX 必须在这里注册，否则它是「假的」────────────────────────
+     *
+     * `@astrojs/mdx` 装了、`content.config.ts` 的 glob 也匹配 `.mdx`，
+     * 但**不注册到 integrations 就完全没用**：放进一个 `.mdx` 文件，
+     * 构建成功、退出码 0，而文章在 dist 里根本不存在、首页也不列。
+     *
+     * 这正是本项目反复强调的那类 bug——**不报错，只是没效果**。
+     * `npm run verify` 里加了一条断言：放一个 `.mdx` 必须能产出页面。
+     */
+    mdx(),
     /**
      * 只在配了站点地址时才启用 sitemap。
      *
