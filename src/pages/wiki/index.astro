@@ -50,8 +50,17 @@ const groups = (['concept', 'entity', 'synthesis'] as const)
           <ul class="post-list">
             {group.docs.map((doc) => (
               <li class="post-list__item">
+                {/*
+                  **不显示 slug。**
+
+                  它是内部标识（文件名），读者不需要看到。早先这里在左栏
+                  用等宽小字列出 `llm-wiki`、`cjk-typography`，整页看起来
+                  像 `ls -la` 的输出——把一个开发者视角的实现细节泄漏进了
+                  用户界面，是「技术演示」而不是「产品」最典型的痕迹。
+
+                  分类信息由上面的分组标题承担，不需要再来一列。
+                */}
                 <a class="post-list__link" href={path(`/wiki/${doc.slug}/`)}>
-                  <span class="meta">{doc.slug}</span>
                   <span>
                     <span class="post-list__title">{doc.title}</span>
                     <span class="post-list__summary" style="display: block">
