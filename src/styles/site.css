@@ -1,0 +1,427 @@
+/**
+ * 布局与组件。
+ *
+ * 瑞士国际主义：12 列非对称网格、全直角、零阴影。
+ *
+ * **分组靠规则线与留白，不靠卡片。** 卡片是最省事的容器，也是让页面
+ * 一眼看上去像模板的最快方式——它替作者做了本该由层级做的决定。
+ * 这里只在真正需要「这是一个独立可点击单元」的地方用边界，其余靠
+ * 1px 线与间距分组。
+ */
+
+@layer layout, components;
+
+@layer layout {
+  .page {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  /*
+   * 12 列网格。非对称是刻意的——居中对称的版式是这个时代最没有信息量的
+   * 默认选择（它只是「不知道该怎么排」的委婉说法）。
+   */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--space-6) var(--space-5);
+  }
+
+  /* 窄视口一律塌成单列。非对称布局在小屏上只会变成「挤」。 */
+  @media (max-width: 767px) {
+    .grid {
+      grid-template-columns: 1fr;
+      gap: var(--space-5);
+    }
+
+    /* 塌陷后所有 span 都失效，强制占满 */
+    .grid > * {
+      grid-column: 1 / -1 !important;
+    }
+  }
+
+  .main {
+    flex: 1;
+    padding-block: var(--space-8);
+  }
+
+  /* 版面的两种基本宽度：正文栏与整栏 */
+  .measure {
+    max-width: var(--measure);
+  }
+
+  .measure-wide {
+    max-width: var(--measure-wide);
+  }
+}
+
+@layer components {
+  /* ── 页头 ──────────────────────────────────────────────────── */
+
+  .site-header {
+    border-block-end: 1px solid var(--color-border);
+    background-color: var(--color-canvas);
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 20;
+  }
+
+  .site-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    /* 页头高度控制在 64px 左右。超过 80px 就会在小屏笔记本上挤掉内容区。 */
+    min-height: 4rem;
+    padding-block: var(--space-2);
+  }
+
+  .site-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: normal;
+    color: var(--color-text);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    font-size: var(--text-sm);
+  }
+
+  .site-nav a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out);
+  }
+
+  .site-nav a:hover,
+  .site-nav a[aria-current='page'] {
+    color: var(--color-accent);
+  }
+
+  .site-nav a[aria-current='page'] {
+    /* 当前位置不只靠颜色标记，加一条下划线——颜色不该是唯一编码 */
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+  }
+
+  /* ── 页脚 ──────────────────────────────────────────────────── */
+
+  .site-footer {
+    border-block-start: 1px solid var(--color-border);
+    padding-block: var(--space-6);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+  }
+
+  .site-footer a {
+    color: var(--color-text-muted);
+  }
+
+  /* ── 元信息 ────────────────────────────────────────────────── */
+
+  /*
+   * 等宽只用于代码、数据、测量——不用于「装技术感」。
+   * 日期、行数、token 数属于数据，所以用等宽合理。
+   */
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* 分隔符用「每行最多一个」的原则——中点不是万能胶水 */
+  .meta__sep {
+    color: var(--color-border-strong);
+    user-select: none;
+  }
+
+  /* ── 文章列表 ──────────────────────────────────────────────── */
+
+  /*
+   * 用规则线分隔的行，不用卡片。
+   * 卡片网格会让每篇文章看起来同等重要，而实际上日期、长度、主题都有差别——
+   * 一排等高卡片把这个信息全部抹平了。
+   */
+  .post-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .post-list__item {
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  .post-list__item + .post-list__item {
+    margin-block-start: 0;
+  }
+
+  .post-list__link {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+    padding-block: var(--space-5);
+    text-decoration: none;
+    color: inherit;
+    transition: background-color var(--duration-fast) var(--ease-out);
+  }
+
+  @media (min-width: 768px) {
+    .post-list__link {
+      /* 日期窄列 + 标题与摘要宽列的非对称结构 */
+      grid-template-columns: 8rem minmax(0, 1fr);
+      gap: var(--space-5);
+      align-items: baseline;
+    }
+  }
+
+  .post-list__link:hover {
+    background-color: var(--color-surface-sunken);
+  }
+
+  .post-list__title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 500;
+    line-height: var(--leading-snug);
+    color: var(--color-text);
+    text-wrap: balance;
+  }
+
+  .post-list__link:hover .post-list__title {
+    color: var(--color-accent);
+  }
+
+  .post-list__summary {
+    margin-block-start: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* ── 页头区 ────────────────────────────────────────────────── */
+
+  /*
+   * 左对齐，不用居中的「大标题 + 副标题 + 两个按钮」。
+   * 那个结构是 AI 生成页面的第一识别特征，而且它传达的信息量为零——
+   * 居中不等于重要。
+   */
+  .page-header {
+    margin-block-end: var(--space-8);
+  }
+
+  .page-header__title {
+    font-size: var(--text-4xl);
+    font-weight: 600;
+    max-width: 20ch;
+  }
+
+  @media (max-width: 767px) {
+    .page-header__title {
+      font-size: var(--text-3xl);
+    }
+  }
+
+  .page-header__lead {
+    margin-block-start: var(--space-4);
+    font-size: var(--text-lg);
+    color: var(--color-text-muted);
+    max-width: var(--measure);
+    text-wrap: pretty;
+  }
+
+  /* ── 正文 ──────────────────────────────────────────────────── */
+
+  .prose {
+    max-width: var(--measure);
+  }
+
+  .prose h2,
+  .prose h3 {
+    /* 标题允许比正文栏宽一点，避免长标题频繁折行 */
+    max-width: var(--measure-wide);
+  }
+
+  .prose > :first-child {
+    margin-block-start: 0;
+  }
+
+  /* 段首不缩进、用段间距分界——两者并用会双重标注边界。 */
+  .prose p {
+    margin-block-end: var(--space-4);
+  }
+
+  .prose img {
+    margin-block: var(--space-6);
+    border: 1px solid var(--color-border);
+    /* 图片必须有尺寸，否则加载完成时会顶动下面的内容（CLS） */
+    height: auto;
+  }
+
+  /* ── 文章头 ────────────────────────────────────────────────── */
+
+  .post-header {
+    margin-block-end: var(--space-7);
+    padding-block-end: var(--space-5);
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  .post-header__title {
+    font-size: var(--text-4xl);
+    font-weight: 600;
+    line-height: var(--leading-tight);
+    text-wrap: balance;
+  }
+
+  @media (max-width: 767px) {
+    .post-header__title {
+      font-size: var(--text-2xl);
+    }
+  }
+
+  .post-header__meta {
+    margin-block-start: var(--space-4);
+  }
+
+  /* ── 标签 ──────────────────────────────────────────────────── */
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .tag {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    padding: 0.15rem var(--space-2);
+    text-decoration: none;
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+  }
+
+  .tag:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  /* ── 引用与被引用 ──────────────────────────────────────────── */
+
+  .backlinks {
+    margin-block-start: var(--space-8);
+    padding-block-start: var(--space-5);
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .backlinks__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    font-family: var(--font-body);
+    color: var(--color-text-muted);
+    margin-block-end: var(--space-3);
+  }
+
+  .backlinks__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  /* ── 供 agent 读取的提示条 ────────────────────────────────── */
+
+  /*
+   * 这是本项目一个差异化能力的可见入口：把同一篇文章的 markdown 版本
+   * 直接给出去。对人有用（复制去别处引用），对 agent 有用（少一次解析）。
+   *
+   * 刻意做成低调的一行，不做成按钮——它不是主操作。
+   */
+  .md-available {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    margin-block-start: var(--space-4);
+  }
+
+  /* ── 状态页（404 等） ──────────────────────────────────────── */
+
+  .status-page {
+    text-align: start;
+    padding-block: var(--space-9);
+  }
+
+  .status-page__code {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status-page__title {
+    margin-block-start: var(--space-3);
+    font-size: var(--text-2xl);
+  }
+
+  .status-page__body {
+    margin-block-start: var(--space-4);
+    color: var(--color-text-muted);
+    max-width: var(--measure);
+  }
+
+  /* ── 主题切换 ──────────────────────────────────────────────── */
+
+  .theme-toggle {
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
+    font-family: var(--font-mono);
+    /* 触控目标至少 24×24 CSS px */
+    min-height: 1.5rem;
+    min-width: 2.5rem;
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+  }
+
+  .theme-toggle:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  /* ── 构建报告（仅开发环境） ────────────────────────────────── */
+
+  .lint-report {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    white-space: pre-wrap;
+    background-color: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    padding: var(--space-4);
+    overflow-x: auto;
+  }
+}

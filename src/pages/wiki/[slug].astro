@@ -1,0 +1,116 @@
+---
+/**
+ * 知识层条目页。
+ *
+ * 与文章页结构基本相同，差别在于：
+ * - 不显示日期（知识层的价值不在时效）
+ * - 显示 outward links（它指向谁），因为它是一张网上的节点
+ */
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Backlinks from '../../components/Backlinks.astro';
+import { site } from '../../config.js';
+import {
+  updatedOfDoc,
+  kindOf,
+  loadContent,
+  publishedWiki,
+  reportIssues,
+  type SiteContent,
+} from '../../lib/content.js';
+
+export async function getStaticPaths() {
+  const content = await loadContent();
+  reportIssues(content.issues);
+
+  return publishedWiki(content).map((doc) => ({
+    params: { slug: doc.slug },
+    props: { doc, content },
+  }));
+}
+
+interface Props {
+  doc: (Awaited<ReturnType<typeof loadContent>>)['docs'][number];
+  content: SiteContent;
+}
+
+const { doc, content } = Astro.props;
+const entry = content.entries.get(doc.slug);
+
+if (!entry) {
+  throw new Error(`找不到 slug 为「${doc.slug}」的知识库条目。`);
+}
+
+const { Content } = await render(entry);
+const updated = updatedOfDoc(content, doc.slug);
+const kind = kindOf(content, doc.slug);
+
+const KIND_LABELS: Record<string, string> = {
+  concept: '概念',
+  entity: '条目',
+  synthesis: '综述',
+};
+
+// 它指向谁。与「被引用」相对，合起来能看到这张网上的一个完整节点。
+const outgoing = [...(content.graph.outbound.get(doc.slug) ?? [])]
+  .map((slug) => content.graph.bySlug.get(slug))
+  .filter((d): d is NonNullable<typeof d> => d !== undefined)
+  .sort((a, b) => (a.title < b.title ? -1 : 1));
+
+const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
+---
+
+<BaseLayout title={doc.title} description={doc.summary} type="article">
+  <article>
+    <header class="post-header">
+      <h1 class="post-header__title">{doc.title}</h1>
+      <div class="meta post-header__meta">
+        <span>{kind ? KIND_LABELS[kind] ?? kind : '条目'}</span>
+        <span class="meta__sep">·</span>
+        <span>{doc.slug}</span>
+        {
+          updated && (
+            <>
+              <span class="meta__sep">·</span>
+              <span>
+                修订于
+                {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(updated)}
+              </span>
+            </>
+          )
+        }
+      </div>
+    </header>
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    {
+      outgoing.length > 0 && (
+        <section class="backlinks" aria-labelledby="outgoing-title">
+          <h2 class="backlinks__title" id="outgoing-title">
+            这一条指向（{outgoing.length}）
+          </h2>
+          <ul class="backlinks__list">
+            {outgoing.map((target) => (
+              <li>
+                <a href={target.kind === 'wiki' ? `/wiki/${target.slug}/` : `/${target.slug}/`}>
+                  {target.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <Backlinks slug={doc.slug} graph={content.graph} />
+
+    <p class="md-available">
+      这一页也有 markdown 版本：<a href={markdownHref}>{markdownHref}</a>
+      <br />
+      请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。
+    </p>
+  </article>
+</BaseLayout>

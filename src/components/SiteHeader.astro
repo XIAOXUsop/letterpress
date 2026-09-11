@@ -1,0 +1,33 @@
+---
+import { site } from '../config.js';
+import ThemeToggle from './ThemeToggle.astro';
+
+const path = Astro.url.pathname;
+
+/** 当前项判定。首页要精确匹配，其余按前缀匹配（这样 /posts/foo/ 也算「文章」）。 */
+const isCurrent = (href: string): boolean =>
+  href === '/' ? path === '/' : path === href || path.startsWith(href);
+
+// 配置里关掉知识层时，导航里也不该出现它的入口——
+// 留一个指向 404 的链接比不显示更糟。
+const nav = site.wiki.enabled
+  ? site.nav
+  : site.nav.filter((item) => !item.href.startsWith('/wiki'));
+---
+
+<header class="site-header">
+  <div class="page site-header__inner">
+    <a class="site-title" href="/">{site.title}</a>
+
+    <nav class="site-nav" aria-label="主导航">
+      {
+        nav.map((item) => (
+          <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+            {item.label}
+          </a>
+        ))
+      }
+      <ThemeToggle />
+    </nav>
+  </div>
+</header>

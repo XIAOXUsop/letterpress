@@ -1,0 +1,35 @@
+---
+import { site, absoluteUrl } from '../config.js';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="page">
+    <p>
+      {site.footer.text}
+    </p>
+    <p style="margin-block-start: var(--space-2)">
+      © {year} {site.author.name}
+      {
+        site.author.url && (
+          <>
+            <span class="meta__sep"> · </span>
+            <a href={site.author.url} rel="me">主页</a>
+          </>
+        )
+      }
+      <span class="meta__sep"> · </span>
+      <a href={absoluteUrl('/llms.txt')}>llms.txt</a>
+      <span class="meta__sep"> · </span>
+      <a href={absoluteUrl('/rss.xml')}>RSS</a>
+    </p>
+    {
+      site.footer.credit && (
+        <p style="margin-block-start: var(--space-2)">
+          由 <a href="https://github.com/XIAOXUsop/letterpress">letterpress</a> 驱动
+        </p>
+      )
+    }
+  </div>
+</footer>

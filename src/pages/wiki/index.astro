@@ -1,0 +1,68 @@
+---
+/**
+ * 知识层索引。
+ *
+ * 与文章列表的关键差别：**按主题分组，不按时间排**。
+ * 知识层的用途是「查」而不是「追更」，时间顺序在这里没有信息量。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { site } from '../../config.js';
+import { kindOf, loadContent, publishedWiki, reportIssues } from '../../lib/content.js';
+
+const content = await loadContent();
+reportIssues(content.issues);
+
+const entries = publishedWiki(content);
+
+const KIND_LABELS: Record<string, string> = {
+  concept: '概念',
+  entity: '条目',
+  synthesis: '综述',
+};
+
+const groups = (['concept', 'entity', 'synthesis'] as const)
+  .map((kind) => ({
+    kind,
+    label: KIND_LABELS[kind] ?? kind,
+    docs: entries.filter((d) => (kindOf(content, d.slug) ?? 'concept') === kind),
+  }))
+  .filter((group) => group.docs.length > 0);
+---
+
+<BaseLayout title={site.wiki.label} description={`${site.wiki.label}：按主题组织的条目，互相链接。`}>
+  <div class="page-header">
+    <h1 class="page-header__title">{site.wiki.label}</h1>
+    <p class="page-header__lead">
+      按主题组织，靠链接连起来。想按时间读，去<a href="/posts/">文章</a>。
+    </p>
+  </div>
+
+  {
+    groups.length === 0 ? (
+      <p style="color: var(--color-text-muted)">
+        还没有条目。在 <code>src/content/wiki/</code> 里新建一个 .md 文件即可。
+      </p>
+    ) : (
+      groups.map((group) => (
+        <section style="margin-block-end: var(--space-8)">
+          <h2 style="font-size: var(--text-lg); margin-block-end: var(--space-4)">{group.label}</h2>
+          <ul class="post-list">
+            {group.docs.map((doc) => (
+              <li class="post-list__item">
+                <a class="post-list__link" href={`/wiki/${doc.slug}/`}>
+                  <span class="meta">{doc.slug}</span>
+                  <span>
+                    <span class="post-list__title">{doc.title}</span>
+                    <span class="post-list__summary" style="display: block">
+                      {doc.summary}
+                    </span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    )
+  }
+</BaseLayout>

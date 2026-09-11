@@ -1,0 +1,34 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostList from '../../components/PostList.astro';
+import { loadContent, publishedPosts, reportIssues, tagsOf } from '../../lib/content.js';
+
+export async function getStaticPaths() {
+  const content = await loadContent();
+  reportIssues(content.issues);
+
+  const posts = publishedPosts(content);
+  const allTags = new Set<string>();
+  for (const post of posts) for (const tag of tagsOf(content, post.slug)) allTags.add(tag);
+
+  return [...allTags].sort().map((tag) => ({
+    params: { tag },
+    props: {
+      tag,
+      docs: posts.filter((post) => tagsOf(content, post.slug).includes(tag)),
+      content,
+    },
+  }));
+}
+
+const { tag, docs, content } = Astro.props;
+---
+
+<BaseLayout title={`标签：${tag}`} description={`带有「${tag}」标签的全部文章。`}>
+  <div class="page-header">
+    <h1 class="page-header__title">标签：{tag}</h1>
+    <p class="page-header__lead">{docs.length} 篇文章</p>
+  </div>
+
+  <PostList docs={docs} content={content} />
+</BaseLayout>

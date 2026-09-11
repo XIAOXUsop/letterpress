@@ -1,0 +1,22 @@
+# 换行符统一为 LF。
+#
+# 这个项目对换行符格外敏感：知识层的链接图基于文本比较，断链检测、
+# slug 生成、`.md` 孪生文件都建立在字节一致的前提上。
+# 在 Windows 上 checkout 得到 CRLF、Linux 上得到 LF，会让同一份源码
+# 在不同机器上产出不同结果——而构建产物的可复现性是这个项目的主张之一。
+* text=auto eol=lf
+
+# 内容文件尤其需要稳定：它们会被逐字节比较
+*.md text eol=lf
+*.mdx text eol=lf
+*.json text eol=lf
+
+# 二进制文件不做任何转换
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary

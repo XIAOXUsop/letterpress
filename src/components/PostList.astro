@@ -1,0 +1,56 @@
+---
+/**
+ * 文章/条目列表。
+ *
+ * 用规则线分隔的行，不用卡片网格。原因不是审美偏好：
+ * 等高卡片会把「篇幅」「时效」「主题」这些差别全部抹平，
+ * 读者失去判断先读哪篇的依据。行式列表能容纳不等长的信息。
+ */
+import type { Doc } from '../lib/wiki/graph.js';
+import { dateOfDoc, tagsOf, type SiteContent } from '../lib/content.js';
+
+interface Props {
+  docs: readonly Doc[];
+  content: SiteContent;
+  /** 是否显示日期列。知识层条目没有日期 */
+  showDates?: boolean;
+}
+
+const { docs, content, showDates = true } = Astro.props;
+
+const formatDate = (date: Date): string =>
+  new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+---
+
+{
+  docs.length === 0 ? (
+    <p style="color: var(--color-text-muted)">还没有内容。在 src/content/ 里新建一个 .md 文件即可。</p>
+  ) : (
+    <ul class="post-list">
+      {docs.map((doc) => {
+        const date = showDates ? dateOfDoc(content, doc.slug) : null;
+        const tags = tagsOf(content, doc.slug);
+        const href = doc.kind === 'wiki' ? `/wiki/${doc.slug}/` : `/${doc.slug}/`;
+
+        return (
+          <li class="post-list__item">
+            <a class="post-list__link" href={href}>
+              <span class="meta">
+                {date ? formatDate(date) : doc.kind === 'wiki' ? '条目' : ''}
+              </span>
+              <span>
+                <span class="post-list__title">{doc.title}</span>
+                {doc.summary && <span class="post-list__summary" style="display: block">{doc.summary}</span>}
+                {tags.length > 0 && (
+                  <span class="meta" style="margin-block-start: var(--space-2)">
+                    {tags.join(' · ')}
+                  </span>
+                )}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  )
+}

@@ -1,0 +1,201 @@
+/**
+ * 设计令牌。三层结构，命名描述**用途**而非外观。
+ *
+ *   primitive  → 原始值。**组件永不直接引用**。
+ *   semantic   → 按用途引用 primitive。组件只引用这一层。
+ *   component  → 只在某个组件内部有意义的派生值。
+ *
+ * 这么分的原因很实际：要换配色时只动 primitive；要换暗色模式时只动 semantic
+ * 的映射。若组件直接写 `color: #002FA7`，上面两件事都得全库搜索替换。
+ *
+ * ── 这套配色是怎么定的 ────────────────────────────────────────────
+ *
+ * 瑞士国际主义风格：**一个强调色，其余全是中性灰**。
+ * 强调色取自 International Klein Blue（#002FA7）——它本身就是那个年代的产物，
+ * 与风格同源，不是我随手挑的「好看的蓝」。
+ *
+ * 刻意避开的：米色/奶油底 + 黄铜/陶土色 + 浓咖啡近黑的「高端消费」配色族，
+ * 以及紫蓝渐变。前者已经是 2026 年可识别的 AI 默认值（比紫色渐变更隐蔽，
+ * 因为看起来「有品味」），后者更不必说。
+ */
+
+@layer tokens {
+  :root {
+    /* ── primitive：原始值 ─────────────────────────────────────── */
+
+    /* 中性阶。刻意不用纯黑纯白——纯值会杀死纵深，且在大面积上有刺目感。 */
+    --zinc-950: #09090b;
+    --zinc-900: #18181b;
+    --zinc-800: #27272a;
+    --zinc-700: #3f3f46;
+    --zinc-500: #71717a;
+    --zinc-400: #a1a1aa;
+    --zinc-300: #d4d4d8;
+    --zinc-200: #e4e4e7;
+    --zinc-100: #f4f4f5;
+    --zinc-50: #fafafa;
+    --paper: #ffffff;
+
+    --klein-blue: #002fa7;
+    /* 暗色下的强调色：提高明度并略降饱和。
+       直接把 #002FA7 放到深色底上对比度只有约 2:1，读不了。 */
+    --klein-blue-lifted: #6b91ff;
+
+    --red-600: #dc2626;
+    --red-400: #f87171;
+    --green-700: #15803d;
+    --green-400: #4ade80;
+
+    /* ── 间距：4 单位基数 ──────────────────────────────────────── */
+    /*
+     * 为什么用 4 而不是只用 8：8 的刻度缺少中间步。想做「比 16 紧一点、
+     * 但比 8 松」的节奏时，8 的刻度里没有可用值，于是只能写一次性数值，
+     * 节奏就散了。4 提供 12、20 这样的中间步。
+     */
+    --space-1: 0.25rem; /*  4px */
+    --space-2: 0.5rem; /*  8px */
+    --space-3: 0.75rem; /* 12px */
+    --space-4: 1rem; /* 16px */
+    --space-5: 1.5rem; /* 24px */
+    --space-6: 2rem; /* 32px */
+    --space-7: 3rem; /* 48px */
+    --space-8: 4rem; /* 64px */
+    --space-9: 6rem; /* 96px */
+
+    /* ── 字号阶梯：Major Third（1.25） ─────────────────────────── */
+    --text-xs: 0.75rem; /* 12px */
+    --text-sm: 0.875rem; /* 14px */
+    --text-base: 1.0625rem; /* 17px —— 中文正文比西文大一档更耐读 */
+    --text-lg: 1.3125rem; /* 21px */
+    --text-xl: 1.625rem; /* 26px */
+    --text-2xl: 2rem; /* 32px */
+    --text-3xl: 2.5rem; /* 40px */
+    --text-4xl: 3.125rem; /* 50px */
+
+    --leading-tight: 1.2; /* 大标题 */
+    --leading-snug: 1.4; /* 小标题 */
+    --leading-normal: 1.75; /* 正文 —— 中文需要比西文的 1.5 更松 */
+    --leading-relaxed: 1.85;
+
+    --tracking-tight: -0.02em; /* 只用于大字号拉丁标题 */
+    --tracking-wide: 0.08em; /* 只用于短的小号大写标签 */
+
+    /* ── 布局 ──────────────────────────────────────────────────── */
+    --page-max: 78rem; /* 页面外框 */
+    --gutter: var(--space-5);
+
+    /*
+     * 正文栏宽。用 em 而不是 ch——这是解决中西文栏宽冲突的关键。
+     *
+     * `ch` 是「0」的宽度：中文正文按 66ch 算会排出约 130 个汉字，太宽。
+     * `em` 等于字号：一个汉字正好约 1em 宽，于是
+     *   34em ≈ 34 个汉字 / ≈ 68 个拉丁字符
+     * 中文的「30–40 字」与西文的「45–75 字符」两个理想区间**同时满足**。
+     */
+    --measure: 34em;
+    --measure-wide: 42em;
+
+    /* 圆角：全直角。瑞士风格的一致性锁——要么全用一套，要么不用。 */
+    --radius: 0px;
+
+    /* 动效。只用两条曲线，避免每个组件各挑一条。 */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --duration-fast: 140ms;
+    --duration-base: 200ms;
+
+    --focus-ring-width: 2px;
+    --focus-ring-offset: 2px;
+
+    /* ── semantic：按用途映射 ──────────────────────────────────── */
+
+    --color-canvas: var(--zinc-50);
+    --color-surface: var(--paper);
+    --color-surface-sunken: var(--zinc-100);
+
+    --color-text: var(--zinc-900);
+    --color-text-muted: var(--zinc-700);
+    --color-text-subtle: var(--zinc-500);
+
+    --color-border: var(--zinc-200);
+    --color-border-strong: var(--zinc-300);
+
+    --color-accent: var(--klein-blue);
+    --color-accent-contrast: var(--paper);
+
+    --color-danger: var(--red-600);
+    --color-success: var(--green-700);
+
+    --color-focus: var(--klein-blue);
+
+    /* 字体栈：拉丁字体在前，中文系统字体在后。
+       顺序不能反——反了英文也会用中文字体渲染，字形是等宽的，很难看。 */
+    --font-display: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+      'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    --font-body: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+      'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+      'PingFang SC', 'Microsoft YaHei', monospace;
+
+    color-scheme: light;
+  }
+
+  /*
+   * 暗色模式。
+   *
+   * **不是把亮色反转**：反转会让层级关系也翻过来（原本的「抬升」变成「下沉」）。
+   * 这里按「表面亮度表达层级」重新排：画布最暗，卡片略亮，靠亮度差而非阴影
+   * 建立纵深。
+   *
+   * 另外中文在深色底上会「显瘦」——笔画细的地方对比度下降。所以正文在暗色下
+   * 略微提高字重（见 base.css），这是补偿不是装饰。
+   */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      color-scheme: dark;
+
+      --color-canvas: var(--zinc-950);
+      --color-surface: #131316;
+      --color-surface-sunken: #0f0f12;
+
+      --color-text: var(--zinc-100);
+      --color-text-muted: var(--zinc-300);
+      --color-text-subtle: var(--zinc-500);
+
+      --color-border: var(--zinc-800);
+      --color-border-strong: var(--zinc-700);
+
+      --color-accent: var(--klein-blue-lifted);
+      --color-accent-contrast: var(--zinc-950);
+
+      --color-danger: var(--red-400);
+      --color-success: var(--green-400);
+
+      --color-focus: var(--klein-blue-lifted);
+    }
+  }
+
+  /* 显式选择暗色（用户手动切换，且系统是亮色时） */
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --color-canvas: var(--zinc-950);
+    --color-surface: #131316;
+    --color-surface-sunken: #0f0f12;
+
+    --color-text: var(--zinc-100);
+    --color-text-muted: var(--zinc-300);
+    --color-text-subtle: var(--zinc-500);
+
+    --color-border: var(--zinc-800);
+    --color-border-strong: var(--zinc-700);
+
+    --color-accent: var(--klein-blue-lifted);
+    --color-accent-contrast: var(--zinc-950);
+
+    --color-danger: var(--red-400);
+    --color-success: var(--green-400);
+
+    --color-focus: var(--klein-blue-lifted);
+  }
+}

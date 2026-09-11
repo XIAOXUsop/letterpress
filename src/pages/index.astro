@@ -1,0 +1,68 @@
+---
+/**
+ * 首页。
+ *
+ * 刻意**不做**居中大标题 + 副标题 + 两个按钮的那种 hero。
+ * 那个结构是 AI 生成页面的第一识别特征，而且它传达的信息量为零：
+ * 居中不等于重要，大字号也不等于重要。
+ *
+ * 这里首页直接就是内容——最近的文章 + 知识层入口。
+ * 读者来这里是为了读东西，不是为了看一句口号。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostList from '../components/PostList.astro';
+import { site } from '../config.js';
+import { loadContent, publishedPosts, publishedWiki, reportIssues } from '../lib/content.js';
+
+const content = await loadContent();
+reportIssues(content.issues);
+
+const posts = publishedPosts(content).slice(0, 8);
+const wiki = publishedWiki(content).slice(0, 6);
+---
+
+<BaseLayout description={site.tagline}>
+  <div class="page-header">
+    <h1 class="page-header__title">{site.title}</h1>
+    <p class="page-header__lead">{site.tagline}</p>
+  </div>
+
+  <div class="grid">
+    <section style="grid-column: span 8" aria-labelledby="recent-title">
+      <h2 id="recent-title" style="font-size: var(--text-xl); margin-block-end: var(--space-4)">
+        最近写的
+      </h2>
+      <PostList docs={posts} content={content} />
+      {
+        posts.length > 0 && (
+          <p style="margin-block-start: var(--space-4)">
+            <a href="/posts/">全部文章 →</a>
+          </p>
+        )
+      }
+    </section>
+
+    {
+      site.wiki.enabled && wiki.length > 0 && (
+        <aside style="grid-column: span 4" aria-labelledby="wiki-title">
+          <h2 id="wiki-title" style="font-size: var(--text-xl); margin-block-end: var(--space-4)">
+            {site.wiki.label}
+          </h2>
+          <ul class="backlinks__list">
+            {wiki.map((doc) => (
+              <li>
+                <a href={`/wiki/${doc.slug}/`}>{doc.title}</a>
+                <span style="display: block; color: var(--color-text-subtle); font-size: var(--text-sm)">
+                  {doc.summary}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p style="margin-block-start: var(--space-4)">
+            <a href="/wiki/">全部条目 →</a>
+          </p>
+        </aside>
+      )
+    }
+  </div>
+</BaseLayout>

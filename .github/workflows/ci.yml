@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 构建与测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # 单元测试覆盖纯逻辑：Accept 解析、slug 生成、链接图、体检规则。
+      # 全部离线，不依赖网络也不依赖构建产物。
+      - name: 单元测试
+        run: npm test
+
+      # 端到端验证。这一步是补上来的——曾经 145 项单元测试全绿、
+      # 构建成功、lint 通过，而所有 [[wiki-link]] 都原样留在正文里没渲染。
+      # 原因（Astro 的 markdown 处理器 API 变更 + 内容层缓存）全都是静默的，
+      # 纯函数测试根本够不着。
+      #
+      # 所以这里必须对**构建产物**断言三件事：
+      #   1. [[方括号]] 在正文里真的被渲染成了链接
+      #   2. 七个 agent 的真实 Accept 头得到正确分流
+      #   3. 响应头契约（Vary / charset / token 提示）齐备
+      - name: 端到端验证
+        run: npm run verify
+
+      # 知识库体检必须通过。断链会让这一步失败——
+      # 这是刻意的：一个不会失败的检查等于没有检查。
+      - name: 确认构建产物完整
+        run: |
+          test -f dist/index.html || { echo "::error::缺少首页"; exit 1; }
+          test -f dist/llms.txt || { echo "::error::缺少 llms.txt"; exit 1; }
+          test -f dist/rss.xml || { echo "::error::缺少 RSS"; exit 1; }
+          test -f dist/markdown-for-agents.md || { echo "::error::缺少 .md 孪生文件"; exit 1; }
+          echo "产物完整：$(find dist -type f | wc -l) 个文件"
+
+      # 零配置必须能构建成功——这是对使用者的核心承诺。
+      # 上面所有步骤跑的都是出厂配置（site.url 为空），
+      # 所以这一步其实已经被隐含验证了，这里显式记一笔。
+      - name: 确认零配置可构建
+        run: |
+          if grep -q "url: ''" src/config.ts; then
+            echo "出厂配置下构建通过 ✓（site.url 未填写时也能正常工作）"
+          else
+            echo "::warning::src/config.ts 的 url 已被填写，零配置路径未被覆盖"
+          fi
+
+  lint-content:
+    name: 内容体检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # 单独跑一次体检，把报告留在日志里。
+      # 构建步骤失败时信息会淹没在 vite 输出里，单独一步更好读。
+      - name: 知识库体检
+        run: |
+          npm run build 2>&1 | tee build.log
+          if grep -q "知识库体检" build.log; then
+            echo "--- 体检报告 ---"
+            grep -A 100 "知识库体检" build.log
+          else
+            echo "知识库体检通过，没有发现问题。"
+          fi

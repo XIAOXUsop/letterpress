@@ -1,0 +1,64 @@
+---
+/**
+ * 三态主题切换：跟随系统 / 亮 / 暗。
+ *
+ * 为什么是三态而不是两态：只给「亮/暗」会剥夺用户「跟随系统」的选择，
+ * 而那是多数人想要的默认。三态循环是最省空间的表达。
+ *
+ * 这个按钮是**低频**交互（一天几次），所以有动画是合理的；
+ * 键盘高频操作才该无动画。但它本身切换的是颜色而非位移，
+ * 所以只是让 CSS 变量过渡，不做任何花哨效果。
+ */
+---
+
+<button
+  class="theme-toggle"
+  type="button"
+  id="theme-toggle"
+  aria-live="polite"
+  title="切换主题：跟随系统 / 亮色 / 暗色"
+>
+  <span id="theme-label">自动</span>
+</button>
+
+<script>
+  type Mode = 'auto' | 'light' | 'dark';
+  const ORDER: Mode[] = ['auto', 'light', 'dark'];
+  const LABELS: Record<Mode, string> = { auto: '自动', light: '亮色', dark: '暗色' };
+
+  const button = document.getElementById('theme-toggle');
+  const label = document.getElementById('theme-label');
+
+  function current(): Mode {
+    try {
+      const stored = localStorage.getItem('theme');
+      return stored === 'light' || stored === 'dark' ? stored : 'auto';
+    } catch {
+      return 'auto';
+    }
+  }
+
+  function apply(mode: Mode): void {
+    if (mode === 'auto') {
+      delete document.documentElement.dataset.theme;
+    } else {
+      document.documentElement.dataset.theme = mode;
+    }
+    try {
+      if (mode === 'auto') localStorage.removeItem('theme');
+      else localStorage.setItem('theme', mode);
+    } catch {
+      // 隐私模式：切不了就不持久化，但本次仍然生效
+    }
+    if (label) label.textContent = LABELS[mode];
+  }
+
+  if (button) {
+    if (label) label.textContent = LABELS[current()];
+
+    button.addEventListener('click', () => {
+      const next = ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length] ?? 'auto';
+      apply(next);
+    });
+  }
+</script>

@@ -1,0 +1,96 @@
+---
+/**
+ * 页面骨架。
+ *
+ * 有两件事**必须**在这里做对：
+ *
+ * 1. `<html lang>`——浏览器的中文标点挤压、断行规则、以及
+ *    `text-autospace` 都依赖正确的语言标签。写错了不会报错，
+ *    只是所有中文排版规则静默失效。
+ *
+ * 2. 主题恢复脚本放在 `<head>` 且同步执行。放到 `<body>` 末尾或加 defer
+ *    会导致首屏先按默认主题绘制、再切换——用户看到一下白一下黑（FOWT）。
+ *    这类闪烁在暗色模式下尤其刺眼。
+ */
+import { site, absoluteUrl } from '../config.js';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+// 顺序有讲究：
+// fonts.css 必须先于 tokens.css —— 它定义 @font-face，而令牌里的字体栈引用这些族名
+import '../styles/fonts.css';
+import '../styles/tokens.css';
+import '../styles/base.css';
+import '../styles/site.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** 页面主类型，用于 og:type */
+  type?: 'website' | 'article';
+  /** 文章页传入发布时间 */
+  publishedTime?: Date;
+}
+
+const { title, description = site.tagline, type = 'website', publishedTime } = Astro.props;
+
+const pageTitle = title ? `${title} · ${site.title}` : site.title;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? `https://example.com`).href;
+
+// 同 URL 的 markdown 版本。给人和 agent 都留一个显式入口，
+// 而不是让他们猜「带上 Accept 头会怎样」。
+const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
+---
+
+<!doctype html>
+<html lang={site.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <!--
+      告诉 agent 这里还有一份 markdown 版本。
+      rel="alternate" 是标准做法，比在页面里塞说明文字可靠。
+    -->
+    <link rel="alternate" type="text/markdown" href={markdownHref} />
+
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
+
+    <link rel="alternate" type="application/rss+xml" title={site.title} href={absoluteUrl('/rss.xml')} />
+    {site.url && <link rel="sitemap" type="application/xml" href={absoluteUrl('/sitemap-index.xml')} />}
+
+    <script is:inline>
+      // 同步执行，必须在首屏绘制之前跑完。
+      // 顺序：先看用户显式选择，再看系统偏好。
+      (() => {
+        try {
+          const stored = localStorage.getItem('theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.dataset.theme = stored;
+          }
+        } catch {
+          // 隐私模式下 localStorage 可能不可用。忽略即可——
+          // 拿不到偏好就用系统偏好，不该因此报错。
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <SiteHeader />
+    <main class="main" id="main">
+      <div class="page">
+        <slot />
+      </div>
+    </main>
+    <SiteFooter />
+  </body>
+</html>

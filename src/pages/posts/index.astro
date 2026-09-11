@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostList from '../../components/PostList.astro';
+import { loadContent, publishedPosts, reportIssues } from '../../lib/content.js';
+
+const content = await loadContent();
+reportIssues(content.issues);
+const posts = publishedPosts(content);
+---
+
+<BaseLayout title="文章" description="按时间排列的全部文章。">
+  <div class="page-header">
+    <h1 class="page-header__title">文章</h1>
+    <p class="page-header__lead">
+      按时间倒序。想按主题找东西，去<a href="/wiki/">知识库</a>。
+    </p>
+  </div>
+
+  <PostList docs={posts} content={content} />
+</BaseLayout>

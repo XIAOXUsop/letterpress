@@ -1,0 +1,179 @@
+/**
+ * Astro 内容集合 → 链接图模型。
+ *
+ * 这一层是**唯一**把 Astro 的内容 API 与纯逻辑（graph / lint / llms）缝在一起
+ * 的地方。纯逻辑那边不知道 Astro 的存在，所以可以在毫秒级被测试；
+ * 而这里只做数据搬运，逻辑尽量少——搬运代码出错最容易，但也最容易被看见。
+ */
+
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { site } from '../config.js';
+import { buildGraph, type Doc, type LinkGraph } from './wiki/graph.js';
+import { hasErrors, lint, type Issue } from './wiki/lint.js';
+import { resolveSlug } from './wiki/slug.js';
+
+export interface SiteContent {
+  readonly docs: readonly Doc[];
+  readonly graph: LinkGraph;
+  readonly issues: readonly Issue[];
+  /** slug → 原始集合条目，用于渲染正文 */
+  readonly entries: ReadonlyMap<string, CollectionEntry<'posts'> | CollectionEntry<'wiki'>>;
+}
+
+function toDoc(
+  entry: CollectionEntry<'posts'> | CollectionEntry<'wiki'>,
+  kind: 'post' | 'wiki',
+): Doc {
+  const data = entry.data;
+  const explicit = typeof data.slug === 'string' && data.slug.trim() !== '';
+
+  /**
+   * `related` 是作者在 frontmatter 里显式声明的关系。
+   * 把它折算成正文末尾的 wiki 链接，让链接图、反向链接、孤儿页判定
+   * 都能看到它——否则声明了 `related` 却没在正文里再写一遍的条目，
+   * 会被误判成孤儿页。
+   *
+   * 链接图去重（同一来源指向同一目标只记一次），所以正文里已写过也不会重复。
+   */
+  const related = kind === 'wiki' ? ((data as { related?: string[] }).related ?? []) : [];
+  const body =
+    related.length > 0
+      ? `${entry.body ?? ''}\n\n${related.map((r) => `[[${r}]]`).join(' ')}\n`
+      : (entry.body ?? '');
+
+  return {
+    kind,
+    // entry.id 是相对内容根的文件路径（不含扩展名），正是 slug 的默认来源。
+    // 优先级见 resolveSlug：显式 slug > 文件名 > 标题。
+    slug: resolveSlug(data.title, data.slug, entry.id),
+    title: data.title,
+    summary: data.summary,
+    body,
+    explicitSlug: explicit,
+    draft: data.draft,
+  };
+}
+
+/**
+ * 加载全部内容，建立链接图，跑一遍体检。
+ *
+ * 每次构建只应调用一次——它做了三次全量扫描。
+ * 页面之间通过 `Astro.locals` 或 props 共享结果，不要各页各调一遍。
+ */
+export async function loadContent(): Promise<SiteContent> {
+  const [postEntries, wikiEntries] = await Promise.all([
+    getCollection('posts'),
+    site.wiki.enabled ? getCollection('wiki') : Promise.resolve([]),
+  ]);
+
+  const docs: Doc[] = [
+    ...postEntries.map((e) => toDoc(e, 'post')),
+    ...wikiEntries.map((e) => toDoc(e, 'wiki')),
+  ];
+
+  const graph = buildGraph(docs);
+  const issues = lint(docs, graph, { warnOnCjkSlug: site.wiki.hintCjkSlugs });
+
+  const entries = new Map<string, CollectionEntry<'posts'> | CollectionEntry<'wiki'>>();
+  for (const entry of postEntries) entries.set(toDoc(entry, 'post').slug, entry);
+  for (const entry of wikiEntries) entries.set(toDoc(entry, 'wiki').slug, entry);
+
+  return { docs, graph, issues, entries };
+}
+
+/** 已发布文章，按日期倒序（新的在前）。 */
+export function publishedPosts(content: SiteContent): Doc[] {
+  return content.docs
+    .filter((d) => d.kind === 'post' && !d.draft)
+    .sort((a, b) => {
+      const da = dateOf(content, a.slug);
+      const db = dateOf(content, b.slug);
+      if (da === db) return a.slug < b.slug ? -1 : 1;
+      return db - da;
+    });
+}
+
+/** 已发布知识库条目，按标题排序（知识层不是流，不该按时间排）。 */
+export function publishedWiki(content: SiteContent): Doc[] {
+  return content.docs
+    .filter((d) => d.kind === 'wiki' && !d.draft)
+    .sort((a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
+}
+
+function dateOf(content: SiteContent, slug: string): number {
+  const entry = content.entries.get(slug);
+  if (!entry) return 0;
+  const data = entry.data as { date?: Date };
+  return data.date ? data.date.getTime() : 0;
+}
+
+export function dateOfDoc(content: SiteContent, slug: string): Date | null {
+  const entry = content.entries.get(slug);
+  if (!entry) return null;
+  const data = entry.data as { date?: Date };
+  return data.date ?? null;
+}
+
+export function updatedOfDoc(content: SiteContent, slug: string): Date | null {
+  const entry = content.entries.get(slug);
+  if (!entry) return null;
+  const data = entry.data as { updated?: Date };
+  return data.updated ?? null;
+}
+
+export function tagsOf(content: SiteContent, slug: string): string[] {
+  const entry = content.entries.get(slug);
+  if (!entry) return [];
+  const data = entry.data as { tags?: string[] };
+  return data.tags ?? [];
+}
+
+export function kindOf(content: SiteContent, slug: string): 'concept' | 'entity' | 'synthesis' | null {
+  const entry = content.entries.get(slug);
+  if (!entry || !('kind' in entry.data)) return null;
+  return (entry.data as { kind: 'concept' | 'entity' | 'synthesis' }).kind;
+}
+
+/**
+ * 构建期把体检报告打到控制台，并在配置要求时让构建失败。
+ *
+ * 失败时抛出的信息里必须带上**具体是哪一条**，否则 CI 日志只显示
+ * 「构建失败」而看不出原因，用户只能本地重跑一遍。
+ *
+ * 每个进程只报一次：多个页面都会调用它，重复输出会让日志里同一批问题
+ * 出现七八遍，真正的新问题反而被淹没。
+ */
+let reported = false;
+
+export function reportIssues(issues: readonly Issue[]): void {
+  if (reported) return;
+  reported = true;
+
+  if (issues.length === 0) return;
+
+  const errors = issues.filter((i) => i.level === 'error');
+  const warn = issues.filter((i) => i.level === 'warn');
+  const info = issues.filter((i) => i.level === 'info');
+
+  const line = (i: Issue): string => `  [${i.rule}] ${i.message}`;
+
+  if (errors.length > 0) {
+    console.error(`\n知识库体检：${errors.length} 个错误`);
+    for (const i of errors) console.error(line(i));
+  }
+  if (warn.length > 0) {
+    console.warn(`\n知识库体检：${warn.length} 个警告`);
+    for (const i of warn) console.warn(line(i));
+  }
+  if (info.length > 0) {
+    console.info(`\n知识库体检：${info.length} 个提示`);
+    for (const i of info) console.info(line(i));
+  }
+
+  if (site.lint.failOnError && hasErrors(issues)) {
+    throw new Error(
+      `知识库体检发现 ${errors.length} 个错误，构建已中止。\n` +
+        `修好上面列出的问题，或在 src/config.ts 里把 lint.failOnError 设为 false。`,
+    );
+  }
+}

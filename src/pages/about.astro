@@ -1,0 +1,101 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../config.js';
+import { loadContent, reportIssues, stats } from '../lib/content.js';
+import { stats as knowledgeStats } from '../lib/wiki/llms.js';
+
+const content = await loadContent();
+reportIssues(content.issues);
+const s = knowledgeStats(content.docs, content.graph);
+---
+
+<BaseLayout title="关于" description={site.author.bio}>
+  <div class="page-header">
+    <h1 class="page-header__title">关于</h1>
+  </div>
+
+  <div class="prose">
+    <p>{site.author.bio}</p>
+
+    {
+      site.author.url && (
+        <p>
+          找到我：<a href={site.author.url}>{site.author.url}</a>
+        </p>
+      )
+    }
+
+    <h2>这个站</h2>
+    <p>
+      用 <a href="https://github.com/XIAOXUsop/letterpress">letterpress</a> 搭建。
+      内容放在 Git 仓库里，构建出静态文件，不需要数据库，也不需要常驻服务。
+    </p>
+
+    <h2>给机器的入口</h2>
+    <p>这一站同时写给人和 AI 读，所以除了页面之外还有：</p>
+    <ul>
+      <li>
+        <a href="/llms.txt">/llms.txt</a>——给 agent 看的目录，标题加一句话说明
+      </li>
+      <li>
+        <a href="/llms-full.txt">/llms-full.txt</a>——全部内容内联成一份文档
+      </li>
+      <li>
+        <a href="/rss.xml">/rss.xml</a>——订阅
+      </li>
+    </ul>
+    <p>
+      另外，每个页面都有一个 <code>.md</code> 孪生文件（把页面 URL 结尾加
+      <code>.md</code> 即可）。请求时带上 <code>Accept: text/markdown</code>
+      头，会直接拿到 markdown 版本而不是 HTML。
+    </p>
+    <p>
+      需要说明的是：<code>llms.txt</code> 的实际效果被高估了——
+      有实测显示 97% 的 llms.txt 从未被请求过。这里生成它是因为零成本，
+      但真正起作用的是内容协商。
+    </p>
+
+    <h2>内容统计</h2>
+  </div>
+
+  <table style="max-width: 32rem">
+    <tbody>
+      <tr>
+        <th scope="row">文章</th>
+        <td>{s.posts}</td>
+      </tr>
+      {
+        site.wiki.enabled && (
+          <tr>
+            <th scope="row">知识库条目</th>
+            <td>{s.wikiPages}</td>
+          </tr>
+        )
+      }
+      <tr>
+        <th scope="row">条目之间的链接</th>
+        <td>{s.links}</td>
+      </tr>
+      <tr>
+        <th scope="row">平均每页出链</th>
+        <td>{s.avgOutbound}</td>
+      </tr>
+      {
+        s.orphans > 0 && (
+          <tr>
+            <th scope="row">孤儿页</th>
+            <td>{s.orphans}（没有任何页面指向它们）</td>
+          </tr>
+        )
+      }
+      {
+        content.issues.length > 0 && (
+          <tr>
+            <th scope="row">体检发现</th>
+            <td>{content.issues.length} 条（详见构建日志）</td>
+          </tr>
+        )
+      }
+    </tbody>
+  </table>
+</BaseLayout>

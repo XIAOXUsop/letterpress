@@ -1,0 +1,25 @@
+# 构建产物
+dist/
+.astro/
+
+# 依赖
+node_modules/
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# 日志
+*.log
+npm-debug.log*
+
+# 测试与验证的临时产物
+coverage/
+.verify/

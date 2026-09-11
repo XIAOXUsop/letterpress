@@ -1,0 +1,33 @@
+/**
+ * `/llms-full.txt`——全部内容内联成一份自包含文档。
+ *
+ * 与 `/llms.txt` 的分工：前者是目录（让 agent 决定读什么），
+ * 后者是全文（一次拿完，不用遍历）。
+ *
+ * 内容多起来之后这个文件会很大。这是刻意的取舍——agent 侧可以只取前若干行，
+ * 而「一次请求拿到全部」在 token 成本上通常仍优于遍历十几个页面。
+ */
+import type { APIRoute } from 'astro';
+import { site } from '../config.js';
+import { loadContent, reportIssues } from '../lib/content.js';
+import { buildLlmsFullTxt } from '../lib/wiki/llms.js';
+
+export const GET: APIRoute = async () => {
+  const content = await loadContent();
+  reportIssues(content.issues);
+
+  const body = buildLlmsFullTxt(content.docs, {
+    siteName: site.title,
+    siteUrl: site.url || undefined,
+    tagline: site.tagline,
+    // 纯文本产物里中英文之间要手动加空格——`text-autospace` 只在 HTML 里生效。
+    notes: [`本站以 ${site.lang} 为主。`],
+  });
+
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      Vary: 'Accept',
+    },
+  });
+};

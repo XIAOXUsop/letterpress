@@ -1,0 +1,63 @@
+---
+/**
+ * 404。
+ *
+ * 空状态要有用，不能只写「找不到」——那等于把用户丢在原地。
+ * 这里做三件事：说清发生了什么、给两条最可能的出路、列出全部内容入口。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../config.js';
+import { loadContent, publishedPosts, publishedWiki } from '../lib/content.js';
+
+const content = await loadContent();
+const posts = publishedPosts(content);
+const wiki = site.wiki.enabled ? publishedWiki(content) : [];
+---
+
+<BaseLayout title="页面不存在" description="这个地址没有对应的内容。">
+  <div class="status-page">
+    <p class="status-page__code">404</p>
+    <h1 class="status-page__title">这个地址没有内容</h1>
+    <p class="status-page__body">
+      可能是链接写错了，也可能是这一页被删掉或改过名字。
+    </p>
+
+    <div class="grid" style="margin-block-start: var(--space-7)">
+      {
+        posts.length > 0 && (
+          <section style="grid-column: span 6">
+            <h2 style="font-size: var(--text-lg); margin-block-end: var(--space-3)">最近的文章</h2>
+            <ul class="backlinks__list">
+              {posts.slice(0, 5).map((doc) => (
+                <li>
+                  <a href={`/${doc.slug}/`}>{doc.title}</a>
+                </li>
+              ))}
+            </ul>
+            <p style="margin-block-start: var(--space-3)">
+              <a href="/posts/">全部文章 →</a>
+            </p>
+          </section>
+        )
+      }
+
+      {
+        wiki.length > 0 && (
+          <section style="grid-column: span 6">
+            <h2 style="font-size: var(--text-lg); margin-block-end: var(--space-3)">{site.wiki.label}</h2>
+            <ul class="backlinks__list">
+              {wiki.slice(0, 5).map((doc) => (
+                <li>
+                  <a href={`/wiki/${doc.slug}/`}>{doc.title}</a>
+                </li>
+              ))}
+            </ul>
+            <p style="margin-block-start: var(--space-3)">
+              <a href="/wiki/">全部条目 →</a>
+            </p>
+          </section>
+        )
+      }
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,38 @@
+# 响应头配置。
+#
+# Cloudflare Pages 与 Netlify 都认这个文件；放在 public/ 下会被原样复制到
+# 构建产物的根目录。（Vercel 不认，它的头配置在 vercel.json 里。）
+
+/*
+  # ── 最关键的一行 ──────────────────────────────────────────────
+  #
+  # `Vary: Accept` 告诉 CDN「同一个 URL 有两种表示，缓存要按 Accept 分开存」。
+  #
+  # 少了它会发生什么：CDN 把某个 agent 请求得到的 markdown 版本缓存下来，
+  # 然后把它发给下一个用浏览器访问的人——用户打开博客看到一坨纯文本。
+  # 反过来也一样：agent 拿到 HTML，内容协商白做。
+  #
+  # 而且这个 bug **只在缓存命中时出现**，排查时看起来像「网站有时候会坏」。
+  Vary: Accept
+
+  # 安全头。
+  #
+  # CSP 里刻意**没有** inline script 的豁免——主题恢复脚本是同步内联的，
+  # 所以如果要用严格 CSP，需要给它加 hash。
+  # 默认注释掉，因为一个开箱即用的模板不该在用户还没配好时就把自己的脚本拦掉。
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+
+# ── markdown 孪生文件的头 ────────────────────────────────────────
+#
+# 单独声明，因为它们的 Content-Type 必须是 text/markdown 而不是 text/plain。
+# 有些客户端拿到 text/plain 会当作纯文本展示，丢掉结构信息。
+
+/*.md
+  Content-Type: text/markdown; charset=utf-8
+  Vary: Accept
+
+# 带指纹的静态资源可以永久缓存——文件名随内容变化，缓存不会过期。
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable

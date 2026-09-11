@@ -1,0 +1,62 @@
+/**
+ * 字体加载。
+ *
+ * ── 两个刻意的决策 ─────────────────────────────────────────────────
+ *
+ * **1. 只自托管拉丁子集，中文走系统字体栈。**
+ *
+ * 中文字体单文件 5–20 MB。哪怕用思源黑体做子集化，一个博客站也不该为此
+ * 付出首屏时间。而中文系统字体（苹方 / 微软雅黑 / 思源黑体）本身质量很好——
+ * 知乎、Medium 中文版这类大站的内文都用系统字体。
+ *
+ * 下面的 `unicode-range` 是关键：它告诉浏览器「这个字体只覆盖拉丁区」，
+ * 于是中文字符根本不会触发 webfont 匹配，直接落到 font-family 栈里的
+ * 系统中文字体。**不是回退，是分工。**
+ *
+ * **2. 没有斜体。**
+ *
+ * 中文没有斜体字形，浏览器会「合成倾斜」——把笔画强行拉斜，笔画变形、糊。
+ * 而 CSS 无法按字符集区分「这段 em 是中文还是西文」。
+ * 所以这里统一把强调处理成加粗，这也是中文排版的通行做法。
+ * 省下的两个斜体文件约 130 KB。
+ *
+ * 自托管而非引 Google Fonts CDN：2022 年起浏览器实施 cache partitioning，
+ * 「用户已缓存过」这个优势消失了，远程字体反而多一次跨域往返。
+ */
+
+/* 只覆盖拉丁区。中文、日文、韩文都不在这里，会落到系统字体。 */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/public-sans/files/public-sans-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
