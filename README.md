@@ -286,6 +286,11 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 - **`llms.txt` 的实际效果被高估**（见上文数据），生成它是因为零成本。
 - **`text-autospace` 与 `text-spacing-trim` 在 Safari / Firefox 上不支持**
   （后者全球覆盖约 72%）。属渐进增强，不支持时版式不坏。
+- **搜索的加载器要求 CSP 允许 `unsafe-eval`。** Vite 会把 `import()` 包成
+  `__vitePreload(…, __VITE_PRELOAD__)`，而 Pagefind 的索引是构建后生成的、
+  Vite 替换不了那个占位符 → 运行时报 `ReferenceError` 且**不发出任何网络请求**。
+  绕开办法是 `new Function` 构造导入，代价是这条 CSP 要求。
+  若你启用了严格 CSP，需要为搜索页开例外或改用其他加载方式。
 - **没有数学公式、流程图、多语言、图片灯箱、评论。** 见上文对比表。
 
 ---

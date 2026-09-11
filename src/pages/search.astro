@@ -110,8 +110,9 @@ import { path } from '../lib/url.js';
      * 从头到尾没发过一个 pagefind 请求**——所以网络面板里什么都看不到。
      *
      * 用 `new Function` 构造导入可以完全绕开 Vite 的转换。
-     * 代价是要求 CSP 允许 `unsafe-eval`；本站默认没有严格 CSP，
+     * 代价是要求 CSP 允许 `unsafe-eval`——本站默认没有严格 CSP，
      * 若你加了严格 CSP，需要为这里开例外或改用其他加载方式。
+     * README 的「已知限制」里也记了这一条。
      */
     const dynamicImport = new Function('u', 'return import(u)') as (
       u: string,
