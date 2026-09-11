@@ -102,8 +102,21 @@ import { path } from '../lib/url.js';
          * @ts-ignore：前者在将来某天它真的被解析到时**会报错提醒**，
          * 后者会一直沉默。
          */
+        /*
+         * 路径必须带上 base。
+         *
+         * Pagefind 把索引放在 `dist/pagefind/` 下，而**部署到子路径时
+         * 它会被放到 `/仓库名/pagefind/`**。写成 `/pagefind/pagefind.js`
+         * 这种绝对路径在本地正常（base 是 `/`），一上线就 404 ——
+         * 结果是搜索框永远转圈，而控制台只有一条 module not found。
+         *
+         * `import.meta.env.BASE_URL` 在客户端脚本里可用（Vite 会在构建时替换）。
+         */
+        const base = import.meta.env.BASE_URL ?? '/';
+        const prefix = base.endsWith('/') ? base.slice(0, -1) : base;
+
         // @ts-expect-error 由 pagefind 在构建后生成，源码里没有
-        pagefind = await import(/* @vite-ignore */ '/pagefind/pagefind.js');
+        pagefind = await import(/* @vite-ignore */ `${prefix}/pagefind/pagefind.js`);
         return pagefind;
       } catch {
         return null;

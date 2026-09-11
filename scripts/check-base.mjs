@@ -89,6 +89,59 @@ async function scan(dir) {
 
 await scan(dist);
 
+/**
+ * ── 还要查 JS 块里的运行时路径 ──────────────────────────────────
+ *
+ * 上面那条只扫 `href` / `src` 属性。**实测漏过一次**：搜索页的
+ * `import('/pagefind/pagefind.js')` 写死在脚本里、不走属性，
+ * 于是本地一切正常、上线后搜索框永远转圈——而那条扫描报「全部通过」。
+ *
+ * 教训与项目里反复出现的是同一个：**只检查一类载体，就只守住那一类**。
+ */
+const scriptProblems = new Map();
+
+async function scanScripts(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await scanScripts(full);
+      continue;
+    }
+    if (!entry.name.endsWith('.html')) continue;
+
+    const html = await readFile(full, 'utf8');
+    const rel = full.slice(dist.length + 1).replace(/\\/g, '/');
+
+    // 只看 <script> 块内部——正文里出现的 "/xxx" 不是路径
+    for (const block of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) {
+      for (const m of (block[1] ?? '').matchAll(/["'`]\/([a-z][\w-]*\/[^"'`\s]*)/gi)) {
+        const url = `/${m[1]}`;
+        // 只认已知的资源目录，避免把数据字符串误判成路径
+        if (!/^\/(pagefind|_astro|og|favicon)/.test(url)) continue;
+        if (url.startsWith(`${FAKE_BASE}/`)) continue;
+
+        const list = scriptProblems.get(url) ?? [];
+        list.push(rel);
+        scriptProblems.set(url, list);
+      }
+    }
+  }
+}
+
+await scanScripts(dist);
+
+console.log('\n检查脚本里的资源路径是否带 base 前缀');
+if (scriptProblems.size === 0) {
+  console.log('  ✓ 脚本里的资源路径都带 base 前缀');
+} else {
+  for (const [url, files] of scriptProblems) problems.set(url, files);
+  console.log(`  ✗ ${scriptProblems.size} 处没带前缀：`);
+  for (const [url, files] of [...scriptProblems].sort()) {
+    console.log(`      ${url}   （${files.length} 个页面，例如 ${files[0]}）`);
+  }
+}
+
 console.log('\n检查绝对路径是否都带 base 前缀');
 if (problems.size === 0) {
   console.log('  ✓ 全部链接都带 base 前缀');
