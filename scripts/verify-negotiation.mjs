@@ -348,6 +348,131 @@ console.log('\n[4] 降级行为');
   check(!(res.headers.get('content-type') ?? '').includes('markdown'), '静态资源不被协商改写');
 }
 
+// ── 6. SEO / 分享 / 无障碍契约 ──────────────────────────────────────
+/**
+ * 这一节来自一次外部对抗性审查。审查发现的问题当时都修了，
+ * 但**修完之后我用一行 shell 命令去核对，得到的结论是错的**——
+ * `grep -c` 数的是行数而压缩 CSS 只有一行，于是「有 10 处」被我读成了 0。
+ *
+ * 教训是：**一次性的核对命令既不可靠也不留痕**。审查发现的每一项
+ * 都应该变成这里的一条断言，之后每次构建都被重新验证。
+ */
+console.log('\n[4b] SEO / 分享 / 无障碍契约');
+{
+  const read = async (rel) => {
+    try {
+      return await readFile(join(DIST, rel), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+
+  // ── 6a. 分享图与社交卡片 ──────────────────────────────────────
+  const ogFiles = (await readdir(join(DIST, 'og')).catch(() => [])).filter((f) => f.endsWith('.png'));
+  check(ogFiles.length >= 3, `分享图已生成（${ogFiles.length} 张）`);
+
+  const siteOg = await stat(join(DIST, 'og.png')).catch(() => null);
+  check(siteOg !== null && siteOg.size > 1000, '站点默认分享图存在且非空');
+
+  /**
+   * PNG 的头 8 字节必须是标准签名——光看文件存在不够，
+   * 编码器写错时产出的仍是「一个文件」，只是任何平台都打不开。
+   */
+  const ogBytes = await readFile(join(DIST, 'og.png'));
+  const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  check(ogBytes.subarray(0, 8).equals(PNG_SIG), '分享图是合法的 PNG（签名正确）');
+
+  // ── 6b. JSON-LD ───────────────────────────────────────────────
+  const article = await read('markdown-for-agents/index.html');
+  check(article !== null && article.includes('application/ld+json'), '文章页含 JSON-LD');
+  check(article !== null && article.includes('"BlogPosting"'), 'JSON-LD 含 BlogPosting');
+  check(article !== null && article.includes('"dateModified"'), 'JSON-LD 含 dateModified');
+
+  /**
+   * **绝不能让 localhost 进产物。**
+   *
+   * 构建期 `Astro.url.origin` 是 localhost，拿它当站点地址的回退值，
+   * 会把结构化数据里的 url 全部写成 `http://localhost:4321` ——
+   * 线上页面自称是 localhost，搜索引擎直接判为无效。
+   *
+   * RSS 例外：它需要一个绝对地址才能生成，而零配置必须能构建成功，
+   * 那里的 localhost 是**刻意的兜底**且有构建警告。
+   */
+  const htmlFiles = [];
+  const collectHtml = async (dir) => {
+    let entries = [];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) await collectHtml(full);
+      else if (e.name.endsWith('.html')) htmlFiles.push(full);
+    }
+  };
+  await collectHtml(DIST);
+
+  let leaked = 0;
+  for (const f of htmlFiles) {
+    if ((await readFile(f, 'utf8')).includes('localhost:4321')) leaked++;
+  }
+  check(leaked === 0, `HTML 产物中无 localhost 泄漏`, `${leaked} 个文件含 localhost`);
+
+  // ── 6c. article 元标签 ────────────────────────────────────────
+  check(article !== null && article.includes('article:published_time'), '含 article:published_time');
+
+  /**
+   * `article:modified_time` 只有在 frontmatter 里写了 `updated` 时才输出——
+   * 「有就输出、没有就不编」是刻意的，凭空写一个修改时间会误导搜索引擎。
+   *
+   * 所以要验证这条接线，得用一篇**真的标了 `updated`** 的文章
+   * （示例内容里是 `cjk-web-typography`）。
+   */
+  const revised = await read('cjk-web-typography/index.html');
+  check(
+    revised !== null && revised.includes('article:modified_time'),
+    '标了 updated 的文章输出 article:modified_time',
+  );
+
+  // ── 6d. robots 与 favicon ─────────────────────────────────────
+  const robots = await read('robots.txt');
+  check(robots !== null && robots.includes('User-agent'), 'robots.txt 存在且格式正确');
+
+  const home = await read('index.html');
+  check(home !== null && home.includes('rel="icon"'), 'favicon 被显式引用');
+
+  // ── 6e. 暗色代码块（曾经的白底 bug）───────────────────────────
+  const astroDir = join(DIST, '_astro');
+  const cssName = (await readdir(astroDir).catch(() => [])).find((f) => f.endsWith('.css'));
+  const css = cssName ? await readFile(join(astroDir, cssName), 'utf8') : '';
+
+  /**
+   * Shiki 双主题只在 `<pre>` 上输出 `--shiki-dark-bg` 自定义属性，
+   * **不会自己应用**。少了映射它的 CSS，暗色页面里就是白底代码块。
+   *
+   * 注意这里用 `includes` 而不是 `grep -c`——压缩后的 CSS 只有一行，
+   * 数行数永远得到 1。我自己在这上面栽过一次。
+   */
+  check(css.includes('shiki-dark-bg'), 'CSS 含暗色代码块的映射规则');
+  check(css.includes('prefers-color-scheme'), 'CSS 含 prefers-color-scheme 分支');
+  check(
+    article !== null && article.includes('--shiki-dark-bg'),
+    '代码块带有暗色主题的自定义属性',
+  );
+
+  // ── 6f. 导航与结构 ────────────────────────────────────────────
+  for (const [label, rel] of [
+    ['搜索页', 'search/index.html'],
+    ['归档页', 'archive/index.html'],
+    ['分页文章页', 'posts/index.html'],
+    ['标签索引', 'tags/index.html'],
+  ]) {
+    check((await read(rel)) !== null, `${label}存在`);
+  }
+}
+
 // ── 5. 实测收益 ─────────────────────────────────────────────────────
 console.log('\n[5] 实测收益（同一页面的 HTML vs markdown）');
 console.log(
