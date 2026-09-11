@@ -58,7 +58,7 @@ export const site: SiteConfig = {
 | 🤖 **给机器** | 每个页面有 `.md` 孪生文件；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt` |
 | 🧠 **知识层** | 用 `[[方括号]]` 互链的独立知识库；断链**会让构建失败**；每次构建出体检报告 |
 | 🌗 **主题** | 三态（跟随系统 / 亮 / 暗），无闪烁（恢复脚本在 `<head>` 同步执行） |
-| 📦 **交付** | 纯静态，零外部 JS 文件；CSS 单文件 20.6 KB（gzip 4.4 KB）；字体只含拉丁子集 100 KB |
+| 📦 **交付** | 纯静态，零外部 JS 文件；CSS 单文件 21.1 KB（gzip 4.5 KB）；字体只含拉丁子集 100 KB |
 | 🚀 **部署** | Cloudflare Pages / Netlify / Vercel / 任何静态托管；三个平台的内容协商垫片已写好 |
 
 ---
@@ -207,7 +207,7 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
 | `npm test` | **215 项**单元测试，全部离线 |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 51 项契约 |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 56 项契约 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/` 与 `dist/` |
 
@@ -246,10 +246,10 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 | 项 | 结果 |
 |---|---|
 | 单元测试 | **215 项**，全部离线，无网络依赖 |
-| 端到端契约 | **51 项**，打在真实构建产物上 |
+| 端到端契约 | **56 项**，打在真实构建产物上 |
 | 构建 | 23 页约 **1.4 秒** |
 | 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
-| CSS | 单文件 **20.6 KB / gzip 4.4 KB** |
+| CSS | 单文件 **21.1 KB / gzip 4.5 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
 
