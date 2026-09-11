@@ -20,13 +20,6 @@ export interface Doc {
   readonly body: string;
   /** 作者是否显式指定过 slug（用于 lint 提示中文 URL 的代价） */
   readonly explicitSlug: boolean;
-  /**
-   * 发布时间（毫秒时间戳）。0 表示没标日期。
-   *
-   * 用于**定时发布**：`date` 填未来时间的文章，到点之前不进构建。
-   * 知识层条目没有日期，恒为 0——它们不受定时发布影响。
-   */
-  readonly date: number;
   readonly draft: boolean;
 }
 

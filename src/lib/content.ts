@@ -62,8 +62,6 @@ function toDoc(
     explicitSlug: explicit,
     // posts 与 wiki 的 schema 不同，astropy 的联合类型推不出共有字段
     draft: (data as { draft?: boolean }).draft ?? false,
-    // 知识层条目没有 date 字段，取不到就是 0（不受定时发布影响）
-    date: ((data as { date?: Date }).date ?? new Date(0)).getTime(),
   };
 }
 
@@ -85,18 +83,9 @@ export async function loadContent(): Promise<SiteContent> {
   ];
 
   /*
-   * 生产构建排除两类内容：
-   *
-   *   draft        草稿。作者明说了不发布。
-   *   未来日期      定时发布。`date` 填一个未来的时间，到点之前不出现。
-   *
-   * **开发模式两类都保留**——作者要能看到自己正在写的东西，
-   * 包括已经排好期还没到点的那篇。否则他没法预览。
+   * 生产构建排除草稿，开发模式保留——作者要能看到自己正在写的东西。
    */
-  const now = Date.now();
-  const docs = IS_DEV
-    ? allDocs
-    : allDocs.filter((d) => !d.draft && dayStart(d.date) <= now);
+  const docs = IS_DEV ? allDocs : allDocs.filter((d) => !d.draft);
 
   // 开发模式下草稿也要进链接图，否则文章里的 [[链接]] 会对着草稿报断链
   const graph = buildGraph(docs, { includeDrafts: IS_DEV });
@@ -132,28 +121,6 @@ export function publishedWiki(content: SiteContent): Doc[] {
   return content.docs
     .filter((d) => d.kind === 'wiki')
     .sort((a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
-}
-
-/**
- * 把「日期」解释成**本地日历日的零点**。
- *
- * ── 为什么不能直接比时间戳 ──────────────────────────────────────────
- *
- * frontmatter 里写 `date: 2026-09-12`，Zod 会把它解析成 **UTC 午夜**
- * （`2026-09-12T00:00:00Z`）。而作者在 UTC+8，此刻本地时间是 9 月 12 日凌晨 1 点，
- * UTC 却还是 9 月 11 日 17 点——于是「今天的文章」被判成未来，
- * **定时发布把当天的文章全部藏了起来**。
- *
- * 作者写下一个日期时想的是「这一天发布」，不是「这个 UTC 瞬间发布」。
- * 所以取出它的年月日，当成本地日历日来比。
- *
- * 这个 bug 是被本项目自己的 lint 抓出来的：文章消失 → 知识层里
- * `[[那篇文章]]` 变成断链 → 构建中止。**断链检查顺带守住了内容可见性。**
- */
-function dayStart(dateMs: number): number {
-  if (dateMs === 0) return 0; // 没标日期的一律视为早已发布
-  const d = new Date(dateMs);
-  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).getTime();
 }
 
 function dateOf(content: SiteContent, slug: string): number {
