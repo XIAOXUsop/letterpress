@@ -92,14 +92,14 @@ export const site: SiteConfig = {
   title: '此间札记',
   tagline: '一个把排版当回事、同时写给人和 AI 读的博客。',
 
-  url: '',
+  url: 'https://xiaoxusop.github.io/letterpress',
 
   lang: 'zh-CN',
 
   author: {
-    name: '你的名字',
-    bio: '一句话介绍自己。这句话会出现在关于页和页脚。',
-    url: 'https://github.com/your-name',
+    name: 'XIAOXUsop',
+    bio: 'Java 后端开发，专注智能 Agent 应用工程化与自研工具。',
+    url: 'https://github.com/XIAOXUsop',
   },
 
   nav: [
@@ -112,6 +112,7 @@ export const site: SiteConfig = {
   footer: {
     text: '写于此处，存于此处。',
     credit: true,
+    repoUrl: 'https://github.com/XIAOXUsop/letterpress',
   },
 
   wiki: {

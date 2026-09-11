@@ -8,6 +8,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { site } from '../config.js';
 import { loadContent, publishedPosts, publishedWiki } from '../lib/content.js';
+import { path } from '../lib/url.js';
 
 const content = await loadContent();
 const posts = publishedPosts(content);
@@ -30,12 +31,12 @@ const wiki = site.wiki.enabled ? publishedWiki(content) : [];
             <ul class="backlinks__list">
               {posts.slice(0, 5).map((doc) => (
                 <li>
-                  <a href={`/${doc.slug}/`}>{doc.title}</a>
+                  <a href={path(`/${doc.slug}/`)}>{doc.title}</a>
                 </li>
               ))}
             </ul>
             <p style="margin-block-start: var(--space-3)">
-              <a href="/posts/">全部文章 →</a>
+              <a href={path('/posts/')}>全部文章 →</a>
             </p>
           </section>
         )
@@ -48,12 +49,12 @@ const wiki = site.wiki.enabled ? publishedWiki(content) : [];
             <ul class="backlinks__list">
               {wiki.slice(0, 5).map((doc) => (
                 <li>
-                  <a href={`/wiki/${doc.slug}/`}>{doc.title}</a>
+                  <a href={path(`/wiki/${doc.slug}/`)}>{doc.title}</a>
                 </li>
               ))}
             </ul>
             <p style="margin-block-start: var(--space-3)">
-              <a href="/wiki/">全部条目 →</a>
+              <a href={path('/wiki/')}>全部条目 →</a>
             </p>
           </section>
         )

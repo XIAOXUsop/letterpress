@@ -75,9 +75,17 @@ function collectFiles(dir: string): string[] {
   return files;
 }
 
-/** 扫描内容目录，建立「名字 → URL」查找表。 */
-export function buildLookup(contentRoot: string): Lookup {
+/**
+ * 扫描内容目录，建立「名字 → URL」查找表。
+ *
+ * `base` 是部署子路径（GitHub Pages 项目站是 `/仓库名`）。
+ * **必须由调用方传进来**：这个模块在 markdown 管线里执行，
+ * 拿不到 Astro 的 `import.meta.env.BASE_URL`，而链接少了前缀
+ * 在本地开发时完全看不出来。
+ */
+export function buildLookup(contentRoot: string, base = '/'): Lookup {
   const byName = new Map<string, string>();
+  const basePrefix = base.endsWith('/') ? base.slice(0, -1) : base;
 
   const scan = (subdir: string, urlPrefix: string): void => {
     for (const file of collectFiles(join(contentRoot, subdir))) {
@@ -92,7 +100,7 @@ export function buildLookup(contentRoot: string): Lookup {
       const slug = resolveSlug(title, explicit, fileId);
       if (slug === '') continue;
 
-      const url = `${urlPrefix}${slug}/`;
+      const url = `${basePrefix}${urlPrefix}${slug}/`;
       byName.set(normalizeTarget(slug), url);
       // 标题也作为入口：作者写 [[某页]] 时想的通常是标题
       if (title !== '' && !byName.has(normalizeTarget(title))) {
@@ -170,7 +178,7 @@ export function splitWikilinks(text: string, lookup: Lookup): Segment[] {
  * `contentRoot` 默认取当前工作目录下的 `src/content`——Astro 构建时
  * cwd 就是项目根，所以不需要额外传参。
  */
-export function remarkWikilink(options: { contentRoot?: string } = {}) {
+export function remarkWikilink(options: { contentRoot?: string; base?: string } = {}) {
   let lookup: Lookup | null = null;
 
   return (tree: Root) => {
@@ -187,7 +195,10 @@ export function remarkWikilink(options: { contentRoot?: string } = {}) {
      */
     if (!tree || typeof tree !== 'object' || !('type' in tree)) return;
 
-    lookup ??= buildLookup(options.contentRoot ?? join(process.cwd(), 'src', 'content'));
+    lookup ??= buildLookup(
+      options.contentRoot ?? join(process.cwd(), 'src', 'content'),
+      options.base ?? '/',
+    );
     const table = lookup;
 
     /**

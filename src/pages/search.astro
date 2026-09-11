@@ -20,6 +20,7 @@
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { site } from '../config.js';
+import { path } from '../lib/url.js';
 ---
 
 <BaseLayout title="搜索" description={`在${site.title}内搜索文章与知识库条目。`}>
@@ -53,7 +54,7 @@ import { site } from '../config.js';
 
   <noscript>
     <p style="color: var(--color-text-muted); margin-block-start: var(--space-5)">
-      搜索需要 JavaScript。没有它也能正常阅读——<a href="/posts/">看全部文章</a>。
+      搜索需要 JavaScript。没有它也能正常阅读——<a href={path('/posts/')}>看全部文章</a>。
     </p>
   </noscript>
 </BaseLayout>

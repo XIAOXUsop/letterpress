@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+# 把站点部署到 GitHub Pages，给项目一个可以点开就看的 Demo。
+#
+# **为什么不提交构建产物**：产物是派生物，进版本库会让每次内容改动都产生
+# 一堆无意义的 diff，评审时真正变的那两行会被淹没。这里每次 push 现构建。
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同时只跑一个部署；新的 push 取消排队中的旧任务，但**不打断正在发布的那个**
+# （打断发布会留下半截站点）。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # 类型检查与测试先跑。部署一个坏掉的站点比不部署更糟——
+      # 访问者看到的是「这个项目没做完」，而不是「CI 拦住了」。
+      - run: npm run check
+      - run: npm test
+
+      - name: 构建站点
+        # **SITE_BASE 是关键。** GitHub Pages 的项目站地址是
+        # `https://<用户名>.github.io/<仓库名>/`，站点跑在子路径下。
+        # 不设这个变量的话，所有以 `/` 开头的链接都会指向域名根，
+        # 整站点不动——而这个问题在本地 `npm run dev` 下完全看不出来。
+        env:
+          SITE_BASE: /${{ github.event.repository.name }}
+        run: npm run build
+
+      - name: 上传产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -27,6 +27,7 @@ import {
   type SiteContent,
 } from '../lib/content.js';
 import { extractToc, shouldShowToc } from '../lib/toc.js';
+import { path } from '../lib/url.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
@@ -93,6 +94,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
   publishedTime={date ?? undefined}
   modifiedTime={updated ?? undefined}
   ogImage={ogImageOf(content, doc.slug)}
+  markdownTwin
 >
   <JsonLd
     type="article"
@@ -126,7 +128,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
           <ul class="tags" style="margin-block-start: var(--space-4)">
             {tags.map((tag) => (
               <li>
-                <a class="tag" href={`/tags/${encodeURIComponent(tag)}/`}>
+                <a class="tag" href={path(`/tags/${encodeURIComponent(tag)}/`)}>
                   {tag}
                 </a>
               </li>

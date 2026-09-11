@@ -8,6 +8,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { site } from '../../config.js';
 import { kindOf, loadContent, publishedWiki, reportIssues } from '../../lib/content.js';
+import { path } from '../../lib/url.js';
 
 const content = await loadContent();
 reportIssues(content.issues);
@@ -33,7 +34,7 @@ const groups = (['concept', 'entity', 'synthesis'] as const)
   <div class="page-header">
     <h1 class="page-header__title">{site.wiki.label}</h1>
     <p class="page-header__lead">
-      按主题组织，靠链接连起来。想按时间读，去<a href="/posts/">文章</a>。
+      按主题组织，靠链接连起来。想按时间读，去<a href={path('/posts/')}>文章</a>。
     </p>
   </div>
 
@@ -49,7 +50,7 @@ const groups = (['concept', 'entity', 'synthesis'] as const)
           <ul class="post-list">
             {group.docs.map((doc) => (
               <li class="post-list__item">
-                <a class="post-list__link" href={`/wiki/${doc.slug}/`}>
+                <a class="post-list__link" href={path(`/wiki/${doc.slug}/`)}>
                   <span class="meta">{doc.slug}</span>
                   <span>
                     <span class="post-list__title">{doc.title}</span>

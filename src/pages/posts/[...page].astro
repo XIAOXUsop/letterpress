@@ -9,6 +9,7 @@
 import type { GetStaticPaths } from 'astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PostList from '../../components/PostList.astro';
+import { path } from '../../lib/url.js';
 import { site } from '../../config.js';
 import { loadContent, publishedPosts, reportIssues } from '../../lib/content.js';
 
@@ -35,7 +36,7 @@ const total = page.lastPage;
   <div class="page-header">
     <h1 class="page-header__title">文章</h1>
     <p class="page-header__lead">
-      按时间倒序。想按主题找东西，去<a href="/wiki/">知识库</a>；想按年份翻，去<a href="/archive/">归档</a>。
+      按时间倒序。想按主题找东西，去<a href={path('/wiki/')}>知识库</a>；想按年份翻，去<a href={path('/archive/')}>归档</a>。
     </p>
   </div>
 

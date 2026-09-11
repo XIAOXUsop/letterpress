@@ -11,6 +11,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { site } from '../config.js';
 import { dateOfDoc, loadContent, publishedPosts, reportIssues } from '../lib/content.js';
+import { path } from '../lib/url.js';
 
 const content = await loadContent();
 reportIssues(content.issues);
@@ -57,7 +58,7 @@ const fmtDay = (d: Date): string =>
               return (
                 <li class="archive-list__item">
                   <span class="archive-list__date">{date ? fmtDay(date) : '—'}</span>
-                  <a href={`/${doc.slug}/`}>{doc.title}</a>
+                  <a href={path(`/${doc.slug}/`)}>{doc.title}</a>
                 </li>
               );
             })}

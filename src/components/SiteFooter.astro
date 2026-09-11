@@ -1,5 +1,6 @@
 ---
-import { site, absoluteUrl } from '../config.js';
+import { site } from '../config.js';
+import { path } from '../lib/url.js';
 
 const year = new Date().getFullYear();
 ---
@@ -20,9 +21,9 @@ const year = new Date().getFullYear();
         )
       }
       <span class="meta__sep"> · </span>
-      <a href={absoluteUrl('/llms.txt')}>llms.txt</a>
+      <a href={path('/llms.txt')}>llms.txt</a>
       <span class="meta__sep"> · </span>
-      <a href={absoluteUrl('/rss.xml')}>RSS</a>
+      <a href={path('/rss.xml')}>RSS</a>
     </p>
     {
       site.footer.credit && (

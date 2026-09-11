@@ -16,6 +16,7 @@
 import type { Doc } from '../lib/wiki/graph.js';
 import { coverOf, dateOfDoc, tagsOf, type SiteContent } from '../lib/content.js';
 import Cover from './Cover.astro';
+import { path } from '../lib/url.js';
 
 interface Props {
   docs: readonly Doc[];
@@ -38,7 +39,7 @@ const formatDate = (date: Date): string =>
       {docs.map((doc) => {
         const date = dateOfDoc(content, doc.slug);
         const tags = tagsOf(content, doc.slug);
-        const href = doc.kind === 'wiki' ? `/wiki/${doc.slug}/` : `/${doc.slug}/`;
+        const href = path(doc.kind === 'wiki' ? `/wiki/${doc.slug}/` : `/${doc.slug}/`);
         const cover = coverOf(content, doc.slug);
         const withCover = !compact && doc.kind === 'post';
 
@@ -77,7 +78,7 @@ const formatDate = (date: Date): string =>
                     {tags.map((tag, i) => (
                       <>
                         {i > 0 && <span class="meta__sep"> · </span>}
-                        <a href={`/tags/${encodeURIComponent(tag)}/`} class="post-list__tag">
+                        <a href={path(`/tags/${encodeURIComponent(tag)}/`)} class="post-list__tag">
                           {tag}
                         </a>
                       </>

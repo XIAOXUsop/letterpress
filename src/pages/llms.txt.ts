@@ -7,6 +7,7 @@
  */
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
+import { path } from '../lib/url.js';
 import { loadContent, reportIssues } from '../lib/content.js';
 import { buildLlmsTxt } from '../lib/wiki/llms.js';
 
@@ -16,7 +17,8 @@ export const GET: APIRoute = async () => {
 
   const body = buildLlmsTxt(content.docs, {
     siteName: site.title,
-    siteUrl: site.url || undefined,
+    // 站点地址为空时传 base，保证子路径部署下链接仍然正确
+    siteUrl: (site.url || '') + (path('/') === '/' ? '' : path('/').replace(/\/$/, '')),
     tagline: site.tagline,
     notes: [
       /*

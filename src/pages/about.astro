@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import { site, unconfiguredFields } from '../config.js';
 import { loadContent, reportIssues } from '../lib/content.js';
 import { stats as knowledgeStats } from '../lib/wiki/llms.js';
+import { path } from '../lib/url.js';
 
 const content = await loadContent();
 reportIssues(content.issues);
@@ -73,13 +74,13 @@ const todo = unconfiguredFields();
     <p>这一站同时写给人和 AI 读，所以除了页面之外还有：</p>
     <ul>
       <li>
-        <a href="/llms.txt">/llms.txt</a>——给 agent 看的目录，标题加一句话说明
+        <a href={path('/llms.txt')}>/llms.txt</a>——给 agent 看的目录，标题加一句话说明
       </li>
       <li>
-        <a href="/llms-full.txt">/llms-full.txt</a>——全部内容内联成一份文档
+        <a href={path('/llms-full.txt')}>/llms-full.txt</a>——全部内容内联成一份文档
       </li>
       <li>
-        <a href="/rss.xml">/rss.xml</a>——订阅
+        <a href={path('/rss.xml')}>/rss.xml</a>——订阅
       </li>
     </ul>
     <p>

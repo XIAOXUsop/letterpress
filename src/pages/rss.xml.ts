@@ -3,6 +3,7 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { render } from 'astro:content';
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
+import { path } from '../lib/url.js';
 import {
   dateOfDoc,
   loadContent,
@@ -77,7 +78,7 @@ export const GET: APIRoute = async (context) => {
       return {
         title: doc.title,
         description: doc.summary,
-        link: `/${doc.slug}/`,
+        link: path(`/${doc.slug}/`),
         pubDate: date ?? new Date(),
         // 分类：把标签映射成 RSS 的 <category>
         categories: tagsOf(content, doc.slug),

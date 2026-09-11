@@ -18,6 +18,8 @@ interface Props {
   next: NavItem | null;
 }
 
+import { path } from '../lib/url.js';
+
 const { prev, next } = Astro.props;
 ---
 
@@ -25,7 +27,7 @@ const { prev, next } = Astro.props;
   (prev || next) && (
     <nav class="post-nav" aria-label="文章导航">
       {prev ? (
-        <a class="post-nav__link" href={`/${prev.slug}/`} rel="prev">
+        <a class="post-nav__link" href={path(`/${prev.slug}/`)} rel="prev">
           <span class="post-nav__label">← 上一篇</span>
           <span class="post-nav__title">{prev.title}</span>
         </a>
@@ -33,7 +35,7 @@ const { prev, next } = Astro.props;
         <span />
       )}
       {next ? (
-        <a class="post-nav__link post-nav__item--next" href={`/${next.slug}/`} rel="next">
+        <a class="post-nav__link post-nav__item--next" href={path(`/${next.slug}/`)} rel="next">
           <span class="post-nav__label">下一篇 →</span>
           <span class="post-nav__title">{next.title}</span>
         </a>

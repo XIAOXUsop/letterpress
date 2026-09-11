@@ -11,6 +11,7 @@
  * 「那篇讲 Accept 头的」才是作者对这个链接的定位。
  */
 import type { LinkGraph } from '../lib/wiki/graph.js';
+import { path } from '../lib/url.js';
 
 interface Props {
   slug: string;
@@ -30,7 +31,7 @@ const links = graph.backlinks.get(slug) ?? [];
       <ul class="backlinks__list">
         {links.map((link) => {
           const target = graph.bySlug.get(link.fromSlug);
-          const href = target?.kind === 'wiki' ? `/wiki/${link.fromSlug}/` : `/${link.fromSlug}/`;
+          const href = path(target?.kind === 'wiki' ? `/wiki/${link.fromSlug}/` : `/${link.fromSlug}/`);
           return (
             <li>
               <a href={href}>{link.fromTitle}</a>

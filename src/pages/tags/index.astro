@@ -10,6 +10,7 @@
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { loadContent, publishedPosts, reportIssues, tagsOf } from '../../lib/content.js';
+import { path } from '../../lib/url.js';
 
 const content = await loadContent();
 reportIssues(content.issues);
@@ -44,7 +45,7 @@ const tags = [...counts.entries()].sort((a, b) =>
       <ul class="tags" style="gap: var(--space-3)">
         {tags.map(([tag, count]) => (
           <li>
-            <a class="tag" href={`/tags/${encodeURIComponent(tag)}/`}>
+            <a class="tag" href={path(`/tags/${encodeURIComponent(tag)}/`)}>
               {tag} <span style="color: var(--color-text-subtle)">{count}</span>
             </a>
           </li>

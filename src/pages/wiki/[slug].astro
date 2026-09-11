@@ -8,6 +8,7 @@
  */
 import { render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { path } from '../../lib/url.js';
 import Backlinks from '../../components/Backlinks.astro';
 import {
   updatedOfDoc,
@@ -66,6 +67,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
   type="article"
   modifiedTime={updated ?? undefined}
   ogImage={ogImageOf(content, doc.slug)}
+  markdownTwin
 >
   <article>
     <header class="post-header">
@@ -101,7 +103,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
           <ul class="backlinks__list">
             {outgoing.map((target) => (
               <li>
-                <a href={target.kind === 'wiki' ? `/wiki/${target.slug}/` : `/${target.slug}/`}>
+                <a href={path(target.kind === 'wiki' ? `/wiki/${target.slug}/` : `/${target.slug}/`)}>
                   {target.title}
                 </a>
               </li>

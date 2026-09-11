@@ -9,6 +9,7 @@
  */
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
+import { path } from '../lib/url.js';
 import { loadContent, reportIssues } from '../lib/content.js';
 import { buildLlmsFullTxt } from '../lib/wiki/llms.js';
 
@@ -18,7 +19,8 @@ export const GET: APIRoute = async () => {
 
   const body = buildLlmsFullTxt(content.docs, {
     siteName: site.title,
-    siteUrl: site.url || undefined,
+    // 站点地址为空时传 base，保证子路径部署下链接仍然正确
+    siteUrl: (site.url || '') + (path('/') === '/' ? '' : path('/').replace(/\/$/, '')),
     tagline: site.tagline,
     // 纯文本产物里中英文之间要手动加空格——`text-autospace` 只在 HTML 里生效。
     notes: [`本站以 ${site.lang} 为主。`],

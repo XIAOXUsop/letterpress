@@ -16,6 +16,7 @@ import { site, absoluteUrl } from '../config.js';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import CodeCopy from '../components/CodeCopy.astro';
+import { path, absolute } from '../lib/url.js';
 // 顺序有讲究：
 // fonts.css 必须先于 tokens.css —— 它定义 @font-face，而令牌里的字体栈引用这些族名
 import '../styles/fonts.css';
@@ -34,6 +35,16 @@ interface Props {
   modifiedTime?: Date;
   /** 分享图路径（相对本站）。不传则用站点默认图 `/og.png` */
   ogImage?: string;
+  /**
+   * 这一页是否有 markdown 孪生文件。
+   *
+   * **只有文章页与知识库条目页才有**（它们各自有对应的 `.md` 路由）。
+   * 首页、关于页、归档页没有——早先这里无条件输出 `rel="alternate"`，
+   * 于是那些页面的 `<link rel="alternate">` 全部指向 404 的地址。
+   * 一个指向不存在文件的 alternate 链接，比没有更糟：它会让 agent
+   * 去抓一个 404，然后据此判断这个站不可靠。
+   */
+  markdownTwin?: boolean;
 }
 
 const {
@@ -43,6 +54,7 @@ const {
   publishedTime,
   modifiedTime,
   ogImage,
+  markdownTwin = false,
 } = Astro.props;
 
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
@@ -51,6 +63,11 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? `https://example.com
 // 同 URL 的 markdown 版本。给人和 agent 都留一个显式入口，
 // 而不是让他们猜「带上 Accept 头会怎样」。
 const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
+
+const rssHref = absolute('/rss.xml', site.url);
+const sitemapHref = absolute('/sitemap-index.xml', site.url);
+const faviconSvg = path('/favicon.svg');
+const faviconIco = path('/favicon.ico');
 
 /**
  * 分享图的绝对地址。
@@ -62,9 +79,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
  *
  * 构建时已经有警告提示用户去填 site.url，这里不重复提醒。
  */
-const shareImage = site.url
-  ? new URL(ogImage ?? '/og.png', site.url.replace(/\/$/, '')).href
-  : null;
+const shareImage = site.url ? absolute(ogImage ?? '/og.png', site.url) : null;
 ---
 
 <!doctype html>
@@ -81,14 +96,16 @@ const shareImage = site.url
       浏览器只会隐式请求 /favicon.ico，而 `public/favicon.svg` 不会被自动加载——
       少了这一行，那个 SVG 文件永远不会被用到。
     */}
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href={faviconSvg} type="image/svg+xml" />
+    <link rel="icon" href={faviconIco} sizes="32x32" />
 
-    <!--
+    {/*
       告诉 agent 这里还有一份 markdown 版本。
       rel="alternate" 是标准做法，比在页面里塞说明文字可靠。
-    -->
-    <link rel="alternate" type="text/markdown" href={markdownHref} />
+
+      **只在真的有孪生文件时才输出**——否则就是指向 404 的假承诺。
+    */}
+    {markdownTwin && <link rel="alternate" type="text/markdown" href={markdownHref} />}
 
     <meta property="og:type" content={type} />
     <meta property="og:title" content={pageTitle} />
@@ -114,8 +131,8 @@ const shareImage = site.url
     {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
     {modifiedTime && <meta property="article:modified_time" content={modifiedTime.toISOString()} />}
 
-    <link rel="alternate" type="application/rss+xml" title={site.title} href={absoluteUrl('/rss.xml')} />
-    {site.url && <link rel="sitemap" type="application/xml" href={absoluteUrl('/sitemap-index.xml')} />}
+    <link rel="alternate" type="application/rss+xml" title={site.title} href={rssHref} />
+    {site.url && <link rel="sitemap" type="application/xml" href={sitemapHref} />}
 
     <script is:inline>
       // 同步执行，必须在首屏绘制之前跑完。

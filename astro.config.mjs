@@ -26,7 +26,23 @@ function readSiteUrl() {
 
 const siteUrl = readSiteUrl();
 
+/**
+ * 部署子路径。默认 `/`（域名根）。
+ *
+ * 什么时候需要改：**GitHub Pages 的项目站**地址是
+ * `https://<用户名>.github.io/<仓库名>/`，这时候 base 必须是 `/仓库名`。
+ *
+ * 用环境变量而不是写死在配置里，是为了让同一份代码既能部署到根
+ * 也能部署到子路径——构建命令前加 `SITE_BASE=/仓库名` 即可。
+ *
+ * **这个坑在本地看不出来**：`npm run dev` 的 base 是 `/`，前缀为空，
+ * 一切正常；只有真正部署到子路径时，所有没加前缀的链接才会一起失效。
+ * 所以 `npm run verify` 里有一条断言专门扫产物里的绝对路径。
+ */
+const base = process.env.SITE_BASE || '/';
+
 export default defineConfig({
+  base,
   // site 为空时 Astro 会警告；这是合法的初始状态（还没部署），
   // 所以显式允许，而不是让用户在第一次 build 时就被警告吓到。
   site: siteUrl || undefined,
@@ -83,7 +99,7 @@ export default defineConfig({
      * 而那个报错里一个字都不会提到 unified，极难反推。
      */
     processor: unified({
-      remarkPlugins: [remarkWikilink],
+      remarkPlugins: [[remarkWikilink, { base }]],
       /*
        * 宽表格必须包一层可滚动容器，否则在窄屏上会把整页撑出横向滚动条。
        * 实测：一张三列对照表在 375px 视口下宽 383px。
