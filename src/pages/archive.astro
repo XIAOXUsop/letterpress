@@ -40,7 +40,8 @@ const fmtDay = (d: Date): string =>
 ---
 
 <BaseLayout title="归档" description={`${site.title}的全部文章，按年份排列。`}>
-  <div class="page-header">
+  {/* 导航页不参与搜索索引——它们是入口，不是内容 */}
+  <div class="page-header" data-pagefind-ignore>
     <h1 class="page-header__title">归档</h1>
     <p class="page-header__lead">全部 {posts.length} 篇，按年份排列。</p>
   </div>

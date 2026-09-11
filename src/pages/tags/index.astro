@@ -31,7 +31,8 @@ const tags = [...counts.entries()].sort((a, b) =>
 ---
 
 <BaseLayout title="标签" description="全部标签，按文章数排列。">
-  <div class="page-header">
+  {/* 导航页不参与搜索索引——它们是入口，不是内容 */}
+  <div class="page-header" data-pagefind-ignore>
     <h1 class="page-header__title">标签</h1>
     <p class="page-header__lead">共 {tags.length} 个标签。</p>
   </div>

@@ -50,7 +50,8 @@ const formatDate = (d: Date): string =>
 <BaseLayout description={site.tagline}>
   <JsonLd type="website" title={site.title} description={site.tagline} url="/" />
 
-  <div class="page-header">
+  {/* 导航页不参与搜索索引——它们是入口，不是内容 */}
+  <div class="page-header" data-pagefind-ignore>
     <h1 class="page-header__title">{site.title}</h1>
     <p class="page-header__lead">{site.tagline}</p>
   </div>

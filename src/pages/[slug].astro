@@ -107,9 +107,17 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
     image={ogImageOf(content, doc.slug)}
   />
 
-  <article>
+  {/*
+    `data-pagefind-body` 把搜索索引的范围**限定在这一篇正文里**。
+
+    不加的话 Pagefind 会索引整页——包括跳转链接、导航、页脚的导航文字，
+    于是搜索结果的摘要变成「跳到主要内容 此间札记. 内容协商. 概念-…」
+    这种把版面文字当正文的碎片。**索引范围决定了摘要质量**，
+    而摘要是用户判断「这条是不是我要找的」的唯一依据。
+  */}
+  <article data-pagefind-body>
     <header class="post-header">
-      <h1 class="post-header__title">{doc.title}</h1>
+      <h1 class="post-header__title" data-pagefind-meta="title">{doc.title}</h1>
       <div class="meta post-header__meta">
         {date && <time datetime={date.toISOString()}>{formatDate(date)}</time>}
         <span class="meta__sep">·</span>
