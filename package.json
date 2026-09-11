@@ -17,7 +17,9 @@
     "check": "astro check",
     "clean": "node -e \"for (const d of ['.astro','dist']) require('node:fs').rmSync(d,{recursive:true,force:true})\"",
     "verify": "npm run clean && npm run build && node scripts/bundle-and-verify.mjs",
-    "verify:only": "node scripts/bundle-and-verify.mjs"
+    "verify:only": "node scripts/bundle-and-verify.mjs",
+    "verify:base": "node scripts/check-base.mjs",
+    "verify:all": "npm run check && npm test && npm run verify && npm run verify:base"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",
