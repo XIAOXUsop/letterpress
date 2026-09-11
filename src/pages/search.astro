@@ -115,7 +115,15 @@ import { path } from '../lib/url.js';
         const base = import.meta.env.BASE_URL ?? '/';
         const prefix = base.endsWith('/') ? base.slice(0, -1) : base;
 
-        // @ts-expect-error 由 pagefind 在构建后生成，源码里没有
+        /*
+         * 这里**不能**写 `@ts-expect-error`。
+         *
+         * 早先路径写成字面量 `'/pagefind/pagefind.js'` 时 TS 会报
+         * 「找不到模块」，需要抑制；改成模板字符串之后 TS 不再做静态解析、
+         * 也就没有错误可抑制——此时那条指令本身变成了错误
+         * （`Unused '@ts-expect-error' directive`），而且是**只在 CI 才会
+         * 暴露**：本地 `astro check` 用的还是改动前的缓存。
+         */
         pagefind = await import(/* @vite-ignore */ `${prefix}/pagefind/pagefind.js`);
         return pagefind;
       } catch {
