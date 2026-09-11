@@ -92,39 +92,38 @@ import { path } from '../lib/url.js';
       search: (q: string) => Promise<{ results: PagefindResult[] }>;
     } | null = null;
 
+    /**
+     * ── 加载 Pagefind。这里有两个坑，都踩过 ──────────────────────
+     *
+     * **坑一：路径必须带 base。**
+     * Pagefind 的索引是构建后生成的，部署到子路径时在 `/仓库名/pagefind/`。
+     * 写死 `/pagefind/pagefind.js` 在本地正常、上线 404。
+     *
+     * **坑二（更隐蔽）：不能用裸的 `import()`。**
+     * Vite 会把 `import()` 包成 `__vitePreload(() => import(...), __VITE_PRELOAD__)`，
+     * 而当说明符是动态的且带 `/* @vite-ignore *​/` 时，Vite 8 **不会替换
+     * `__VITE_PRELOAD__` 这个占位符**。产物里于是留着一个未定义标识符，
+     * 求值在 `import()` 之前发生 → `ReferenceError` → 被下面的 catch 吞掉
+     * → 永远显示「索引不可用」。
+     *
+     * 表现极具误导性：先是以为路径错了，改完路径依然不工作，而**浏览器
+     * 从头到尾没发过一个 pagefind 请求**——所以网络面板里什么都看不到。
+     *
+     * 用 `new Function` 构造导入可以完全绕开 Vite 的转换。
+     * 代价是要求 CSP 允许 `unsafe-eval`；本站默认没有严格 CSP，
+     * 若你加了严格 CSP，需要为这里开例外或改用其他加载方式。
+     */
+    const dynamicImport = new Function('u', 'return import(u)') as (
+      u: string,
+    ) => Promise<typeof pagefind>;
+
     /** 首次搜索时才加载索引——不搜索的人不该为它下载任何东西。 */
     async function load() {
       if (pagefind) return pagefind;
       try {
-        /*
-         * 这个模块是 **Pagefind 在构建后生成的**，源码树里根本不存在，
-         * 所以 TS 报 `Cannot find module`。用 @ts-expect-error 而不是
-         * @ts-ignore：前者在将来某天它真的被解析到时**会报错提醒**，
-         * 后者会一直沉默。
-         */
-        /*
-         * 路径必须带上 base。
-         *
-         * Pagefind 把索引放在 `dist/pagefind/` 下，而**部署到子路径时
-         * 它会被放到 `/仓库名/pagefind/`**。写成 `/pagefind/pagefind.js`
-         * 这种绝对路径在本地正常（base 是 `/`），一上线就 404 ——
-         * 结果是搜索框永远转圈，而控制台只有一条 module not found。
-         *
-         * `import.meta.env.BASE_URL` 在客户端脚本里可用（Vite 会在构建时替换）。
-         */
         const base = import.meta.env.BASE_URL ?? '/';
         const prefix = base.endsWith('/') ? base.slice(0, -1) : base;
-
-        /*
-         * 这里**不能**写 `@ts-expect-error`。
-         *
-         * 早先路径写成字面量 `'/pagefind/pagefind.js'` 时 TS 会报
-         * 「找不到模块」，需要抑制；改成模板字符串之后 TS 不再做静态解析、
-         * 也就没有错误可抑制——此时那条指令本身变成了错误
-         * （`Unused '@ts-expect-error' directive`），而且是**只在 CI 才会
-         * 暴露**：本地 `astro check` 用的还是改动前的缓存。
-         */
-        pagefind = await import(/* @vite-ignore */ `${prefix}/pagefind/pagefind.js`);
+        pagefind = await dynamicImport(`${prefix}/pagefind/pagefind.js`);
         return pagefind;
       } catch {
         return null;

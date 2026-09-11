@@ -261,6 +261,7 @@ function doc(over: Partial<Doc> & { slug: string }): Doc {
     body: '',
     explicitSlug: true,
     draft: false,
+    date: 0,
     ...over,
   };
 }

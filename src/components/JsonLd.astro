@@ -10,7 +10,7 @@
  * 会让结构化数据从「信号」变成「噪声」——校验器不报错，但搜索引擎会降权。
  */
 import { site } from '../config.js';
-import { path } from '../lib/url.js';
+import { path, siteOrigin, basePath } from '../lib/url.js';
 
 interface Props {
   type: 'website' | 'article' | 'note';
@@ -39,14 +39,32 @@ const { type, title, description, url, publishedTime, modifiedTime, tags = [], i
  * 所以 `site.url` 为空时改用**相对路径**——搜索引擎会按页面地址解析。
  * 不是最优解，但方向是对的。
  */
-// 注意这里拼上了部署子路径：`og:image` 等地址在子路径部署下也必须带前缀
-const deployBase = path('/') === '/' ? '' : path('/').replace(/\/$/, '');
-const base = site.url.replace(/\/$/, '') + deployBase;
-const absolute = (p: string): string => (p.startsWith('http') ? p : `${base}${p}`);
+/*
+ * `site.url` 里可能已经带了一次部署路径，先剥掉再交给 `absolute` 加——
+ * 否则结构化数据里会出现 `/letterpress/letterpress/letterpress/...`。
+ */
+const base = siteOrigin(site.url);
+const deployBase = basePath();
+
+/**
+ * 传进来的路径**可能已经含 base**。
+ *
+ * 页面传的是 `Astro.url.pathname`，而它带着部署前缀
+ * （子路径部署下是 `/letterpress/cjk-web-typography/`）。
+ * 直接再拼一次 base 就是三层前缀——实测正是这么错的。
+ *
+ * 所以先剥掉可能存在的 base 前缀，再统一加上。这样无论调用方传的是
+ * 带前缀的还是不带的，结果都对。
+ */
+const stripBase = (p: string): string =>
+  deployBase && p.startsWith(deployBase) ? p.slice(deployBase.length) : p;
+
+const absolute = (p: string): string =>
+  p.startsWith('http') ? p : `${base}${deployBase}${stripBase(p)}`;
 
 /** `@id` 需要绝对地址才有意义，没有站点域名时干脆不输出。 */
 const idFor = (fragment: string): string | undefined =>
-  base ? `${base}/${fragment}` : undefined;
+  base ? `${base}${deployBase}/${fragment}` : undefined;
 
 const websiteId = idFor('#website');
 const personId = idFor('#person');

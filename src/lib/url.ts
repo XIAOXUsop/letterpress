@@ -38,15 +38,63 @@ export function path(p: string): string {
 }
 
 /**
+ * 取出部署子路径（`''` 或 `/letterpress`）。
+ *
+ * Astro 的 `base` 与 `site.url` 里可能各写了一遍子路径——
+ * **两个真相来源相加就是前缀翻倍**（实测踩过：产物里全是
+ * `/letterpress/letterpress/og.png`，分享图与 RSS 发现全部 404）。
+ */
+export function basePath(): string {
+  const base = import.meta.env.BASE_URL ?? '/';
+  return base === '/' || base === '' ? '' : base.replace(/\/$/, '');
+}
+
+/**
  * 构造绝对地址。用于 `og:image`、RSS、sitemap、JSON-LD 这些
  * **必须**是完整 URL 的地方。
  *
- * `site.url` 为空时返回相对路径——比编一个 localhost 地址好，
- * 后者会进生产产物（这个坑踩过一次）。
+ * ── 约定：`site.url` 填**域名根**，不要带部署路径 ──────────────────
+ *
+ * 部署到子路径时，路径由 `SITE_BASE` 提供。写两遍会翻倍：
+ *
+ *     site.url = 'https://example.com/blog'   ← 含路径
+ *     SITE_BASE = /blog                        ← 又一遍
+ *     → https://example.com/blog/blog/og.png   ✗
+ *
+ * 但「写错了不会报错、只是产物里多个前缀」这种事不该靠人记住，
+ * 所以下面做一层容错：**若 `siteUrl` 末尾已经带了当前 base，先剥掉**。
+ * 两种写法都能得到正确结果，代价只是这里多一个判断。
+ *
+ * `siteUrl` 为空时返回带 base 的相对路径——比编一个 localhost 地址好，
+ * 后者会原样进生产产物（这个坑也踩过）。
  */
 export function absolute(p: string, siteUrl: string): string {
   if (/^[a-z][a-z0-9+.-]*:/i.test(p)) return p;
+
   const withBase = path(p);
   if (!siteUrl) return withBase;
-  return siteUrl.replace(/\/$/, '') + withBase;
+
+  let origin = siteUrl.replace(/\/$/, '');
+  const prefix = basePath();
+  if (prefix && origin.endsWith(prefix)) {
+    origin = origin.slice(0, -prefix.length);
+  }
+
+  return origin + withBase;
+}
+
+/**
+ * 站点来源（协议 + 域名 + 端口），**已剥掉重复的部署路径**。
+ *
+ * 给 llms.txt / RSS 这类自己拼 URL 的地方用，避免每处各写一遍
+ * 「剥掉末尾 base」的逻辑——写漏一处就是一次前缀翻倍，
+ * 而翻倍的表现是 404，不是报错。
+ */
+export function siteOrigin(siteUrl: string): string {
+  let origin = siteUrl.replace(/\/$/, '');
+  const prefix = basePath();
+  if (prefix && origin.endsWith(prefix)) {
+    origin = origin.slice(0, -prefix.length);
+  }
+  return origin;
 }

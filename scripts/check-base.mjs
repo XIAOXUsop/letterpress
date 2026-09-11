@@ -131,6 +131,57 @@ async function scanScripts(dir) {
 
 await scanScripts(dist);
 
+/**
+ * ── 查绝对 URL 里的前缀翻倍 ────────────────────────────────────
+ *
+ * **这条是补上来的，因为上一版检查报「通过」而线上是坏的。**
+ *
+ * 当时的扫描只匹配 `href="/xxx"` / `src="/xxx"` 这种**相对绝对路径**。
+ * 而产物里有另一类地址：`og:image`、RSS 自动发现、sitemap、JSON-LD、
+ * llms.txt、rss.xml —— 它们是 `https://` 开头的完整 URL，**根本不进正则**。
+ *
+ * 于是 `site.url` 与 `SITE_BASE` 各写了一遍子路径、代码把两者相加，
+ * 产物里全是 `https://…/letterpress/letterpress/og.png`，
+ * 分享图 404、RSS 无法被阅读器发现、llms.txt 整份是死链清单——
+ * 而检查报「子路径部署检查通过」。
+ *
+ * 教训很直白：**检查的覆盖面必须跟着「地址出现在哪些载体里」走**，
+ * 而不是跟着「我知道的几种写法」走。
+ */
+const doubled = new Map();
+
+async function scanDoubled(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await scanDoubled(full);
+      continue;
+    }
+    // HTML 之外还有 llms.txt / rss.xml / sitemap —— 它们是纯文本产物，
+    // 恰恰是最容易漏、也最容易被 agent 与阅读器读到的那几份
+    if (!/\.(html|txt|xml|json)$/.test(entry.name)) continue;
+
+    const text = await readFile(full, 'utf8');
+    const rel = full.slice(dist.length + 1).replace(/\\/g, '/');
+    const n = (text.match(new RegExp(`${FAKE_BASE}${FAKE_BASE}`, 'g')) ?? []).length;
+    if (n > 0) doubled.set(rel, n);
+  }
+}
+
+await scanDoubled(dist);
+
+console.log('\n检查绝对 URL 是否前缀翻倍');
+if (doubled.size === 0) {
+  console.log('  ✓ 没有前缀翻倍');
+} else {
+  for (const [rel, n] of doubled) problems.set(rel, [`前缀翻倍 ×${n}`]);
+  console.log(`  ✗ ${doubled.size} 个产物里有翻倍前缀：`);
+  for (const [rel, n] of [...doubled].sort()) {
+    console.log(`      ${rel}   ×${n}`);
+  }
+}
+
 console.log('\n检查脚本里的资源路径是否带 base 前缀');
 if (scriptProblems.size === 0) {
   console.log('  ✓ 脚本里的资源路径都带 base 前缀');

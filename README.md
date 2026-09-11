@@ -8,10 +8,10 @@
 **[▶ 在线 Demo](https://xiaoxusop.github.io/letterpress/)** · **[仓库](https://github.com/XIAOXUsop/letterpress)**
 
 ![Astro](https://img.shields.io/badge/Astro-7-FF5D01?logo=astro&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-205%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-215%20项-2C5E2E)
 
 </div>
 
@@ -54,7 +54,7 @@ export const site: SiteConfig = {
 | 🔗 **分享** | 1200×630 分享图（PNG，由构建生成）、Open Graph、Twitter 卡片、JSON-LD |
 | 📡 **订阅** | RSS **全文输出**（含分类与作者）、sitemap、robots.txt |
 | 🌏 **中文** | 行高 1.75、标题字重按中文字体特性选、行宽 `34em`、`text-autospace` 中西文自动间距、中文不用斜体 |
-| ♿ **无障碍** | 跳转链接、100% 可见焦点、`prefers-reduced-motion`、**全部文字对比度实测 ≥4.5:1**（亮暗双模式） |
+| ♿ **无障碍** | 跳转链接、100% 可见焦点、`prefers-reduced-motion`；**对比度有自动化测试**（解析 `tokens.css` 逐对验算，亮暗双模式） |
 | 🤖 **给机器** | 每个页面有 `.md` 孪生文件；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt` |
 | 🧠 **知识层** | 用 `[[方括号]]` 互链的独立知识库；断链**会让构建失败**；每次构建出体检报告 |
 | 🌗 **主题** | 三态（跟随系统 / 亮 / 暗），无闪烁（恢复脚本在 `<head>` 同步执行） |
@@ -71,7 +71,8 @@ export const site: SiteConfig = {
 
 | | letterpress | AstroPaper | Fuwari | PaperMod |
 |---|---|---|---|---|
-| 中文排版（行宽/行高/中西文间距） | ✅ 按中文重调过 | ⚠️ 用西文默认值 | ⚠️ 用西文默认值 | ⚠️ 只修 `hasCJKLanguage` 的截断 |
+| 中西文自动间距、中文不用斜体 | ✅ 唯一做到 | ❌ | ❌ | ❌ |
+| 行高 1.75 / 行宽按中文调 | ✅ | ⚠️ 行高同为 1.75，行宽随卡片浮动 | ⚠️ 同左 | ⚠️ 只修 `hasCJKLanguage` 的截断 |
 | **给 AI 读的 markdown 接口** | ✅ 内容协商 + `.md` 孪生 | ❌ | ❌ | ❌ |
 | **双向链接（`[[…]]` + 反向链接）** | ✅ | ❌ | ❌ | ❌ |
 | 断链让**构建失败** | ✅ | 部分（zod schema） | ❌ | ❌ |
@@ -205,8 +206,8 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **205 项**单元测试，全部离线 |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 47 项契约 |
+| `npm test` | **215 项**单元测试，全部离线 |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 51 项契约 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/` 与 `dist/` |
 
@@ -223,7 +224,13 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 | **Cloudflare Pages** | `npm run build` | `dist` | ✅ 免费套餐即可用 |
 | **Netlify** | 同上 | `dist` | ✅ 免费额度 100 万次/月 |
 | **Vercel** | 同上 | `dist` | ✅ |
-| GitHub Pages | 同上 | `dist` | ❌ 响应头不可改 |
+| **GitHub Pages（项目站）** | `SITE_BASE=/仓库名 npm run build` | `dist` | ❌ 响应头不可改 |
+
+> ⚠️ **部署到 GitHub Pages 的项目站必须设 `SITE_BASE`。**
+> 项目站地址形如 `https://<用户名>.github.io/<仓库名>/`，站点跑在子路径下。
+> 不设这个变量的话，所有以 `/` 开头的链接都会指向域名根，**整站点不动**——
+> 而这个问题在本地 `npm run dev` 下完全看不出来（本地 base 是 `/`，前缀为空）。
+> 一条命令验证：`npm run verify:base`。
 
 **GitHub Pages 用不了内容协商**（响应头不可改）。站点照常工作，
 agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问。
@@ -238,10 +245,10 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **205 项**，全部离线，无网络依赖 |
-| 端到端契约 | **47 项**，打在真实构建产物上 |
+| 单元测试 | **215 项**，全部离线，无网络依赖 |
+| 端到端契约 | **51 项**，打在真实构建产物上 |
 | 构建 | 23 页约 **1.4 秒** |
-| 外部 JS | **0 个文件**（首页仅 1.9 KB 内联） |
+| 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
 | CSS | 单文件 **20.6 KB / gzip 4.4 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |

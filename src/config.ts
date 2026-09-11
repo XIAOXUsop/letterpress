@@ -152,6 +152,16 @@ const DEFAULTS = {
   authorUrl: 'https://github.com/your-name',
 } as const;
 
+/*
+ * 注意：**站名不在这个清单里**。
+ *
+ * 早先它在这里，判据是「等于默认的『此间札记』」。结果本站自己的 Demo
+ * 保留了这个名字，于是关于页对访客显示「这个站还没配置」——
+ * 一个给使用者的提示，在作者自己的站点上变成了假阳性。
+ *
+ * 站名是个**审美选择**而不是「没配」，与作者名、域名性质不同。
+ */
+
 /**
  * 站点是否还没配置。
  *
@@ -169,6 +179,5 @@ export function unconfiguredFields(): string[] {
   }
   if (site.author.url === DEFAULTS.authorUrl) missing.push('site.author.url：你的主页');
   if (site.url === '') missing.push('site.url：你的域名（不填就没有 sitemap 与分享图）');
-  if (site.title === '此间札记') missing.push('site.title：你的站名');
   return missing;
 }

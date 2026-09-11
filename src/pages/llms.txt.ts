@@ -7,7 +7,7 @@
  */
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
-import { path } from '../lib/url.js';
+import { siteOrigin } from '../lib/url.js';
 import { loadContent, reportIssues } from '../lib/content.js';
 import { buildLlmsTxt } from '../lib/wiki/llms.js';
 
@@ -17,8 +17,12 @@ export const GET: APIRoute = async () => {
 
   const body = buildLlmsTxt(content.docs, {
     siteName: site.title,
-    // 站点地址为空时传 base，保证子路径部署下链接仍然正确
-    siteUrl: (site.url || '') + (path('/') === '/' ? '' : path('/').replace(/\/$/, '')),
+    /*
+     * 传**剥掉部署路径的站点来源**。早先这里写成「site.url + base」，
+     * 而 site.url 本身就含子路径——两处相加就是前缀翻倍，
+     * llms.txt 里 8 条 URL 全部 404。
+     */
+    siteUrl: siteOrigin(site.url),
     tagline: site.tagline,
     notes: [
       /*
