@@ -5,11 +5,13 @@
 
 <div align="center">
 
+**[▶ 在线 Demo](https://xiaoxusop.github.io/letterpress/)** · **[仓库](https://github.com/XIAOXUsop/letterpress)**
+
 ![Astro](https://img.shields.io/badge/Astro-7-FF5D01?logo=astro&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-204%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-205%20项-2C5E2E)
 
 </div>
 
@@ -203,14 +205,14 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **204 项**单元测试，全部离线 |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 27 项契约 |
+| `npm test` | **205 项**单元测试，全部离线 |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 47 项契约 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/` 与 `dist/` |
 
 > **改了 `astro.config.mjs` 里的 markdown 配置后必须 `npm run clean`。**
 > 内容层有缓存，不清理会让你以为改动没生效。这个坑我们踩过——
-> 当时所有 `[[链接]]` 都没渲染出来，而 204 项测试全绿、构建成功、lint 通过。
+> 当时所有 `[[链接]]` 都没渲染出来，而全部测试全绿、构建成功、lint 通过。
 
 ---
 
@@ -236,8 +238,8 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **204 项**，全部离线，无网络依赖 |
-| 端到端契约 | **27 项**，打在真实构建产物上 |
+| 单元测试 | **205 项**，全部离线，无网络依赖 |
+| 端到端契约 | **47 项**，打在真实构建产物上 |
 | 构建 | 23 页约 **1.4 秒** |
 | 外部 JS | **0 个文件**（首页仅 1.9 KB 内联） |
 | CSS | 单文件 **20.6 KB / gzip 4.4 KB** |
@@ -250,7 +252,9 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 
 **如实列出，不打算假装这些不存在。**
 
-- **没有在线 Demo。** 上面的截图是本地预览。部署一个 demo 是下一步该做的事。
+- **Demo 部署在 GitHub Pages 上，因此跑不了内容协商**（Pages 的响应头不可改）。
+  其余功能都可在线验证；内容协商需要 Cloudflare Pages / Netlify / Vercel，
+  本地可用 `npm run verify` 实测——它会打印真实的 token 节省数字。
 - **内容协商只对三个平台有现成实现。** GitHub Pages 不行（响应头不可改）；
   其他平台需自写垫片，共享逻辑在 `src/lib/negotiate/edge.ts`，约 40 行。
 - **七个 agent 里只有三个要 markdown。** Codex、Copilot、Gemini CLI、Windsurf
