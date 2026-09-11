@@ -154,6 +154,15 @@ Google 明确不支持。
 
 ### 二、中文排版按中文的规矩来
 
+![文章页](docs/article.png)
+
+<details>
+<summary>暗色模式（同一个页面）</summary>
+
+![文章页 · 暗色](docs/article-dark.png)
+
+</details>
+
 多数主题（包括中文圈的）直接套用为西文调好的参数：
 
 | 参数 | 西文常用 | 本项目的取值 | 为什么 |
