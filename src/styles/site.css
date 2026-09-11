@@ -287,18 +287,58 @@
     margin-block-start: 0;
   }
 
-  .post-list__link {
+  /*
+   * ── 「拉伸链接」模式 ────────────────────────────────────────────
+   *
+   * 外层是 div，标题里的 <a> 用伪元素铺满整行做点击区。
+   *
+   * **不能用「外层 a 包内层 a」**：HTML 不允许锚点嵌套，解析器遇到内层
+   * `<a>` 会自动闭合外层，标签于是掉出卡片、渲染到列表项外面。
+   * 那个 bug 的表现是「元素都在、只是位置不对」，任何存在性断言都抓不到。
+   */
+  .post-list__row {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr;
     gap: var(--space-2);
     padding-block: var(--space-5);
-    text-decoration: none;
-    color: inherit;
     transition: background-color var(--duration-fast) var(--ease-out);
   }
 
+  .post-list__row:hover {
+    background-color: var(--color-surface-sunken);
+  }
+
+  /* 链接本身只包住标题，但 ::after 把它撑满整行 */
+  .post-list__link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .post-list__link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  /* 焦点环要看得见——铺满整行的点击区，焦点环也该是整行 */
+  .post-list__link:focus-visible {
+    outline: none;
+  }
+
+  .post-list__link:focus-visible::after {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: calc(var(--focus-ring-offset) * -1);
+  }
+
+  /* 标签要浮在拉伸链接之上，否则点不动 */
+  .post-list__tags {
+    position: relative;
+    z-index: 1;
+  }
+
   @media (min-width: 768px) {
-    .post-list__link {
+    .post-list__row {
       /* 日期窄列 + 标题与摘要宽列的非对称结构 */
       grid-template-columns: 7rem minmax(0, 1fr);
       gap: var(--space-5);
@@ -308,14 +348,10 @@
     /*
      * 有缩略图时：缩略图在最左，日期紧随其后，然后是正文。
      *
-     * 早先把缩略图放最右，配合 `1fr` 的文本列，结果是文字与图之间
-     * 空出一大片——图看起来像贴上去的。放最左则形成一条清晰的
-     * 起始线，缩略图成为扫描的锚点而不是尾巴。
-     *
      * 日期列从 7rem 收到 5.5rem：`2026/09/12` 用等宽字体排出来
      * 就是这个宽度，原来给多了，多出来的空白把标题推得很远。
      */
-    .post-list__link--with-cover {
+    .post-list__row--with-cover {
       grid-template-columns: 9rem 5.5rem minmax(0, 1fr);
       align-items: start;
     }
@@ -327,12 +363,32 @@
     max-width: var(--measure);
   }
 
+  .post-list__title {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 500;
+    line-height: var(--leading-snug);
+    color: var(--color-text);
+    text-wrap: balance;
+  }
+
+  .post-list__row:hover .post-list__title {
+    color: var(--color-accent);
+  }
+
+  .post-list__summary {
+    margin-block-start: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-wrap: pretty;
+  }
+
   /*
    * 紧凑变体：知识层条目。
    *
    * 桌面端排成两列——条目没有日期与封面，单列会显得空。
-   * 两列同时让它与「文章」区块在视觉上区分开，
-   * 避免首页两个区块长得一模一样。
+   * 两列同时让它与「文章」区块在视觉上区分开。
    */
   .post-list--compact {
     display: grid;
@@ -346,14 +402,12 @@
     }
   }
 
-  .post-list--compact .post-list__link {
+  .post-list--compact .post-list__row {
     /*
      * **必须显式重置列定义。**
      *
-     * 基础样式在桌面端把每个链接设成了 `7rem minmax(0, 1fr)` 的两列网格。
-     * 紧凑条目没有封面也没有日期列，只有一个子元素——它会落进那个 7rem
-     * 的第一列，正文被挤成一百来像素宽的窄条，每行只放得下三四个字。
-     * 只覆盖 gap 与 padding 不够，列定义得一起改。
+     * 基础样式在桌面端把行设成了两列网格。紧凑条目只有一个子元素，
+     * 它会落进 7rem 的第一列，正文被挤成一百来像素宽的窄条。
      */
     grid-template-columns: 1fr;
     padding-block: var(--space-3);
@@ -375,28 +429,15 @@
     overflow: hidden;
   }
 
-  .post-list__link:hover {
-    background-color: var(--color-surface-sunken);
+  .post-list__tag {
+    color: var(--color-text-subtle);
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out);
   }
 
-  .post-list__title {
-    font-family: var(--font-display);
-    font-size: var(--text-lg);
-    font-weight: 500;
-    line-height: var(--leading-snug);
-    color: var(--color-text);
-    text-wrap: balance;
-  }
-
-  .post-list__link:hover .post-list__title {
+  .post-list__tag:hover {
     color: var(--color-accent);
-  }
-
-  .post-list__summary {
-    margin-block-start: var(--space-1);
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-    text-wrap: pretty;
+    text-decoration: underline;
   }
 
   /* ── 页头区 ────────────────────────────────────────────────── */

@@ -10,8 +10,19 @@
  * - `default`：文章。缩略图 + 日期 + 标题摘要，信息全
  * - `compact`：知识层条目。没有日期（知识层不看时效），排得更紧
  *
- * 分成两种而不是复用一种，是因为**同一页上出现两次相同布局会显得单调**。
- * 首页同时有文章与条目两个区块，它们需要在视觉上可区分。
+ * ── 外层为什么是 div 而不是 a（这里踩过一次）──────────────────────
+ *
+ * 原先把整行做成 `<a>`，标签也做成 `<a>`——**HTML 不允许 `<a>` 嵌套 `<a>`**。
+ * 浏览器解析到内层锚点时会**自动闭合外层**，于是标签整个掉出卡片，
+ * 渲染到 `<li>` 下面、缩略图正下方，版式错位。
+ *
+ * 更麻烦的是它的表现：**DOM 看起来「有那个元素」，只是位置不对**，
+ * 所以任何只检查「元素是否存在」「文字是否正确」的断言都发现不了。
+ * 我是把页面截图出来看才注意到的。
+ *
+ * 现在用标准的「拉伸链接」模式：外层是 `div`，标题里的 `<a>` 用伪元素
+ * 铺满整行做点击区，标签再提升层级保持独立可点。
+ * 整行可点、标签可点，两者都是合法的 HTML。
  */
 import type { Doc } from '../lib/wiki/graph.js';
 import { coverOf, dateOfDoc, tagsOf, type SiteContent } from '../lib/content.js';
@@ -45,10 +56,7 @@ const formatDate = (date: Date): string =>
 
         return (
           <li class="post-list__item">
-            <a
-              class:list={['post-list__link', withCover && 'post-list__link--with-cover']}
-              href={href}
-            >
+            <div class:list={['post-list__row', withCover && 'post-list__row--with-cover']}>
               {withCover && (
                 <Cover
                   slug={doc.slug}
@@ -59,22 +67,19 @@ const formatDate = (date: Date): string =>
                   class="cover cover--thumb"
                 />
               )}
-              {!compact && (
-                <span class="meta">{date ? formatDate(date) : ''}</span>
-              )}
+              {!compact && <span class="meta">{date ? formatDate(date) : ''}</span>}
               <span class="post-list__body">
-                <span class="post-list__title">{doc.title}</span>
+                {/* 这个 <a> 是整行的点击区——伪元素铺满 .post-list__row */}
+                <a class="post-list__link" href={href}>
+                  <span class="post-list__title">{doc.title}</span>
+                </a>
                 {doc.summary && (
                   <span class="post-list__summary" style="display: block">
                     {doc.summary}
                   </span>
                 )}
-                {/*
-                  标签做成可点的链接。纯文本的标签在列表里只是装饰——
-                  读者看到「排版」想找同类文章时点不动，等于把分类能力浪费了。
-                */}
                 {tags.length > 0 && (
-                  <span class="meta" style="margin-block-start: var(--space-2)">
+                  <span class="meta post-list__tags" style="margin-block-start: var(--space-2)">
                     {tags.map((tag, i) => (
                       <>
                         {i > 0 && <span class="meta__sep"> · </span>}
@@ -86,7 +91,7 @@ const formatDate = (date: Date): string =>
                   </span>
                 )}
               </span>
-            </a>
+            </div>
           </li>
         );
       })}
