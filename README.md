@@ -56,7 +56,7 @@ export const site: SiteConfig = {
 | 🌏 **中文** | 行高 1.75、标题字重按中文字体特性选、行宽 `34em`、`text-autospace` 中西文自动间距、中文不用斜体 |
 | ♿ **无障碍** | 跳转链接、100% 可见焦点、`prefers-reduced-motion`；**对比度有自动化测试**（解析 `tokens.css` 逐对验算，亮暗双模式） |
 | 🤖 **给机器** | **文章与知识库条目**有 `.md` 孪生文件；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt` |
-| 🧠 **知识层** | 用 `[[方括号]]` 互链的独立知识库；断链**会让构建失败**；每次构建出体检报告 |
+| 🧠 **知识层** | 用 `[[方括号]]` 互链的独立知识库；断链**会让构建失败**；**有问题时**打印体检报告（干净构建不打印） |
 | 🌗 **主题** | 三态（跟随系统 / 亮 / 暗），无闪烁（恢复脚本在 `<head>` 同步执行） |
 | 📦 **交付** | 纯静态，零外部 JS 文件；CSS 单文件 21.7 KB（gzip 4.6 KB）；字体只含拉丁子集 100 KB |
 | 🚀 **部署** | Cloudflare Pages / Netlify / Vercel / 任何静态托管；三个平台的内容协商垫片已写好 |
@@ -132,8 +132,8 @@ Vercel 的实现只在自己平台内生效的原因。
 
 ```
 页面                         HTML token   MD token       节省
-/markdown-for-agents/            4597       1674    63.6%
-/cjk-web-typography/             5351       1816    66.1%
+/markdown-for-agents/            4724       1674    64.6%
+/cjk-web-typography/             5416       1816    66.5%
 ```
 
 > **为什么低于 Cloudflare 的 80% 和 Vercel 的 99.6%？**
@@ -216,7 +216,7 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
 | `npm test` | **215 项**单元测试，全部离线 |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 71 项契约 |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 77 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物，四类载体） |
 | `npm run verify:formats` | 内容格式探针：真的放一个 .md 与 .mdx 进去，看能不能产出页面 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
@@ -225,6 +225,11 @@ html { text-autospace: normal; text-spacing-trim: trim-start; }
 > **改了 `astro.config.mjs` 里的 markdown 配置后必须 `npm run clean`。**
 > 内容层有缓存，不清理会让你以为改动没生效。这个坑我们踩过——
 > 当时所有 `[[链接]]` 都没渲染出来，而全部测试全绿、构建成功、lint 通过。
+
+> **`verify:base` 会重建 `dist`，`verify:formats` 跑完会清空它——它们不是构建命令。**
+> 两者都是检查。跑完想要可部署的产物，请重新 `npm run build`。
+> 而且 `verify:base` 只跑 `astro build`、**不生成 Pagefind 索引**，
+> 所以它留下的那份产物是**没有搜索**的。
 
 ---
 
@@ -248,7 +253,13 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 
 > **`Vary: Accept` 不能省。** 少了它，CDN 会把 markdown 缓存下来发给浏览器，
 > 用户打开博客看到一坨纯文本。这个 bug 只在缓存命中时出现，
-> 排查时看起来像「网站有时候会坏」。三个平台的头配置都已备好。
+> 排查时看起来像「网站有时候会坏」。三个平台的头配置都已备好：
+> Cloudflare / Netlify 用 `public/_headers`，Vercel 用 `vercel.json`。
+
+> ⚠️ **Vercel 这一份没有在 Vercel 上实际部署验证过。** 本项目只把 Demo 跑在
+> GitHub Pages 上（那是唯一一个**不支持**内容协商的平台）。`vercel.json` 是按
+> Vercel 文档写的，内容与 `_headers` 逐条对应；但「写对了」和「在平台上生效」
+> 是两件事。选 Vercel 的话请自己 curl 一次确认头里有 `Vary: Accept`。
 
 ---
 
@@ -257,7 +268,7 @@ agent 拿到 HTML——`.md` 孪生文件仍在，通过 URL 加 `.md` 可访问
 | 项 | 结果 |
 |---|---|
 | 单元测试 | **215 项**，全部离线，无网络依赖 |
-| 端到端契约 | **71 项**，打在真实构建产物上（条数由脚本自己打印） |
+| 端到端契约 | **77 项**，打在真实构建产物上（由脚本自己打印；含按文章数展开的断言，条数随内容浮动） |
 | 构建 | 32 页约 **1.5 秒** |
 | 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
 | CSS | 单文件 **21.7 KB / gzip 4.6 KB** |

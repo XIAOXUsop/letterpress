@@ -529,6 +529,58 @@ console.log('\n[4c] 页面结构：区块不得重复');
   }
 }
 
+/**
+ * ── 4d. 「该出现的，出现了吗」────────────────────────────────────────
+ *
+ * 这一节是补出来的，因为在此之前**所有断言只问两类问题**：
+ * 「这个元素存在吗」「它出现了几次」。没有一条问「本该有的东西还在不在」。
+ *
+ * 后果是真实发生过的：`src/pages/[slug].astro` 里 `PostNav` 被 import 了，
+ * 但渲染调用在某一轮改动中被删掉，而 `prev` / `next` 照算不误。
+ * 于是**线上所有文章页都没有「上一篇 / 下一篇」**，README 却宣称了两次——
+ * 而构建成功、215 项单测全绿、契约全过、lint 通过。
+ *
+ * **删掉一个组件不会让任何断言变红**，除非有一条专门守它。
+ *
+ * 这里守的是「文章页一定有文章导航」这个不变式。不写死页面路径，而是从
+ * 产物里认文章页（只有文章页有 `post-header`，且都在一层目录下），
+ * 因此对使用者自己的内容同样成立。
+ */
+console.log('\n[4d] 该出现的出现了吗：文章页必须有上下篇导航');
+{
+  const articleDirs = (await readdir(DIST, { withFileTypes: true }))
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  const articles = [];
+  for (const dir of articleDirs) {
+    let html;
+    try {
+      html = await readFile(join(DIST, dir, 'index.html'), 'utf8');
+    } catch {
+      continue; // 不是页面目录（比如 _astro、pagefind）
+    }
+    if (html.includes('class="post-header"')) articles.push({ dir, html });
+  }
+
+  check(articles.length > 0, `从产物里认出了文章页（${articles.length} 篇）`);
+
+  if (articles.length >= 2) {
+    // 只有一篇时没有邻居，导航本就不该出现（组件内部会判空）
+    for (const { dir, html } of articles) {
+      const hasNav = html.includes('class="post-nav"');
+      const hasNeighbour = /rel="(?:prev|next)"/.test(html);
+      check(
+        hasNav && hasNeighbour,
+        `/${dir}/ 渲染了上一篇 / 下一篇`,
+        hasNav ? '有导航但没有邻居链接' : '整块导航缺失',
+      );
+    }
+  } else {
+    console.log('  （文章少于 2 篇，无可导航的邻居）');
+  }
+}
+
 // ── 5. 实测收益 ─────────────────────────────────────────────────────
 console.log('\n[5] 实测收益（同一页面的 HTML vs markdown）');
 console.log(

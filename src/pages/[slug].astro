@@ -166,9 +166,21 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
       <Content />
     </div>
 
-    {/* 导航块不是正文，不该进搜索摘要 */}
+    {/*
+      导航块不是正文，不该进搜索摘要——整块一起 ignore。
+
+      ⚠️ 这里曾经有一个**静默消失的功能**：`PostNav` 在第 14 行 import 了，
+      但渲染调用在某一轮改动中被删掉，而 `prev` / `next` 仍然照算不误
+      （`astro check` 只会给一条「声明了但没用到」的 hint）。
+      于是线上所有文章页**都没有「上一篇 / 下一篇」**，README 却宣称了两次。
+
+      它能藏这么久，是因为当时整套断言里**没有一条问「该出现的东西出现了吗」**——
+      只有「不得重复」和「元素存在吗」。删掉一个组件不会让任何断言变红。
+      现在 `npm run verify` 有一条断言专门守它。
+    */}
     <div data-pagefind-ignore>
-        <Backlinks slug={doc.slug} graph={content.graph} />
+      <PostNav prev={prev} next={next} />
+      <Backlinks slug={doc.slug} graph={content.graph} />
     </div>
 
 

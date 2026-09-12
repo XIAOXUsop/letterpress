@@ -100,6 +100,13 @@ const shareImage = site.url ? absolute(ogImage ?? '/og.png', site.url) : null;
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    {/*
+      404 页要 noindex。
+      上一轮把它的 canonical 从「指向 404」改成「指向首页」，方向对了，
+      但只改 canonical 还不够——一个内容不存在的地址被搜索引擎收录，
+      用户搜到点进来还是空页。对不存在的内容，规范做法是**明确表示不要收录**。
+    */}
+    {isNotFound && <meta name="robots" content="noindex" />}
 
     {/*
       favicon 必须显式引用。
