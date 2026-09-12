@@ -110,7 +110,21 @@ await new Promise((resolve) => server.listen(PORT, resolve));
 const base = `http://localhost:${PORT}`;
 let failures = 0;
 
+/**
+ * 断言总数由脚本**自己数**，不接受外部抄写。
+ *
+ * 缘起：README 里写「76 项契约」而实测是 71——那个 76 是拿「56 + 新增 20」
+ * 算出来的，**不是跑出来的**。这类数字一旦靠手抄，就必然会漂，
+ * 而且漂了没有任何东西会提醒你。项目里已经因为同一个原因改过好几次
+ * README 数字（构建页数、CSS 体积、token 节省）。
+ *
+ * 所以计数放在这里：`npm run verify` 每次都会打印真实条数，
+ * README 照抄即可，抄错了也一眼能看出来。
+ */
+let assertions = 0;
+
 function check(ok, label, detail = '') {
+  assertions++;
   if (ok) {
     console.log(`  ✓ ${label}`);
   } else {
@@ -553,5 +567,9 @@ server.closeAllConnections?.();
 server.close();
 
 console.log('\n' + '─'.repeat(64));
-console.log(failures === 0 ? '全部通过。\n' : `${failures} 项失败。\n`);
+console.log(
+  failures === 0
+    ? `${assertions} 项契约全部通过。\n`
+    : `${assertions} 项契约中 ${failures} 项失败。\n`,
+);
 process.exitCode = failures === 0 ? 0 : 1;

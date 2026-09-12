@@ -75,8 +75,20 @@ async function scan(dir) {
     const html = await readFile(full, 'utf8');
     const rel = full.slice(dist.length + 1).replace(/\\/g, '/');
 
-    // href="/xxx" 或 src="/xxx"，排除协议相对地址（//example.com）
-    for (const m of html.matchAll(/(?:href|src)="(\/[^/"][^"]*)"/g)) {
+    /*
+     * 匹配**真实标签上的** `href` / `src` 属性，排除协议相对地址（//example.com）。
+     *
+     * 正则必须以 `<[^>]*\s` 开头：**不加这个锚点会误报正文里的代码示例**。
+     *
+     * 实测：知识库里一篇讲「检查本身是坏的」的条目里写了
+     * `<code>href="/x"</code>`——它是正文文本，但字面形式与属性完全相同，
+     * 于是被判成「缺 base 前缀的链接」，构建检查失败。
+     *
+     * 对模板来说这是硬伤：**使用者写一篇提到 `href="/foo"` 的文章，
+     * 子路径检查就会红**，而失败原因和他的文章毫无关系。
+     * 页面上的真链接一定在某个标签内部，所以把匹配限定在标签里。
+     */
+    for (const m of html.matchAll(/<[^>]*\s(?:href|src)="(\/[^/"][^"]*)"/g)) {
       const url = m[1];
       if (!url.startsWith(`${FAKE_BASE}/`)) {
         const list = problems.get(url) ?? [];
