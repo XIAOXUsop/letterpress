@@ -499,6 +499,42 @@ console.log('\n[4b] SEO / 分享 / 无障碍契约');
  * 「文字对不对」「href 对不对」——**没有任何一条问「它出现了几次」**。
  * 一个元素出现两次，前面所有问题都会给出「正常」的答案。
  */
+/**
+ * ── 从产物里认出「内容页」─────────────────────────────────────────────
+ *
+ * 文章在一层目录（`/<slug>/`），知识库条目在两层（`/wiki/<slug>/`）。
+ * 两者的共同标志是 `post-header`，也正是它们区别于首页 / 归档 / 标签页的地方。
+ *
+ * **为什么不写死页面路径**：写死的话，使用者换成自己的内容之后，下面的断言
+ * 会对着一个 404 页面跑——「匹配数 0」恰好满足「不重复」，于是**静静全部通过**。
+ * 这正是本项目反复踩的那个坑：「扫了 0 个文件却报告通过」。
+ * 认产物就不会有这个问题，对使用者自己的内容同样成立。
+ */
+async function discoverContentPages() {
+  const found = [];
+
+  async function walk(dir, prefix, depth) {
+    if (depth > 2) return;
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const url = `${prefix}/${entry.name}/`;
+      let html = null;
+      try {
+        html = await readFile(join(dir, entry.name, 'index.html'), 'utf8');
+      } catch {
+        // 没有 index.html 的目录（_astro、pagefind 之类）不是页面
+      }
+      if (html && html.includes('class="post-header"')) found.push({ url, html, depth });
+      await walk(join(dir, entry.name), url, depth + 1);
+    }
+  }
+
+  await walk(DIST, '', 1);
+  return found;
+}
+
+const contentPages = await discoverContentPages();
+
 console.log('\n[4c] 页面结构：区块不得重复');
 {
   // 每个页面里，这些「一页只该有一处」的区块出现次数
@@ -509,22 +545,14 @@ console.log('\n[4c] 页面结构：区块不得重复');
     ['文章头', /class="post-header"/g],
   ];
 
-  const pages = [
-    '/markdown-for-agents/',
-    '/cjk-web-typography/',
-    '/how-this-works/',
-    '/wiki/content-negotiation/',
-    '/wiki/letterpress/',
-  ];
+  // 认出 0 个页面本身就是故障（构建产物不对），必须报出来而不是空过
+  check(contentPages.length > 0, `从产物里认出了内容页（${contentPages.length} 个）`);
 
-  for (const page of pages) {
-    const res = await fetch(`${base}${page}`, { headers: { Accept: 'text/html' } });
-    const html = await res.text();
-
+  for (const { url, html } of contentPages) {
     for (const [label, pattern] of singletons) {
       const n = (html.match(pattern) ?? []).length;
       // 0 是允许的（这一页可能本来就没有这块），但 ≥2 一定是渲染重复
-      check(n <= 1, `${page} 的「${label}」不重复`, `出现 ${n} 次`);
+      check(n <= 1, `${url} 的「${label}」不重复`, `出现 ${n} 次`);
     }
   }
 }
@@ -548,31 +576,20 @@ console.log('\n[4c] 页面结构：区块不得重复');
  */
 console.log('\n[4d] 该出现的出现了吗：文章页必须有上下篇导航');
 {
-  const articleDirs = (await readdir(DIST, { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
-
-  const articles = [];
-  for (const dir of articleDirs) {
-    let html;
-    try {
-      html = await readFile(join(DIST, dir, 'index.html'), 'utf8');
-    } catch {
-      continue; // 不是页面目录（比如 _astro、pagefind）
-    }
-    if (html.includes('class="post-header"')) articles.push({ dir, html });
-  }
+  // 知识库条目也在一层目录下会有 post-header，但它们没有上下篇——
+  // 所以只取一层（`/<slug>/`），那才是文章页
+  const articles = contentPages.filter((p) => p.depth === 1);
 
   check(articles.length > 0, `从产物里认出了文章页（${articles.length} 篇）`);
 
   if (articles.length >= 2) {
     // 只有一篇时没有邻居，导航本就不该出现（组件内部会判空）
-    for (const { dir, html } of articles) {
+    for (const { url, html } of articles) {
       const hasNav = html.includes('class="post-nav"');
       const hasNeighbour = /rel="(?:prev|next)"/.test(html);
       check(
         hasNav && hasNeighbour,
-        `/${dir}/ 渲染了上一篇 / 下一篇`,
+        `${url} 渲染了上一篇 / 下一篇`,
         hasNav ? '有导航但没有邻居链接' : '整块导航缺失',
       );
     }

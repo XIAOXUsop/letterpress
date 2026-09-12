@@ -212,7 +212,6 @@ const modularGrid: Archetype = (rand) => {
         parts.push(`<rect x="${x}" y="${y}" width="${Math.ceil(cellW)}" height="${Math.ceil(cellH)}" fill="${INK}"/>`);
       } else if (roll < 0.34) {
         // 半圆：在格子里画弧，打破纯方块的单调
-        const cx = Math.round(x + cellW / 2);
         const cy = Math.round(y + cellH);
         parts.push(`<path d="M ${Math.round(x)} ${cy} A ${Math.round(cellW / 2)} ${Math.round(cellW / 2)} 0 0 1 ${Math.round(x + cellW)} ${cy} Z" fill="${INK}"/>`);
       }

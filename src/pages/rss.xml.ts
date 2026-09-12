@@ -10,7 +10,6 @@ import {
   publishedPosts,
   reportIssues,
   tagsOf,
-  updatedOfDoc,
 } from '../lib/content.js';
 
 /**
@@ -57,7 +56,6 @@ export const GET: APIRoute = async (context) => {
     posts.map(async (doc) => {
       const entry = content.entries.get(doc.slug);
       const date = dateOfDoc(content, doc.slug);
-      const updated = updatedOfDoc(content, doc.slug);
 
       let html = '';
       if (entry) {
