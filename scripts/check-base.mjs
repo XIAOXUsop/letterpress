@@ -17,7 +17,7 @@
  * 用法：`npm run verify:base`
  */
 
-import { spawn } from 'node:child_process';
+import { runAstro } from './lib/astro.mjs';
 import { readFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -27,18 +27,6 @@ const FAKE_BASE = '/letterpress';
 const root = process.cwd();
 const dist = join(root, 'dist');
 
-function run(cmd, args, env) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
-      cwd: root,
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
-      env: { ...process.env, ...env },
-    });
-    child.on('exit', (code) => resolve(code ?? 1));
-  });
-}
-
 console.log(`\n子路径部署检查（SITE_BASE=${FAKE_BASE}）`);
 console.log('─'.repeat(64));
 
@@ -47,12 +35,9 @@ await rm(join(root, '.astro'), { recursive: true, force: true });
 await rm(dist, { recursive: true, force: true });
 
 console.log('\n用假 base 构建…');
-const buildCode = await run('npx', ['astro', 'build'], {
-  SITE_BASE: FAKE_BASE,
-  // Windows 上 Git Bash 会把 `/letterpress` 当成路径转换成 `D:/App/Git/letterpress`。
-  // 这个变量在 Node 里设置，不经过 shell，所以不受影响——但为了保险还是显式注明。
-  MSYS_NO_PATHCONV: '1',
-});
+// 环境变量在 Node 里传给子进程，不经过任何 shell —— Git Bash 的路径转换
+// （把 /letterpress 改成 D:/App/Git/letterpress）碰不到它。
+const buildCode = await runAstro(['build'], { env: { SITE_BASE: FAKE_BASE } });
 
 if (buildCode !== 0) {
   console.error('\n构建失败，无法继续检查。');

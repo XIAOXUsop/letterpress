@@ -18,7 +18,7 @@
  * 用法：`npm run verify:formats`
  */
 
-import { spawn } from 'node:child_process';
+import { runAstro } from './lib/astro.mjs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -54,17 +54,6 @@ const DRAFT_PROBE = {
   body: '---\ntitle: DRAFT_PROBE_MUST_NOT_SHIP\nsummary: 这条内容只用于验证草稿隔离。\ndate: 2026-01-01\ndraft: true\n---\n\nDRAFT_PROBE_MUST_NOT_SHIP\n',
 };
 
-function run(cmd, args) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
-      cwd: root,
-      stdio: 'inherit', // 构建失败时能看到原因，否则只能靠猜
-      shell: process.platform === 'win32',
-    });
-    child.on('exit', (code) => resolve(code ?? 1));
-  });
-}
-
 console.log('\n内容格式探针');
 console.log('─'.repeat(64));
 
@@ -83,7 +72,7 @@ try {
   await rm(join(root, '.astro'), { recursive: true, force: true });
   await rm(dist, { recursive: true, force: true });
 
-  const code = await run('npx', ['astro', 'build']);
+  const code = await runAstro(['build']);
   if (code !== 0) {
     problems.push(`探索构建失败（退出码 ${code}）`);
   }
