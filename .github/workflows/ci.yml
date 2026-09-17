@@ -48,14 +48,6 @@ jobs:
       # 子路径部署检查。**这条必须单独跑**——`npm run dev` 的 base 是 `/`，
       # 前缀为空，所有没加前缀的绝对路径在本地都工作正常。只有真正部署到
       # GitHub Pages 项目站（`/仓库名/`）时，整站才会一起失效。
-      - name: 子路径部署检查
-        run: npm run verify:base
-
-      # 内容格式探针：Markdown / MDX / 草稿隔离三件事，同样打在真实产物上。
-      # 它和 verify:base 都会各自重建一次 dist，所以必须放在产物检查之前。
-      - name: 内容格式探针
-        run: npm run verify:formats
-
       # 知识库体检必须通过。断链会让这一步失败——
       # 这是刻意的：一个不会失败的检查等于没有检查。
       - name: 确认构建产物完整
@@ -65,6 +57,15 @@ jobs:
           test -f dist/rss.xml || { echo "::error::缺少 RSS"; exit 1; }
           test -f dist/markdown-for-agents.md || { echo "::error::缺少 .md 孪生文件"; exit 1; }
           echo "产物完整：$(find dist -type f | wc -l) 个文件"
+
+      - name: 子路径部署检查
+        run: npm run verify:base
+
+      # 内容格式探针：Markdown / MDX / 草稿隔离三件事，同样打在真实产物上。
+      # 注意它和 verify:base 都会 `rm -rf dist` 再重建、并在结束时把产物清掉，
+      # 所以**必须排在「确认构建产物完整」之后**——否则那一步会误报"缺少首页"。
+      - name: 内容格式探针
+        run: npm run verify:formats
 
       # 零配置必须能构建成功——这是对使用者的核心承诺。
       # 上面所有步骤跑的都是出厂配置（site.url 为空），
