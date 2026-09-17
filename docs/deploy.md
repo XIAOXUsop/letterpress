@@ -74,3 +74,38 @@ npm run verify:base
 
 另外搜索的加载器要求 CSP 允许 `unsafe-eval`——原因见 [命令行](cli.md) 里
 关于 `__VITE_PRELOAD__` 的说明。
+
+---
+
+## 部署完必须验一次：线上烟测
+
+内容协商的成败**全在托管平台**——边缘函数有没有被部署、响应头有没有被平台改写、
+CDN 有没有吃掉 `Vary: Accept`。这些在本地一个都测不到：
+`npm run dev` 和 `scripts/verify-negotiation.mjs` 的响应头都是本项目自己写的。
+
+所以有一个只打线上、只查四个稳定 URL 的烟测：
+
+```bash
+SITE_ORIGIN=https://your-demo.example npm run verify:online
+```
+
+它验的是：同一个页面在两种 `Accept` 下拿到**不同**的 `Content-Type`、两侧都带
+`Vary: Accept`、markdown 侧带 `Content-Location` 与 `rel="alternate"` 的 `Link`、
+没有 markdown 孪生的页面安全回落到 HTML、静态资源不被重写。
+
+> **它不会因为线上不可用就退回本地服务器。** 没有配置 `SITE_ORIGIN` 时它直接失败退出。
+> 一个能自己找退路的烟测，唯一的作用是把部署事故伪装成绿色。
+
+推送到 `main` 时 CI 也会跑这一条——前提是仓库变量 `DEMO_ORIGIN` 已经配好
+（Settings → Secrets and variables → Actions → Variables）。
+没配的话这个 job 不会出现，而不是绿着出现。
+
+### 当前状态
+
+| 环境 | 地址 | 内容协商 |
+|---|---|---|
+| GitHub Pages（项目站） | <https://xiaoxusop.github.io/letterpress/> | ❌ 平台改不了响应头 |
+| Cloudflare / Netlify / Vercel | — | **尚未部署**，垫片已备好 |
+
+也就是说：`Accept: text/markdown` 这件事**目前没有公开环境可以直接 curl 验证**。
+上面那个烟测是为了让第一次部署之后能立刻验一次，而不是靠"本地跑过了"。
