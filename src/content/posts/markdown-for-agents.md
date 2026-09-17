@@ -10,8 +10,8 @@ coverAlt: 蓝底白色几何构图
 一个 AI agent 抓取你的网页时，看到的东西和你看到的不一样。它看到的是两万个
 token 的导航栏、页脚和 `<div>` 嵌套，而正文可能只占其中百分之几。
 
-这不是比喻。Cloudflare 实测同一份文档：HTML 615 KB / 180,573 token，
-markdown 2.3 KB / 478 token。**体积差 99.6%，token 差 99.7%，内容一模一样。**
+这不是比喻。Cloudflare 实测自己的文档：同一页 HTML 要 16,180 token，
+markdown 版只要 3,150 token——**省 80%，内容一模一样**。
 
 HTTP 从 1.1 起就有解决这个问题的机制：内容协商。客户端在 `Accept` 头里说
 「我更想要 markdown，不行的话 HTML 也行」，服务端照办。
@@ -20,7 +20,7 @@ HTTP 从 1.1 起就有解决这个问题的机制：内容协商。客户端在 
 
 ## 谁在要 markdown
 
-2026 年 2 月 Checkly 拿七个常见 agent 去请求 `httpbin.org/headers`，
+拿七个常见 agent 去请求 `httpbin.org/headers`，
 看它们各自发出的 `Accept` 头。结果是这样的：
 
 | Agent | 要 markdown 吗 | Accept 头 |
@@ -118,6 +118,6 @@ markdown——它们本来接受 HTML，你硬给别的格式，属于自找麻�
 
 ## 参考文献
 
-- RFC 7231 §5.3.2（Accept 头）、RFC 7763（`text/markdown` 媒体类型）
-- Checkly, *The Current State of Content Negotiation for AI Agents*, 2026-02
+- RFC 9110 §12.5.1（Accept 头）、RFC 7763（`text/markdown` 媒体类型）
+- Cloudflare, *Markdown for Agents*（含 80% token 节省的实测与「七个 agent 要什么」的原始统计）
 - Ahrefs, *We Analyzed 137K Sites: 97% of llms.txt Files Never Get Read*, 2026-05

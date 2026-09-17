@@ -12,9 +12,10 @@
  */
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
-import { MARKDOWN_CONTENT_TYPE, estimateTokens } from '../lib/negotiate/accept.js';
+import { markdownResponseHeaders } from '../lib/negotiate/accept.js';
 import { dateOfDoc, loadContent, publishedPosts, reportIssues, tagsOf } from '../lib/content.js';
 import { buildMarkdownTwin } from '../lib/wiki/llms.js';
+import { path } from '../lib/url.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
@@ -53,19 +54,6 @@ export const GET: APIRoute = ({ props }) => {
   }
 
   return new Response(body, {
-    headers: {
-      'Content-Type': MARKDOWN_CONTENT_TYPE,
-      /**
-       * **`Vary: Accept` 不能省。**
-       *
-       * 少了它，CDN 会把 markdown 版本缓存下来发给浏览器——
-       * 用户打开博客看到一坨纯文本。而这个 bug 只在缓存命中时出现，
-       * 排查时会以为是「网站有时候会坏」。
-       */
-      Vary: 'Accept',
-      // 给 agent 的成本提示。这两个头不是标准，但 Cloudflare 与 Vercel
-      // 的实现都用同名头，跟着用便于工具链识别。
-      'x-markdown-tokens': String(estimateTokens(body)),
-    },
+    headers: markdownResponseHeaders(body, path(`/${slug}/`), path(`/${slug}.md`)),
   });
 };

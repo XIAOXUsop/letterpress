@@ -60,8 +60,9 @@ function toDoc(
     summary: data.summary,
     body,
     explicitSlug: explicit,
-    // posts 与 wiki 的 schema 不同，astropy 的联合类型推不出共有字段
-    draft: (data as { draft?: boolean }).draft ?? false,
+    // posts 与 wiki 的 schema 现在都声明了 draft（wiki 一直有，posts 是补上的——
+    // 缺它时 Zod 静默剥离，过滤逻辑拿到的永远是 false，见 content.config.ts 的注释）
+    draft: data.draft,
   };
 }
 

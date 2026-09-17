@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-215%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-220%20项-2C5E2E)
 
 </div>
 
@@ -26,16 +26,16 @@
   lines in one file to go live. No database, no env vars.
 - **Content negotiation on free static hosting.** Claude Code / Cursor / OpenCode
   send `Accept: text/markdown`; this template answers with markdown
-  (RFC 7231 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
+  (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Measured saving: **64.6% / 66.5%** of tokens. → [details](docs/content-negotiation.md)
+  Measured saving: **64.5% / 66.5%** of tokens. → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
   → [details](docs/cjk-typography.md)
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
-- **0 external JS files** · 215 unit tests · 102 end-to-end contracts · MIT
+- **0 external JS files** · 220 unit tests · 104 end-to-end contracts · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -79,7 +79,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-实测同一页面的 markdown 比 HTML 省 **64.6% / 66.5%** 的 token。
+实测同一页面的 markdown 比 HTML 省 **64.5% / 66.5%** 的 token。
 
 三个会**静默失败**的地方——不报错，只是永远不生效：
 
@@ -132,8 +132,8 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **215 项**，全部离线，无网络依赖 |
-| 端到端契约 | **102 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
+| 单元测试 | **220 项**，全部离线，无网络依赖 |
+| 端到端契约 | **104 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 构建 | 32 页；`astro build` 自报 **约 1.1 秒**，整条 `npm run build` 约 **2.6 秒**（差值是 npm 启动开销 + Pagefind 索引 0.14 秒） |
 | 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
 | CSS | 单文件 **21.7 KB / gzip 4.6 KB** |

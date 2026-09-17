@@ -4,7 +4,8 @@
 > 「实际收益多少」讲清楚，证据都能自己复现。
 
 Claude Code、Cursor、OpenCode 请求网页时会发 `Accept: text/markdown`。
-这是 HTTP 从 1.1 就有的**内容协商**（RFC 7231 §5.3.2 + RFC 7763），不是新发明。
+这是 HTTP 从 1.1 就有的**内容协商**（现行语义见 RFC 9110 §12.5.1，
+媒体类型见 RFC 7763），不是新发明。
 
 **但静态博客做不到**——静态托管只吐文件，不解析请求头。这正是 Cloudflare 的
 Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台内生效的原因。
@@ -42,8 +43,13 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
    用严格的 `>` 比较会判成「无偏好」而返回 HTML——**不报错、不警告，只是永远不生效**。
 2. **通配符不算「想要 markdown」。** 只发 `*/*` 的客户端意思是「给什么都行」。
 3. **`q=0` 是明确拒绝**，不是「偏好为零」。
+4. **具体类型先于通配符。** 某个表示同时命中具体类型和通配符时，先用更具体的
+   范围确定它的 q；否则通配符会覆盖客户端对 HTML 的明确降权或拒绝。
 
 对应实现见 `src/lib/negotiate/accept.ts`，边界用例在 `accept.test.ts`。
+
+协商成功的响应还会带上 `Content-Location`，明确实际返回的 `.md` 孪生文件；
+`Link` 同时声明 HTML canonical 与 markdown alternate，让两种表示可以双向发现。
 
 ## 实测收益
 
@@ -51,9 +57,9 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 ```
 页面                         HTML token   MD token       节省
-/markdown-for-agents/            4724       1674    64.6%
+/markdown-for-agents/            4728       1677    64.5%
 /cjk-web-typography/             5416       1816    66.5%
-/wiki/content-negotiation/       2890        983    66.0%
+/wiki/content-negotiation/       3055       1115    63.5%
 ```
 
 > **为什么低于 Cloudflare 的 80% 和 Vercel 的 99.6%？**

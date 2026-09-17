@@ -7,7 +7,7 @@ related: [markdown-for-agents, llm-wiki]
 
 同一个 URL，对人和对 agent 返回不同格式的同一份内容。
 
-标准依据是 RFC 7231 §5.3.2（Accept 头）与 RFC 7763（`text/markdown`）。
+标准依据是 RFC 9110 §12.5.1（Accept 头）与 RFC 7763（`text/markdown`）。
 **这是 HTTP 从 1.1 就有的能力，不是新发明。**
 
 ## 判定算法
@@ -15,6 +15,8 @@ related: [markdown-for-agents, llm-wiki]
 ```
 markdown = Accept 里显式声明的 text/markdown 或 text/x-markdown 中最优的
 html     = Accept 里 text/html、application/xhtml+xml 或通配符中最优的
+
+每个表示先按「具体类型 > 类型通配符 > 全局通配符」确定有效 q
 
 若 markdown 不存在          → 返回 HTML
 若 markdown 的 q 为 0       → 返回 HTML（q=0 是明确拒绝）
@@ -42,6 +44,11 @@ Claude Code 发 `text/markdown, text/html, <通配符>`，**不写 q 值**。
 OpenCode 会带 `text/plain;q=0.8`，那是它的降级选项。
 宁可漏给（客户端仍拿到可用的 HTML），不可错给。
 
+**四、具体类型先于通配符。**
+
+如果 HTML 被具体类型明确降权或拒绝，不能再用一个 q 更高的宽泛通配符把它放行。
+RFC 9110 要求先选匹配该表示的最具体媒体范围，再比较不同表示的 q。
+
 ## 在静态托管上怎么实现
 
 静态托管只吐文件，不解析请求头。所以需要两层：
@@ -57,6 +64,8 @@ Vercel Middleware。不用这一层站点照常工作，只是 agent 拿到 HTML
 - **`Vary: Accept`**——否则 CDN 会把 markdown 缓存下来发给浏览器。
   这个 bug 只在缓存命中时出现，会让人以为「有时候网站会坏」。
 - **只在 markdown 是显式偏好时才返回**——见上面第二点。
+- **声明表示关系**——`Content-Location` 指向 `.md` 孪生文件，`Link` 同时声明
+  HTML canonical 与 markdown alternate，避免两种表示成为信息孤岛。
 
 ## 效果数据
 
@@ -64,7 +73,6 @@ Vercel Middleware。不用这一层站点照常工作，只是 agent 拿到 HTML
 |---|---|
 | Cloudflare（自己的文档） | 80% token 减少 |
 | Vercel（自己的博客） | 500 KB → 2 KB，99.6% |
-| Checkly（自己的文档） | 615.4 KB / 180,573 token → 2.3 KB / 478 token |
 
 ## 回到本项目的代码
 

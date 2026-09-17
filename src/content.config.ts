@@ -37,6 +37,17 @@ const posts = defineCollection({
     updated: z.coerce.date().optional(),
     /** 显式指定 URL 片段。中文标题留空会自动生成中文 URL（合法，但复制出去很长） */
     slug: z.string().optional(),
+    /**
+     * 是否草稿。
+     *
+     * **这个字段必须有，不能靠 `content.ts` 里那个 `?? false` 兜底。**
+     * Zod 会把 schema 未声明的键**静默剥离**——`draft ?? false` 拿到的永远是
+     * false，`draft: true` 的文章在生产构建里照常发到全部出口
+     * （页面、.md、og、llms.txt、rss、sitemap、列表——实测 9/9 泄漏），而
+     * AGENTS.md 明确承诺了「草稿不进构建」。修之前踩的正是「写好的过滤逻辑
+     * 上游被 schema 掐掉」这条链。
+     */
+    draft: z.boolean().default(false),
     tags: z.array(z.string()).default([]),
     /**
      * 封面图路径，相对 `public/`，例如 `/covers/my-post.svg`。

@@ -26,7 +26,7 @@
  * 而平台垫片是不需要测试的胶水。把两者混在一起会让测试被迫依赖某个平台的运行时。
  */
 
-import { MARKDOWN_CONTENT_TYPE, estimateTokens, prefersMarkdown } from './accept.js';
+import { markdownResponseHeaders, prefersMarkdown } from './accept.js';
 
 export interface NegotiateOptions {
   /** 取静态资源。返回 null 表示「没有这个文件」 */
@@ -116,13 +116,8 @@ export async function negotiate(
 
   const body = await twin.text();
 
-  const headers = new Headers({
-    'Content-Type': MARKDOWN_CONTENT_TYPE,
-    ...VARY_HEADERS,
-  });
-
-  // 给 agent 的成本提示。Cloudflare 与 Vercel 的实现用同名头，跟着用便于工具链识别。
-  headers.set('x-markdown-tokens', String(estimateTokens(body)));
+  const representationPath = twinPath(pathname);
+  const headers = markdownResponseHeaders(body, pathname, representationPath);
 
   // HEAD 请求不该带 body
   return new Response(request.method === 'HEAD' ? null : body, { headers });

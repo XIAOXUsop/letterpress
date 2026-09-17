@@ -1,9 +1,10 @@
 /** 知识层条目的 markdown 孪生文件：`/wiki/<slug>.md`。 */
 import type { APIRoute } from 'astro';
 import { site } from '../../config.js';
-import { MARKDOWN_CONTENT_TYPE, estimateTokens } from '../../lib/negotiate/accept.js';
+import { markdownResponseHeaders } from '../../lib/negotiate/accept.js';
 import { loadContent, publishedWiki, reportIssues } from '../../lib/content.js';
 import { buildMarkdownTwin } from '../../lib/wiki/llms.js';
+import { path } from '../../lib/url.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
@@ -30,10 +31,10 @@ export const GET: APIRoute = ({ props }) => {
   });
 
   return new Response(body, {
-    headers: {
-      'Content-Type': MARKDOWN_CONTENT_TYPE,
-      Vary: 'Accept',
-      'x-markdown-tokens': String(estimateTokens(body)),
-    },
+    headers: markdownResponseHeaders(
+      body,
+      path(`/wiki/${slug}/`),
+      path(`/wiki/${slug}.md`),
+    ),
   });
 };

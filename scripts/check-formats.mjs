@@ -19,7 +19,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -41,6 +41,18 @@ const PROBES = [
     expect: 'zprobe-mdx-format/index.html',
   },
 ];
+
+/**
+ * 负向探针：它必须被内容层读取，但绝不能出现在任何发布出口。
+ * 只检查「某个页面不存在」不够——草稿曾经同时泄漏到页面、孪生文件、OG、
+ * 列表、RSS、sitemap 与 llms 文件，而构建仍然是绿色的。
+ */
+const DRAFT_PROBE = {
+  file: 'zprobe-draft-must-not-ship.md',
+  slug: 'zprobe-draft-must-not-ship',
+  marker: 'DRAFT_PROBE_MUST_NOT_SHIP',
+  body: '---\ntitle: DRAFT_PROBE_MUST_NOT_SHIP\nsummary: 这条内容只用于验证草稿隔离。\ndate: 2026-01-01\ndraft: true\n---\n\nDRAFT_PROBE_MUST_NOT_SHIP\n',
+};
 
 function run(cmd, args) {
   return new Promise((resolve) => {
@@ -64,7 +76,8 @@ try {
   for (const probe of PROBES) {
     await writeFile(join(probeDir, probe.file), probe.body, 'utf8');
   }
-  console.log(`\n放入 ${PROBES.length} 个探针文件，构建…`);
+  await writeFile(join(probeDir, DRAFT_PROBE.file), DRAFT_PROBE.body, 'utf8');
+  console.log(`\n放入 ${PROBES.length} 个格式探针和 1 个草稿隔离探针，构建…`);
 
   // 干净的构建：不要被上一次的产物骗到
   await rm(join(root, '.astro'), { recursive: true, force: true });
@@ -94,11 +107,46 @@ try {
       console.log(`  ✗ ${probe.label} 没有产出页面`);
     }
   }
+
+  const forbiddenOutputs = [
+    join(dist, DRAFT_PROBE.slug, 'index.html'),
+    join(dist, `${DRAFT_PROBE.slug}.md`),
+    join(dist, 'og', `${DRAFT_PROBE.slug}.png`),
+  ];
+  const leakedFiles = [];
+  for (const full of forbiddenOutputs) {
+    try {
+      await readFile(full);
+      leakedFiles.push(full.slice(dist.length + 1));
+    } catch {
+      // 正确：没有生成草稿产物
+    }
+  }
+
+  for (const relative of await readdir(dist, { recursive: true })) {
+    if (!/\.(?:html|md|txt|xml|json)$/i.test(relative)) continue;
+    const full = join(dist, relative);
+    try {
+      const text = await readFile(full, 'utf8');
+      if (text.includes(DRAFT_PROBE.marker)) leakedFiles.push(relative);
+    } catch {
+      // 目录或非文本产物不参与内容泄漏检查
+    }
+  }
+
+  if (leakedFiles.length === 0) {
+    console.log('  ✓ 草稿没有进入页面、孪生文件、OG 或任何文本出口');
+  } else {
+    const unique = [...new Set(leakedFiles)];
+    problems.push(`草稿泄漏到 ${unique.join('、')}`);
+    console.log(`  ✗ 草稿泄漏到 ${unique.join('、')}`);
+  }
 } finally {
   // 无论如何都要清掉探针，别把它们留在仓库里
   for (const probe of PROBES) {
     await rm(join(probeDir, probe.file), { force: true });
   }
+  await rm(join(probeDir, DRAFT_PROBE.file), { force: true });
   await rm(join(root, '.astro'), { recursive: true, force: true });
   await rm(dist, { recursive: true, force: true });
   console.log('\n探针已清理（内容层缓存与产物也一并清掉，避免污染后续构建）');

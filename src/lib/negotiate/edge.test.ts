@@ -79,6 +79,28 @@ describe('negotiate', () => {
     expect(tokens).toBeGreaterThan(0);
   });
 
+  it('声明实际表示位置与 HTML/Markdown 双向发现关系', async () => {
+    const res = await negotiate(get('/hello/', 'text/markdown'), {
+      pathname: '/hello/',
+      fetchAsset: fakeSite(SITE),
+    });
+
+    expect(res!.headers.get('content-location')).toBe('/hello.md');
+    expect(res!.headers.get('link')).toContain('</hello/>; rel="canonical"; type="text/html"');
+    expect(res!.headers.get('link')).toContain('</hello.md>; rel="alternate"; type="text/markdown"');
+  });
+
+  it('中文路径在响应头中使用 URI 编码，不会触发非法 Header', async () => {
+    const res = await negotiate(get('/中文/', 'text/markdown'), {
+      pathname: '/中文/',
+      fetchAsset: fakeSite({ '/中文.md': '# 中文' }),
+    });
+
+    expect(res).not.toBeNull();
+    expect(res!.headers.get('content-location')).toBe('/%E4%B8%AD%E6%96%87.md');
+    expect(res!.headers.get('link')).toContain('</%E4%B8%AD%E6%96%87/>');
+  });
+
   it('不要 markdown 时返回 null，交给平台处理静态资源', async () => {
     const res = await negotiate(get('/hello/', 'text/html'), {
       pathname: '/hello/',

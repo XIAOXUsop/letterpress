@@ -74,6 +74,22 @@ describe('prefersMarkdown — 会把实现写错的地方', () => {
   });
 
   /**
+   * RFC 9110 §12.5.1：先用最具体的媒体范围确定某个表示的质量，再比较 q。
+   * 不能先挑 q 最大的范围，否则宽泛通配符会覆盖客户端对 HTML 的明确降权/拒绝。
+   */
+  it('具体 HTML 类型优先于 q 更高的全局通配符', () => {
+    expect(prefersMarkdown('text/html;q=0.2, */*;q=0.9, text/markdown;q=0.5')).toBe(true);
+  });
+
+  it('具体 HTML 拒绝不能被全局通配符重新放行', () => {
+    expect(prefersMarkdown('text/html;q=0, */*;q=1, text/markdown;q=0.5')).toBe(true);
+  });
+
+  it('类型通配符比全局通配符更具体', () => {
+    expect(prefersMarkdown('*/*;q=0.9, text/*;q=0.2, text/markdown;q=0.5')).toBe(true);
+  });
+
+  /**
    * `text/plain` 是 OpenCode 的降级选项，不是 markdown 请求。
    * 宁可漏给（客户端仍拿到可用的 HTML），不可错给。
    */

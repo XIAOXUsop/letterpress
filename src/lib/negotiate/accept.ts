@@ -5,7 +5,7 @@
  * 它是这个项目唯一「别人没做对」的地方，而做错的方式是**静默的**——
  * 实现写错了不会报错，只会永远返回 HTML，看起来一切正常。
  *
- * 依据 RFC 7231 §5.3.2（Accept）与 RFC 7763（text/markdown 媒体类型）。
+ * 依据 RFC 9110 §12.5.1（Accept）与 RFC 7763（text/markdown 媒体类型）。
  *
  * ── 三件必须做对的事 ──────────────────────────────────────────────
  *
@@ -93,30 +93,77 @@ export function parseAccept(header: string): MediaRange[] {
 }
 
 /**
- * 在候选类型里找出最优匹配。
+ * 一个媒体范围对具体表示的匹配精度。
  *
- * 只在**显式**命中时返回结果（`allowWildcard` 控制是否接受 `*`）。
- * 「最优」的判据是 q 大者胜，q 相同则头部里靠前者胜——后者正是
- * Claude Code 那种不写 q 值的客户端能working的前提。
+ * RFC 9110 §12.5.1 的顺序是：具体类型 > 类型通配符 > 全局通配符。
+ * 这个顺序**先于 q 值**。例如 HTML 被显式赋予 q=0、全局通配符为 q=1 时，
+ * HTML 的质量仍然是 0；显式拒绝不能被宽泛的通配符重新放行。
  */
-function bestMatch(
+function specificity(range: MediaRange, candidate: readonly [string, string]): number {
+  const [type, subtype] = candidate;
+  if (range.type === type && range.subtype === subtype) return 2;
+  if (range.type === type && range.subtype === '*') return 1;
+  if (range.type === '*' && range.subtype === '*') return 0;
+  return -1;
+}
+
+/**
+ * 算出一组等价表示的有效质量。
+ *
+ * 对每个具体表示，先取**最具体**的媒体范围；精度相同时才比较 q 与顺序。
+ * 最后再在等价表示之间选 q 更高的一个。`requireExplicit` 用来守住本项目的
+ * 保守原则：客户端没有点名 markdown 时，绝不只凭通配符把 markdown 塞过去。
+ */
+function qualityFor(
   ranges: readonly MediaRange[],
   candidates: ReadonlyArray<readonly [string, string]>,
-  allowWildcard: boolean,
+  requireExplicit: boolean,
 ): MediaRange | null {
-  let best: MediaRange | null = null;
+  let bestCandidate: MediaRange | null = null;
 
-  for (const range of ranges) {
-    const explicit = candidates.some(([t, s]) => range.type === t && range.subtype === s);
-    const wildcard = allowWildcard && range.subtype === '*' && (range.type === '*' || range.type === 'text');
-    if (!explicit && !wildcard) continue;
+  for (const [candidateIndex, candidate] of candidates.entries()) {
+    const explicitlyMentioned = ranges.some((range) => specificity(range, candidate) === 2);
+    /*
+     * 第一项是服务端真正提供的媒体类型，其余是兼容别名。
+     * 别名只有被客户端点名时才参与竞争；否则一个全局通配符会凭空制造出
+     * application/xhtml+xml 表示，再覆盖 text/html 的明确降权。
+     */
+    if ((requireExplicit || candidateIndex > 0) && !explicitlyMentioned) {
+      continue;
+    }
 
-    if (best === null || range.q > best.q || (range.q === best.q && range.index < best.index)) {
-      best = range;
+    let bestMatch: MediaRange | null = null;
+    let bestSpecificity = -1;
+
+    for (const range of ranges) {
+      const currentSpecificity = specificity(range, candidate);
+      if (currentSpecificity < 0) continue;
+
+      if (
+        bestMatch === null ||
+        currentSpecificity > bestSpecificity ||
+        (currentSpecificity === bestSpecificity && range.q > bestMatch.q) ||
+        (currentSpecificity === bestSpecificity &&
+          range.q === bestMatch.q &&
+          range.index < bestMatch.index)
+      ) {
+        bestMatch = range;
+        bestSpecificity = currentSpecificity;
+      }
+    }
+
+    if (bestMatch === null) continue;
+
+    if (
+      bestCandidate === null ||
+      bestMatch.q > bestCandidate.q ||
+      (bestMatch.q === bestCandidate.q && bestMatch.index < bestCandidate.index)
+    ) {
+      bestCandidate = bestMatch;
     }
   }
 
-  return best;
+  return bestCandidate;
 }
 
 /**
@@ -139,15 +186,15 @@ export function prefersMarkdown(accept: string | null | undefined): boolean {
   if (!accept) return false;
 
   const ranges = parseAccept(accept);
-  const markdown = bestMatch(ranges, MARKDOWN_TYPES, /* allowWildcard */ false);
+  const markdown = qualityFor(ranges, MARKDOWN_TYPES, /* requireExplicit */ true);
   if (markdown === null) return false;
 
-  // q=0 按 RFC 7231 §5.3.1 是**明确拒绝**，不是「偏好程度为零」。
+  // q=0 按 RFC 9110 §12.4.2 是**明确拒绝**，不是「偏好程度为零」。
   // 少了这一条，`text/markdown;q=0` 会被下面的「没有 HTML 备选就返回 true」
   // 判成肯定——把客户端的明确拒绝读成了明确要求，方向正好相反。
   if (markdown.q === 0) return false;
 
-  const html = bestMatch(ranges, HTML_TYPES, /* allowWildcard */ true);
+  const html = qualityFor(ranges, HTML_TYPES, /* requireExplicit */ false);
   if (html === null) return true; // 只点名要 markdown，没有任何 HTML 备选
 
   if (markdown.q !== html.q) return markdown.q > html.q;
@@ -157,6 +204,35 @@ export function prefersMarkdown(accept: string | null | undefined): boolean {
 
 /** 响应用的内容类型常量。 */
 export const MARKDOWN_CONTENT_TYPE = 'text/markdown; charset=utf-8';
+
+/** HTTP 头只能可靠承载 ASCII；中文 slug 在这里统一转成 URI 百分号编码。 */
+function headerUri(pathname: string): string {
+  const url = new URL(pathname, 'https://letterpress.invalid');
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+/**
+ * Markdown 表示的公共响应头。
+ *
+ * 静态 `.md` 路由与边缘协商必须共用这一处，否则两条访问路径会逐渐漂移：
+ * 一条有 token 提示，另一条没有；一条可发现 HTML，另一条变成信息孤岛。
+ */
+export function markdownResponseHeaders(
+  body: string,
+  canonicalPath: string,
+  representationPath: string,
+): Headers {
+  const canonical = headerUri(canonicalPath);
+  const representation = headerUri(representationPath);
+
+  return new Headers({
+    'Content-Type': MARKDOWN_CONTENT_TYPE,
+    'Content-Location': representation,
+    Link: `<${canonical}>; rel="canonical"; type="text/html", <${representation}>; rel="alternate"; type="text/markdown"`,
+    Vary: 'Accept',
+    'x-markdown-tokens': String(estimateTokens(body)),
+  });
+}
 
 /**
  * 估算文本的 token 数。

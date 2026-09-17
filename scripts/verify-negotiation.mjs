@@ -342,6 +342,15 @@ console.log('\n[3] 响应头契约');
     'Content-Type 带 charset（否则中文会乱码）',
   );
   check(Number.isInteger(Number(res.headers.get('x-markdown-tokens'))), 'x-markdown-tokens 已提供');
+  check(
+    res.headers.get('content-location') === '/markdown-for-agents.md',
+    'Content-Location 指向静态孪生文件',
+  );
+  const links = res.headers.get('link') ?? '';
+  check(
+    links.includes('rel="canonical"') && links.includes('rel="alternate"'),
+    'Link 可双向发现 HTML / markdown 表示',
+  );
 }
 
 // ── 4. 失败必须静默回落 ─────────────────────────────────────────────
@@ -517,7 +526,7 @@ async function discoverContentPages() {
     if (depth > 2) return;
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      const url = `${prefix}/${entry.name}/`;
+      const url = `${prefix}${entry.name}/`;
       let html = null;
       try {
         html = await readFile(join(dir, entry.name, 'index.html'), 'utf8');
@@ -529,7 +538,7 @@ async function discoverContentPages() {
     }
   }
 
-  await walk(DIST, '', 1);
+  await walk(DIST, '/', 1);
   return found;
 }
 
