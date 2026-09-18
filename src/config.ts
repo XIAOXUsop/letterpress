@@ -94,6 +94,9 @@ export const site: SiteConfig = {
 
   url: 'https://xiaoxusop.github.io/letterpress',
 
+  // 别改错：中文标点规则与**搜索分词**都依赖它。Pagefind 按它选分词器，
+  // 丢了 lang 就会退回不切分中文的模式——搜「中文排版」从 6 条掉到 1 条，
+  // 而构建、测试、lint 全都不会出声。`npm run verify:search` 守着这一条。
   lang: 'zh-CN',
 
   author: {

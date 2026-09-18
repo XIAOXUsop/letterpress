@@ -58,6 +58,13 @@ jobs:
           test -f dist/markdown-for-agents.md || { echo "::error::缺少 .md 孪生文件"; exit 1; }
           echo "产物完整：$(find dist -type f | wc -l) 个文件"
 
+      # 搜索可用性：页面语言、索引语言、索引覆盖面。
+      # `<html lang>` 决定 Pagefind 选哪个分词器——丢掉它，中文搜索会静默退回
+      # 不切分中文的模式：文章还在，只是再也搜不到。排在这里是因为上一步刚确认
+      # 过产物完整，而 verify:base 会 `rm -rf dist` 重建。
+      - name: 搜索可用性检查
+        run: npm run verify:search
+
       - name: 子路径部署检查
         run: npm run verify:base
 
