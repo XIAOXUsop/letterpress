@@ -19,7 +19,11 @@ import { z } from 'astro/zod';
  * 文章。
  *
  * 放在 `src/content/posts/` 下的 `.md` / `.mdx` 都会成为一篇文章。
- * 文件名不决定 URL——URL 由 frontmatter 的 `slug` 或标题推导（见 lib/wiki/slug.ts）。
+ *
+ * URL 片段的优先级是 **显式 `slug` > 文件名 > 标题**（见 `lib/wiki/slug.ts`
+ * 的 `resolveSlug`）。也就是说文件名**就是**默认的 URL 片段——写成英文小写
+ * 连字符，URL 就好看；中文文件名会生成中文 URL（合法，但复制出去是一串
+ * `%E8%AE%BA...`）。想覆盖它就在 frontmatter 里写 `slug`。
  */
 const posts = defineCollection({
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/posts' }),

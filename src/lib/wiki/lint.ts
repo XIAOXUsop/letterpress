@@ -41,7 +41,13 @@ export interface LintOptions {
    * 但这是**取舍**不是**错误**，所以分级是 info 而不是 warn。
    */
   readonly warnOnCjkSlug?: boolean;
-  /** 摘要长度上限（字符）。超过会被 llms.txt 截断，提示作者精简 */
+  /**
+   * 摘要长度上限（字符）。
+   *
+   * 摘要同时用作 `meta description`，而**搜索引擎会在约 160 字符处截断它**——
+   * 超出后读者在搜索结果里看到的是半句话。llms.txt 那边**不截断**（整句照列），
+   * 代价是多占 token。这两种代价都不致命，所以分级是 info 而不是 warn。
+   */
   readonly maxSummaryLength?: number;
   /**
    * 是否检查 wiki 链接。
@@ -239,7 +245,8 @@ function checkSummaries(docs: readonly Doc[], maxLength: number): Issue[] {
         slug: doc.slug,
         message:
           `「${doc.title}」的摘要 ${doc.summary.length} 字，超过 ${maxLength} 字。` +
-          `过长的摘要会被截断，反而让 agent 读到半句话——建议精炼成一句。`,
+          `搜索引擎会把 meta description 截到约 160 字符，读者在结果页只看到半句话` +
+          `（llms.txt 里不截断，但会多占 token）——建议精炼成一句。`,
       });
     }
   }

@@ -107,7 +107,7 @@ related: [其他条目的-slug]
 | 警告 | `orphan-page` | 没有任何页面指向它。读者只能靠直接输 URL 找到 |
 | 警告 | `missing-summary` | 缺摘要，agent 只能靠标题猜内容 |
 | 警告 | `empty-body` | 空正文。没写完就加 `draft: true` |
-| 提示 | `summary-too-long` | 摘要过长会被截断 |
+| 提示 | `summary-too-long` | 摘要过长，搜索引擎会在 meta description 处截断 |
 | 提示 | `cjk-slug` | URL 由中文标题生成（默认关闭，可在配置里开） |
 
 **孤儿页是最值得注意的一类。** 一个没有任何入链的条目，

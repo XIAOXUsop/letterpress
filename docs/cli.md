@@ -7,8 +7,9 @@
 | `npm test` | **220 项**单元测试，全部离线 |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 104 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物，四类载体） |
-| `npm run verify:formats` | 内容格式探针：真的放一个 `.md` 与 `.mdx` 进去，看能不能产出页面 |
-| `npm run verify:all` | 上面四道依次跑一遍 |
+| `npm run verify:formats` | 内容格式探针：真的放一个 `.md`、一个 `.mdx` 与一个**草稿**进去，看前两者能不能产出页面、草稿会不会泄漏 |
+| `npm run verify:online` | **线上烟测**：只打线上地址，验内容协商真的生效。需要 `SITE_ORIGIN`，没配就直接失败（不退回本地） |
+| `npm run verify:all` | 上面**五道**依次跑一遍（`check` + `test` + `verify` + `verify:base` + `verify:formats`），**不含** `verify:online` |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/` 与 `dist/` |
 

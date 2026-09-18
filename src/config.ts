@@ -134,13 +134,6 @@ export const site: SiteConfig = {
   },
 };
 
-/** 供页面引用的派生值，避免各处重复拼字符串。 */
-export const absoluteUrl = (path: string): string => {
-  if (!site.url) return path;
-  const base = site.url.replace(/\/$/, '');
-  return path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
-};
-
 /**
  * 出厂默认值。用来判断「用户还没改过」。
  *
