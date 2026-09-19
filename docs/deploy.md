@@ -32,9 +32,9 @@ SITE_BASE=/仓库名 npm run build
 npm run verify:base
 ```
 
-它用一个假 base 重建产物，然后扫**四类载体**：`href`/`src` 属性、
+它用一个假 base 重建产物，然后扫**五类载体**：`href`/`src` 属性、
 `<script>` 里拼出来的路径、`https://` 开头的绝对 URL、纯文本产物
-（`llms.txt` / `robots.txt`）。每一类都是踩过之后才补上的。
+（`llms.txt` / `robots.txt`），以及 JSON 内容清单。每一类都是踩过之后才补上的。
 
 > ⚠️ 在 Windows 的 Git Bash 里，`SITE_BASE=/仓库名` 会被 MSYS 当成路径转换成
 > `D:/App/Git/仓库名`。加 `MSYS_NO_PATHCONV=1` 前缀。
@@ -83,7 +83,7 @@ npm run verify:base
 CDN 有没有吃掉 `Vary: Accept`。这些在本地一个都测不到：
 `npm run dev` 和 `scripts/verify-negotiation.mjs` 的响应头都是本项目自己写的。
 
-所以有一个只打线上、只查四个稳定 URL 的烟测：
+所以有一个只打线上、只查少量稳定出口的烟测：
 
 ```bash
 SITE_ORIGIN=https://your-demo.example npm run verify:online
@@ -91,7 +91,9 @@ SITE_ORIGIN=https://your-demo.example npm run verify:online
 
 它验的是：同一个页面在两种 `Accept` 下拿到**不同**的 `Content-Type`、两侧都带
 `Vary: Accept`、markdown 侧带 `Content-Location` 与 `rel="alternate"` 的 `Link`、
-没有 markdown 孪生的页面安全回落到 HTML、静态资源不被重写。
+没有 markdown 孪生的页面安全回落到 HTML、静态资源不被重写；还会读取
+`content-manifest.json`，从中推导一篇真实文档，确认线上 `.md` 的字节数和
+SHA-256 与清单一致。它只抽一篇，不会退化成每次全站抓取。
 
 > **它不会因为线上不可用就退回本地服务器。** 没有配置 `SITE_ORIGIN` 时它直接失败退出。
 > 一个能自己找退路的烟测，唯一的作用是把部署事故伪装成绿色。

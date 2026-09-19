@@ -14,6 +14,7 @@ import PostList from '../components/PostList.astro';
 import Cover from '../components/Cover.astro';
 import JsonLd from '../components/JsonLd.astro';
 import { site } from '../config.js';
+import { formatContentDate } from '../lib/date.js';
 import { path } from '../lib/url.js';
 import {
   coverOf,
@@ -44,7 +45,7 @@ const featuredDate = featured ? dateOfDoc(content, featured.slug) : null;
 const featuredCover = featured ? coverOf(content, featured.slug) : null;
 
 const formatDate = (d: Date): string =>
-  new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+  formatContentDate(d, { year: 'numeric', month: 'long', day: 'numeric' });
 ---
 
 <BaseLayout description={site.tagline}>

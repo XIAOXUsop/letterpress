@@ -18,17 +18,72 @@
  */
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 
-/** astro CLI 的绝对入口——从包自己的 bin 字段读，不硬编码 `node_modules/astro/bin/...` */
-export const astroBin = (() => {
-  const pkgPath = require.resolve('astro/package.json');
-  const { bin } = require('astro/package.json');
-  return join(dirname(pkgPath), bin.astro);
-})();
+/**
+ * 从包自己的 `bin` 字段解析 CLI 入口，不猜 `node_modules/.bin` 的平台扩展名。
+ *
+ * @param {string} packageName
+ * @param {string} [binName]
+ */
+export function resolveNodeBin(packageName, binName = packageName) {
+  /*
+   * 不能直接 `require.resolve('包/package.json')`：Pagefind 这类包用 exports
+   * 封住了 package.json，明明安装着却会抛 ERR_PACKAGE_PATH_NOT_EXPORTED。
+   * 从 Node 自己的模块搜索路径逐个找，仍然不依赖工作区位置或平台扩展名。
+   */
+  let pkgPath;
+  let pkg;
+  for (const searchRoot of require.resolve.paths(packageName) ?? []) {
+    const candidate = join(searchRoot, packageName, 'package.json');
+    try {
+      pkg = JSON.parse(readFileSync(candidate, 'utf8'));
+      pkgPath = candidate;
+      break;
+    } catch {
+      // 继续尝试 Node 的下一个标准模块搜索目录
+    }
+  }
+  if (!pkgPath || !pkg) throw new Error(`找不到已安装包 ${packageName}`);
+
+  const { bin } = pkg;
+  const relative = typeof bin === 'string' ? bin : bin?.[binName];
+  if (!relative) throw new Error(`${packageName} 没有名为 ${binName} 的 CLI 入口`);
+  return join(dirname(pkgPath), relative);
+}
+
+/** astro CLI 的绝对入口。 */
+export const astroBin = resolveNodeBin('astro');
+
+/**
+ * 用当前 Node 运行任意依赖包的 CLI，全程不开 shell。
+ *
+ * @param {string} packageName
+ * @param {string[]} args
+ * @param {{ binName?: string, cwd?: string, env?: Record<string, string> }} [options]
+ * @returns {Promise<number>}
+ */
+export function runNodeBin(
+  packageName,
+  args,
+  { binName = packageName, cwd = process.cwd(), env = {} } = {},
+) {
+  const bin = resolveNodeBin(packageName, binName);
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [bin, ...args], {
+      cwd,
+      stdio: 'inherit',
+      shell: false,
+      env: { ...process.env, ...env },
+    });
+    child.on('error', () => resolve(1));
+    child.on('exit', (code) => resolve(code ?? 1));
+  });
+}
 
 /**
  * 跑一条 astro 命令。
@@ -38,13 +93,5 @@ export const astroBin = (() => {
  * @returns {Promise<number>} 退出码；信号终止时返回 1
  */
 export function runAstro(args, { cwd = process.cwd(), env = {} } = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [astroBin, ...args], {
-      cwd,
-      stdio: 'inherit',
-      shell: false,
-      env: { ...process.env, ...env },
-    });
-    child.on('exit', (code) => resolve(code ?? 1));
-  });
+  return runNodeBin('astro', args, { binName: 'astro', cwd, env });
 }

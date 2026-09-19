@@ -10,6 +10,7 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 import { site } from '../config.js';
 import { buildGraph, type Doc, type LinkGraph } from './wiki/graph.js';
 import { hasErrors, lint, type Issue } from './wiki/lint.js';
+import { buildMarkdownTwin } from './wiki/llms.js';
 import { resolveSlug } from './wiki/slug.js';
 /**
  * 是否处于开发模式。
@@ -156,6 +157,35 @@ export function kindOf(content: SiteContent, slug: string): 'concept' | 'entity'
   const entry = content.entries.get(slug);
   if (!entry || !('kind' in entry.data)) return null;
   return (entry.data as { kind: 'concept' | 'entity' | 'synthesis' }).kind;
+}
+
+/**
+ * 生成某篇内容真正发布出去的 markdown 孪生文件。
+ *
+ * 页面路由与内容清单必须共用这一处：若各自拼一份，清单里的 hash 很容易
+ * 对着「看起来相同、字节却不同」的内容计算，增量同步就会失去意义。
+ */
+export function markdownTwinOf(
+  content: SiteContent,
+  doc: Doc,
+  options: { siteUrl?: string; lang?: string },
+): string {
+  let body = buildMarkdownTwin(doc, content.graph, options);
+
+  if (doc.kind !== 'post') return body;
+
+  // 文章的日期与标签也是发布内容的一部分；它们变化时 hash 必须随之变化。
+  const date = dateOfDoc(content, doc.slug);
+  const tags = tagsOf(content, doc.slug);
+  const meta: string[] = [];
+  if (date) meta.push(`日期：${date.toISOString().slice(0, 10)}`);
+  if (tags.length > 0) meta.push(`标签：${tags.join('、')}`);
+  if (meta.length > 0) {
+    const [head, ...rest] = body.split('\n\n');
+    body = `${head}\n\n${meta.join('  \n')}\n\n${rest.join('\n\n')}`;
+  }
+
+  return body;
 }
 
 /**

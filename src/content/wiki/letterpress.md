@@ -18,6 +18,10 @@ related: [llm-wiki, content-negotiation, design-tokens]
 **三、知识会腐烂。** 加一层 [[LLM 知识库]]，把文章从「流」变成「网」，
 并且把机械可判定的检查做成能进 CI 的 lint。
 
+同一原则也用于构建本身：`npm run verify:reproducible` 会禁止生产源码读取构建时钟，
+并在两个时区完整构建，逐文件比较 Astro 与 Pagefind 的全部产物，
+而不是靠「代码看起来确定」来判断。
+
 ## 不做什么
 
 - **不做生成器**。生成器赛道拥挤且被托管平台生态锁死。

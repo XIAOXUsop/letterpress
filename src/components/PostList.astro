@@ -26,6 +26,7 @@
  */
 import type { Doc } from '../lib/wiki/graph.js';
 import { coverOf, dateOfDoc, tagsOf, type SiteContent } from '../lib/content.js';
+import { formatContentDate } from '../lib/date.js';
 import Cover from './Cover.astro';
 import { path } from '../lib/url.js';
 
@@ -39,7 +40,7 @@ const { docs, content, variant = 'default' } = Astro.props;
 const compact = variant === 'compact';
 
 const formatDate = (date: Date): string =>
-  new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+  formatContentDate(date, { year: 'numeric', month: '2-digit', day: '2-digit' });
 ---
 
 {

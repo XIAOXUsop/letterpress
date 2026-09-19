@@ -32,7 +32,10 @@ export const GET: APIRoute = async () => {
     siteUrl: siteOrigin(site.url) + basePath(),
     tagline: site.tagline,
     // 纯文本产物里中英文之间要手动加空格——`text-autospace` 只在 HTML 里生效。
-    notes: [`本站以 ${site.lang} 为主。`],
+    notes: [
+      `本站以 ${site.lang} 为主。`,
+      '需要增量同步时，先读取 /content-manifest.json，按 sha256 只抓取变化的 .md 文件。',
+    ],
   });
 
   return new Response(body, {

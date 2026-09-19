@@ -13,9 +13,8 @@
 import type { APIRoute } from 'astro';
 import { site } from '../config.js';
 import { markdownResponseHeaders } from '../lib/negotiate/accept.js';
-import { dateOfDoc, loadContent, publishedPosts, reportIssues, tagsOf } from '../lib/content.js';
-import { buildMarkdownTwin } from '../lib/wiki/llms.js';
-import { path } from '../lib/url.js';
+import { loadContent, markdownTwinOf, publishedPosts, reportIssues } from '../lib/content.js';
+import { basePath, path, siteOrigin } from '../lib/url.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
@@ -36,22 +35,10 @@ export const GET: APIRoute = ({ props }) => {
   const doc = content.docs.find((d) => d.slug === slug);
   if (!doc) return new Response('Not found', { status: 404 });
 
-  let body = buildMarkdownTwin(doc, content.graph, {
-    siteUrl: site.url || undefined,
+  const body = markdownTwinOf(content, doc, {
+    siteUrl: siteOrigin(site.url) + basePath() || undefined,
     lang: site.lang,
   });
-
-  // 元信息用一段 markdown 表格补在正文前——比 YAML frontmatter 更适合被模型读，
-  // 而且这些字段（日期、标签）对人也有用。
-  const date = dateOfDoc(content, slug);
-  const tags = tagsOf(content, slug);
-  const meta: string[] = [];
-  if (date) meta.push(`日期：${date.toISOString().slice(0, 10)}`);
-  if (tags.length > 0) meta.push(`标签：${tags.join('、')}`);
-  if (meta.length > 0) {
-    const [head, ...rest] = body.split('\n\n');
-    body = `${head}\n\n${meta.join('  \n')}\n\n${rest.join('\n\n')}`;
-  }
 
   return new Response(body, {
     headers: markdownResponseHeaders(body, path(`/${slug}/`), path(`/${slug}.md`)),

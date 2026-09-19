@@ -17,10 +17,12 @@
  */
 
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { negotiate } from '../src/lib/negotiate/edge.ts';
 import { estimateTokens } from '../src/lib/negotiate/accept.ts';
+import { RESERVED_POST_SLUGS } from '../src/lib/wiki/lint.ts';
 
 const DIST = join(process.cwd(), 'dist');
 const PORT = 8791;
@@ -44,6 +46,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
 };
 
@@ -153,7 +156,7 @@ for (const page of mdPages) {
  *
  * 1. Astro 7 把 `markdown.remarkPlugins` 换成了 `markdown.processor`，
  *    老写法被接受但不执行，只发一条弃用警告
- * 2. 内容层会缓存渲染结果，改了处理器配置不删 `.astro/` 就不生效
+ * 2. 内容层会缓存渲染结果，改了处理器代码不删 `node_modules/.astro/` 就不生效
  *
  * 单元测试测的是纯函数，测不到「插件到底有没有接进管线」。
  * 所以这条断言必须打在**构建产物**上。
@@ -314,6 +317,138 @@ console.log('\n[1d] 源码卫生');
    */
   check(scanned > 20, `扫描 ${scanned} 个源文件`, '扫描量太少，检查可能没真正执行');
   check(bad === 0, `无裸 NUL 字节`, `${bad} 个文件有问题`);
+
+  /*
+   * 保留 slug 清单必须跟真实路由一起长。
+   * 只给当前七个值写单测，未来新增 `/projects/` 页面时测试仍会全绿，
+   * 文章就能再次占用新路由。这里直接从 `src/pages` 推导根层静态页面。
+   */
+  const pagesRoot = join(process.cwd(), 'src', 'pages');
+  const pageEntries = await readdir(pagesRoot, { withFileTypes: true });
+  const staticRootSlugs = [];
+  for (const entry of pageEntries) {
+    // 普通页面可以是 Astro / Markdown / HTML，也可能是无额外扩展名的 API 路由。
+    const rootPage = entry.name.match(/^([^.[\]]+)\.(?:astro|md|mdx|html|ts|js)$/);
+    if (entry.isFile() && rootPage) {
+      const slug = rootPage[1];
+      if (slug !== 'index') staticRootSlugs.push(slug);
+      continue;
+    }
+    if (!entry.isDirectory()) continue;
+    try {
+      const children = await readdir(join(pagesRoot, entry.name), { withFileTypes: true });
+      const ownsRoot = children.some(
+        (child) =>
+          child.isFile() &&
+          (/^index\.(?:astro|md|mdx|html|ts|js)$/.test(child.name) ||
+            /^\[\.\.\.[^\]]+\]\.(?:astro|md|mdx|html|ts|js)$/.test(child.name)),
+      );
+      if (ownsRoot) staticRootSlugs.push(entry.name);
+    } catch {
+      // 无法读取的命名空间交给最终集合差异报错
+    }
+  }
+  staticRootSlugs.sort();
+  check(
+    JSON.stringify(staticRootSlugs) === JSON.stringify([...RESERVED_POST_SLUGS].sort()),
+    '文章保留 slug 与真实根层静态路由同步',
+    `路由=${staticRootSlugs.join(',')} 清单=${[...RESERVED_POST_SLUGS].sort().join(',')}`,
+  );
+}
+
+// ── 1e. 内容清单真的是可用于增量同步的契约 ─────────────────────────
+/**
+ * 只验证「JSON 能解析」没有意义。清单最重要的承诺是：它列全了真实孪生文件，
+ * hash 对得上文件字节，图关系指向存在的 ID。任一条失真，增量同步都会漏更新。
+ */
+console.log('\n[1e] Agent 增量同步清单');
+{
+  const response = await fetch(`${base}/content-manifest.json`);
+  check(response.ok, '/content-manifest.json 可访问');
+  check(
+    (response.headers.get('content-type') ?? '').includes('application/json'),
+    '清单 Content-Type 是 application/json',
+  );
+
+  let manifest;
+  try {
+    manifest = await response.json();
+    check(true, '清单是合法 JSON');
+  } catch (error) {
+    check(false, '清单是合法 JSON', error instanceof Error ? error.message : String(error));
+    manifest = { documents: [] };
+  }
+
+  check(manifest.format === 'letterpress-content-manifest', '格式名明确且不伪装成外部标准');
+  check(manifest.version === 1, '清单版本为 1');
+
+  const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
+  check(manifest.documentCount === documents.length, 'documentCount 与条目数一致');
+
+  const ids = documents.map((doc) => doc.id);
+  check(new Set(ids).size === ids.length, '文档 ID 无重复');
+  check(ids.join('\n') === [...ids].sort().join('\n'), '文档按 ID 稳定排序');
+
+  const actualTwins = (await readdir(DIST, { recursive: true }))
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => name.replace(/\\/g, '/'))
+    .sort();
+  check(actualTwins.length === documents.length, '清单覆盖全部 markdown 孪生文件');
+
+  const knownIds = new Set(ids);
+  let countedEdges = 0;
+  for (const doc of documents) {
+    const relative = doc.kind === 'wiki' ? `wiki/${doc.slug}.md` : `${doc.slug}.md`;
+    let markdown = '';
+    try {
+      markdown = await readFile(join(DIST, relative), 'utf8');
+      check(true, `${doc.id} 的 markdown 文件存在`);
+    } catch {
+      check(false, `${doc.id} 的 markdown 文件存在`, relative);
+    }
+
+    const digest = createHash('sha256').update(markdown, 'utf8').digest('hex');
+    check(doc.markdown?.sha256 === digest, `${doc.id} 的 sha256 对应真实文件`);
+    check(
+      doc.markdown?.bytes === Buffer.byteLength(markdown, 'utf8'),
+      `${doc.id} 的 UTF-8 字节数准确`,
+    );
+    check(doc.urls?.markdown?.endsWith(`/${relative}`), `${doc.id} 指向正确的 .md URL`);
+
+    const relations = [
+      ...(doc.relations?.outgoing ?? []),
+      ...(doc.relations?.backlinks ?? []),
+    ];
+    check(relations.every((id) => knownIds.has(id)), `${doc.id} 的图关系全部可解析`);
+    countedEdges += doc.relations?.outgoing?.length ?? 0;
+  }
+  check(manifest.edgeCount === countedEdges, 'edgeCount 与实际出链数一致');
+}
+
+// ── 1f. 标题永久链接必须指回真实标题 id ────────────────────────────
+/**
+ * 单测能证明插件会改一棵假 AST，但证明不了它真的接进 Astro 管线，
+ * 也证明不了标题 id 是在插件之前生成的。这里直接检查构建产物。
+ */
+console.log('\n[1f] 小节永久链接');
+{
+  const response = await fetch(`${base}/reproducible-builds/`);
+  const html = await response.text();
+  const headings = [...html.matchAll(/<h([23])\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/g)];
+
+  check(headings.length > 0, '真实文章包含带 id 的二、三级标题');
+  check(
+    headings.every((heading) => {
+      const id = heading[2] ?? '';
+      const body = heading[3] ?? '';
+      return (
+        body.includes('class="heading-anchor"') &&
+        body.includes(`href="#${id}"`) &&
+        body.includes('data-pagefind-ignore')
+      );
+    }),
+    '每个标题的永久链接都指回自身 id，且不污染搜索索引',
+  );
 }
 
 // ── 2. 七个 agent 的真实请求头 ──────────────────────────────────────
@@ -466,7 +601,85 @@ console.log('\n[4b] SEO / 分享 / 无障碍契约');
   const home = await read('index.html');
   check(home !== null && home.includes('rel="icon"'), 'favicon 被显式引用');
 
-  // ── 6e. 暗色代码块（曾经的白底 bug）───────────────────────────
+  // ── 6e. 搜索快捷键与 RSS 自描述 ──────────────────────────────
+  check(
+    home !== null &&
+      home.includes('aria-keyshortcuts="/"') &&
+      home.includes('data-search-link') &&
+      home.includes('location.assign'),
+    '搜索入口声明 / 快捷键且实际接入导航脚本',
+  );
+
+  const rssXml = await read('rss.xml');
+  check(
+    rssXml !== null && rssXml.includes('xmlns:atom="http://www.w3.org/2005/Atom"'),
+    'RSS 声明 Atom 命名空间',
+  );
+  check(
+    rssXml !== null &&
+      /<atom:link\b[^>]*\bhref="[^"]+\/rss\.xml"[^>]*\brel="self"[^>]*\btype="application\/rss\+xml"/.test(
+        rssXml,
+      ),
+    'RSS 输出指向自身的 atom:link',
+  );
+
+  // ── 6f. 标签 RSS ──────────────────────────────────────────────
+  // 只检查「路由文件存在」不够：页面必须真的暴露订阅入口，每个条目也必须
+  // 仍是全文且属于对应标签，否则这只是一个看得见、用不起来的空功能。
+  const tagFeedFiles = [];
+  const collectTagFeeds = async (dir, rel = 'tags') => {
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const full = join(dir, entry.name);
+      const childRel = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) await collectTagFeeds(full, childRel);
+      else if (entry.name === 'rss.xml') tagFeedFiles.push(childRel);
+    }
+  };
+  await collectTagFeeds(join(DIST, 'tags'));
+
+  check(tagFeedFiles.length > 0, `按标签生成独立 RSS（${tagFeedFiles.length} 份）`);
+
+  let undiscoverable = 0;
+  let invalidItems = 0;
+  for (const rel of tagFeedFiles) {
+    const segments = rel.split('/');
+    const tag = segments.at(-2) ?? '';
+    const href = `/${segments.map(encodeURIComponent).join('/')}`;
+    const page = await read(`${segments.slice(0, -1).join('/')}/index.html`);
+    const hrefCount = page?.split(`href="${href}"`).length ?? 0;
+    if (hrefCount < 3) undiscoverable++;
+
+    const xml = await read(rel);
+    const items = xml?.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+    const xmlTag = tag
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+    if (
+      items.length === 0 ||
+      items.some(
+        (item) =>
+          !item.includes(`<category>${xmlTag}</category>`) || !item.includes('<content:encoded>'),
+      )
+    ) {
+      invalidItems++;
+    }
+  }
+
+  check(
+    undiscoverable === 0,
+    '每个标签页都在 head 与正文暴露对应订阅源',
+    `${undiscoverable} 个标签页入口不完整`,
+  );
+  check(
+    invalidItems === 0,
+    '标签 RSS 只含对应标签文章且保留全文',
+    `${invalidItems} 份订阅内容不完整`,
+  );
+
+  // ── 6g. 暗色代码块与打印样式 ──────────────────────────────────
   const astroDir = join(DIST, '_astro');
   const cssName = (await readdir(astroDir).catch(() => [])).find((f) => f.endsWith('.css'));
   const css = cssName ? await readFile(join(astroDir, cssName), 'utf8') : '';
@@ -484,8 +697,13 @@ console.log('\n[4b] SEO / 分享 / 无障碍契约');
     article !== null && article.includes('--shiki-dark-bg'),
     '代码块带有暗色主题的自定义属性',
   );
+  check(css.includes('@media print'), 'CSS 含独立打印模式');
+  check(
+    css.includes('break-inside:avoid') && css.includes('white-space:pre-wrap'),
+    '打印时代码可换行，关键内容块尽量不跨页',
+  );
 
-  // ── 6f. 导航与结构 ────────────────────────────────────────────
+  // ── 6h. 导航与结构 ────────────────────────────────────────────
   for (const [label, rel] of [
     ['搜索页', 'search/index.html'],
     ['归档页', 'archive/index.html'],

@@ -75,6 +75,33 @@ const DEFAULTS = {
 } as const;
 
 /**
+ * 根层文章路由不能占用的系统路径。
+ *
+ * 文章输出在 `/<slug>/`，而这些路径已经由 `src/pages` 的静态路由占用。
+ * Astro 遇到冲突只打印 warning、仍以 0 退出：文章 HTML 消失，但 `.md`、RSS、
+ * 列表与内容清单仍保留它，造成同一条内容在不同出口指向不同页面。
+ */
+export const RESERVED_POST_SLUGS = [
+  '404',
+  'about',
+  'archive',
+  'posts',
+  'search',
+  'tags',
+  'wiki',
+] as const;
+
+const RESERVED_POST_ROUTES: ReadonlyMap<string, string> = new Map([
+  ['404', '404 页面'],
+  ['about', '关于页'],
+  ['archive', '归档页'],
+  ['posts', '文章列表'],
+  ['search', '搜索页'],
+  ['tags', '标签索引'],
+  ['wiki', '知识库入口'],
+]);
+
+/**
  * 对文档集合跑全部规则。
  *
  * 输出按 (level, rule, slug) 稳定排序——报告必须可复现，
@@ -85,6 +112,7 @@ export function lint(docs: readonly Doc[], graph: LinkGraph, options: LintOption
   const issues: Issue[] = [];
 
   issues.push(...checkDuplicateSlugs(docs));
+  issues.push(...checkReservedPostRoutes(docs));
   // 断链与孤儿页都依赖知识层存在才有意义，关掉时不检查
   if (opts.checkWikilinks) issues.push(...checkBrokenLinks(graph));
   if (opts.checkOrphans) issues.push(...checkOrphans(graph));
@@ -98,6 +126,28 @@ export function lint(docs: readonly Doc[], graph: LinkGraph, options: LintOption
     if (byLevel !== 0) return byLevel;
     if (a.rule !== b.rule) return a.rule < b.rule ? -1 : 1;
     return (a.slug ?? '') < (b.slug ?? '') ? -1 : (a.slug ?? '') > (b.slug ?? '') ? 1 : 0;
+  });
+}
+
+/** 文章 slug 与静态系统路由冲突。知识库位于 `/wiki/<slug>/`，不受此限制。 */
+function checkReservedPostRoutes(docs: readonly Doc[]): Issue[] {
+  return docs.flatMap((doc) => {
+    if (doc.draft || doc.kind !== 'post') return [];
+    const owner = RESERVED_POST_ROUTES.get(doc.slug);
+    if (!owner) return [];
+
+    return [
+      {
+        rule: 'reserved-post-slug',
+        level: 'error' as const,
+        slug: doc.slug,
+        message:
+          `文章「${doc.title}」使用了 slug「${doc.slug}」，但 /${doc.slug}/ 已属于${owner}。` +
+          `Astro 遇到这种冲突只会警告并跳过文章 HTML，构建仍显示成功；` +
+          `与此同时 .md、RSS、列表和内容清单仍会发布它，导致各出口互相矛盾。` +
+          `请为文章改用其他 slug。`,
+      },
+    ];
   });
 }
 

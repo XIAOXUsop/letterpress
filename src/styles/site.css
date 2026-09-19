@@ -743,6 +743,39 @@
     margin-block-end: var(--space-6);
   }
 
+  /* ── 小节永久链接 ──────────────────────────────────────────── */
+
+  .heading-anchor {
+    display: inline-block;
+    margin-inline-start: 0.4em;
+    padding-inline: 0.15em;
+    font-family: var(--font-mono);
+    font-size: 0.65em;
+    font-weight: 400;
+    color: var(--color-text-subtle);
+    text-decoration: none;
+    vertical-align: 0.1em;
+    /* 阅读时不制造噪声；标题悬停或键盘聚焦时才显露。 */
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-out);
+  }
+
+  .prose :is(h2, h3):hover > .heading-anchor,
+  .heading-anchor:focus-visible {
+    opacity: 1;
+  }
+
+  .heading-anchor:hover {
+    color: var(--color-accent);
+  }
+
+  /* 触屏没有 hover，永久隐藏会让功能事实上不可用。 */
+  @media (hover: none) {
+    .heading-anchor {
+      opacity: 0.65;
+    }
+  }
+
   /* ── 目录 ──────────────────────────────────────────────────── */
 
   .toc {
@@ -1081,5 +1114,74 @@
 
   .prose pre {
     position: relative;
+  }
+
+  /* ── 打印 / 另存 PDF ───────────────────────────────────────── */
+
+  @media print {
+    @page {
+      margin: 18mm;
+    }
+
+    body {
+      color: #000 !important;
+      background: #fff !important;
+      font-size: 11pt;
+    }
+
+    /* 只保留文章与必要元数据，避免把导航操作打印成正文。 */
+    .site-header,
+    .site-footer,
+    .skip-link,
+    .toc,
+    .post-nav,
+    .backlinks,
+    .md-available,
+    .code-copy,
+    .heading-anchor {
+      display: none !important;
+    }
+
+    .main,
+    .page,
+    .prose {
+      width: auto;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .post-header {
+      margin-block-end: 1.5rem;
+    }
+
+    .prose a {
+      color: inherit;
+      text-decoration: underline;
+    }
+
+    /* 纸面没有悬停目标，把外链地址写出来才可继续访问。 */
+    .prose a[href^='http']::after {
+      content: ' (' attr(href) ')';
+      font-family: var(--font-mono);
+      font-size: 0.75em;
+      overflow-wrap: anywhere;
+    }
+
+    .prose pre {
+      overflow: visible;
+      white-space: pre-wrap;
+    }
+
+    .table-wrap {
+      overflow: visible;
+    }
+
+    .prose blockquote,
+    .prose figure,
+    .prose img,
+    .prose tr {
+      break-inside: avoid;
+    }
   }
 }

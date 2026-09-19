@@ -2,9 +2,8 @@
 import type { APIRoute } from 'astro';
 import { site } from '../../config.js';
 import { markdownResponseHeaders } from '../../lib/negotiate/accept.js';
-import { loadContent, publishedWiki, reportIssues } from '../../lib/content.js';
-import { buildMarkdownTwin } from '../../lib/wiki/llms.js';
-import { path } from '../../lib/url.js';
+import { loadContent, markdownTwinOf, publishedWiki, reportIssues } from '../../lib/content.js';
+import { basePath, path, siteOrigin } from '../../lib/url.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
@@ -25,8 +24,8 @@ export const GET: APIRoute = ({ props }) => {
   const doc = content.docs.find((d) => d.slug === slug);
   if (!doc) return new Response('Not found', { status: 404 });
 
-  const body = buildMarkdownTwin(doc, content.graph, {
-    siteUrl: site.url || undefined,
+  const body = markdownTwinOf(content, doc, {
+    siteUrl: siteOrigin(site.url) + basePath() || undefined,
     lang: site.lang,
   });
 

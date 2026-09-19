@@ -2,7 +2,7 @@
 title: 构建可复现比你想的难，而且它值得
 summary: 同一份源码在两台机器上构建出不同的产物——这件事的代价不是洁癖，是你没法用 diff 判断"这次改动干了什么"。
 date: 2025-11-20
-updated: 2026-09-12
+updated: 2026-09-19
 tags: [构建, 可复现, ci]
 ---
 
@@ -73,14 +73,21 @@ CI（UTC）：  此刻是 9 月 11 日 17:57
 
 「可复现」是个可以被证明的性质，不用靠信念。
 
-最直接的做法：**同一种输入构建两次，比哈希**。
+最直接的做法：**改变一个本不该影响内容的环境输入，再比哈希**。仓库已经把这条
+做成命令：
 
 ```bash
-npm run build && sha256sum dist/**/* | sha256sum
-npm run clean && npm run build && sha256sum dist/**/* | sha256sum
+npm run verify:reproducible
 ```
 
-两次结果不同，就说明有非确定性来源。
+它会先扫描生产源码，禁止无参数 `new Date()` 与 `Date.now()` 直接读取构建时钟；
+再清空 `.astro` 与 `dist`，分别在 UTC 与 America/Los_Angeles 跑完整的
+Astro + Pagefind，逐文件比较 SHA-256。当前 93 个产物跨时区逐字节一致；
+任一文件不同都会列出路径并以非零状态退出。
+
+这里两层检查缺一不可：跨时区构建能抓出日期显示偏移，但抓不出一年才变化一次的
+页脚年份；源码时钟检查能在跨年之前就拦住后者。内容里的日期则统一按 UTC 日历显示，
+不会因为构建机位于负时区而退到前一天。
 
 更有价值的一种是**换一种无关输入再比**。比如换行符：
 
@@ -111,5 +118,5 @@ npm run clean && npm run build && sha256sum dist/**/* | sha256sum
 ## 参考
 
 - reproducible-builds.org（这个概念的系统性整理）
-- 本站的实测：`npm run verify` 会在每次构建后核对产物结构，
-  `.gitattributes` 统一换行符，内容层的排序全部显式化
+- 本站的实测：`npm run verify:reproducible` 会在两个时区完整构建并逐文件比对，
+  同时禁止构建时钟泄漏；`.gitattributes` 统一换行符，内容层的排序全部显式化

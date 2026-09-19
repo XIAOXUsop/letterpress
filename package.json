@@ -15,13 +15,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "astro check",
-    "clean": "node -e \"for (const d of ['.astro','dist']) require('node:fs').rmSync(d,{recursive:true,force:true})\"",
+    "clean": "node scripts/clean.mjs",
     "verify": "npm run clean && npm run build && node scripts/bundle-and-verify.mjs",
     "verify:only": "node scripts/bundle-and-verify.mjs",
     "verify:base": "node scripts/check-base.mjs",
-    "verify:all": "npm run check && npm test && npm run verify && npm run verify:search && npm run verify:base && npm run verify:formats",
+    "verify:all": "npm run check && npm test && npm run verify && npm run verify:search && npm run verify:reproducible && npm run verify:base && npm run verify:formats",
     "verify:formats": "node scripts/check-formats.mjs",
     "verify:online": "node scripts/smoke-online.mjs",
+    "verify:reproducible": "node scripts/check-reproducible.mjs",
     "verify:search": "node scripts/check-search.mjs"
   },
   "dependencies": {

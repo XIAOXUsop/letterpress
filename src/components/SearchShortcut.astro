@@ -1,0 +1,46 @@
+---
+/**
+ * `/` 全站搜索快捷键。
+ *
+ * 正文页按下后进入搜索页；已经在搜索页时直接聚焦并选中输入框。
+ * 输入框、文本域、下拉框和 contenteditable 中不接管按键，避免用户想输入 `/`
+ * 却被突然导航走。没有 JavaScript 时普通搜索链接仍然可用。
+ */
+---
+
+<script>
+  import { shouldOpenSearch } from '../lib/search-shortcut.js';
+
+  document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented) return;
+
+    const target = event.target;
+    const element = target instanceof HTMLElement ? target : null;
+    if (
+      !shouldOpenSearch({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        targetTag: element?.tagName ?? '',
+        targetEditable: element?.isContentEditable ?? false,
+      })
+    ) {
+      return;
+    }
+
+    const input = document.getElementById('search-input');
+    if (input instanceof HTMLInputElement) {
+      event.preventDefault();
+      input.focus();
+      input.select();
+      return;
+    }
+
+    const link = document.querySelector<HTMLAnchorElement>('[data-search-link]');
+    if (link) {
+      event.preventDefault();
+      location.assign(link.href);
+    }
+  });
+</script>

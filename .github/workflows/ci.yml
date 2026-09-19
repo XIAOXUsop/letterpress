@@ -54,6 +54,7 @@ jobs:
         run: |
           test -f dist/index.html || { echo "::error::缺少首页"; exit 1; }
           test -f dist/llms.txt || { echo "::error::缺少 llms.txt"; exit 1; }
+          test -f dist/content-manifest.json || { echo "::error::缺少内容清单"; exit 1; }
           test -f dist/rss.xml || { echo "::error::缺少 RSS"; exit 1; }
           test -f dist/markdown-for-agents.md || { echo "::error::缺少 .md 孪生文件"; exit 1; }
           echo "产物完整：$(find dist -type f | wc -l) 个文件"
@@ -65,13 +66,18 @@ jobs:
       - name: 搜索可用性检查
         run: npm run verify:search
 
+      # 「可复现」不能只写在文章里。在两个时区做完整干净构建，
+      # 连 Pagefind 索引一起逐文件比较 SHA-256；时间、时区或随机顺序都会让它失败。
+      - name: 可复现构建检查
+        run: npm run verify:reproducible
+
       - name: 子路径部署检查
         run: npm run verify:base
 
-      # 内容格式探针：Markdown / MDX / 草稿隔离三件事，同样打在真实产物上。
+      # 内容发布探针：Markdown / MDX、草稿隔离、系统路由冲突，同样打在真实构建上。
       # 注意它和 verify:base 都会 `rm -rf dist` 再重建、并在结束时把产物清掉，
       # 所以**必须排在「确认构建产物完整」之后**——否则那一步会误报"缺少首页"。
-      - name: 内容格式探针
+      - name: 内容发布探针
         run: npm run verify:formats
 
       # 零配置必须能构建成功——这是对使用者的核心承诺。

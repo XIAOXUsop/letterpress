@@ -6,6 +6,7 @@ import mdx from '@astrojs/mdx';
 import { unified } from '@astrojs/markdown-remark';
 import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
 import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
+import { rehypeHeadingLinks } from './src/lib/rehype-heading-links.ts';
 
 /**
  * 站点根地址从 `src/config.ts` 读——那里是用户唯一要改的文件，
@@ -117,7 +118,7 @@ export default defineConfig({
        * 实测：一张三列对照表在 375px 视口下宽 383px。
        * 详见 rehype-table-wrap.ts 里关于「为什么不直接用 CSS」的说明。
        */
-      rehypePlugins: [rehypeTableWrap],
+      rehypePlugins: [rehypeTableWrap, rehypeHeadingLinks],
     }),
     shikiConfig: {
       // 双主题：Shiki 会输出 CSS 变量，由页面样式决定用哪套。

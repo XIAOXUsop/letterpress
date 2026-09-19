@@ -104,6 +104,7 @@ related: [其他条目的-slug]
 |---|---|---|
 | 错误 | `broken-wikilink` | 引用了不存在的页面。**会让构建失败** |
 | 错误 | `duplicate-slug` | 两个文档抢同一个 URL，后构建的会静默覆盖先构建的 |
+| 错误 | `reserved-post-slug` | 文章占用了 `/about/`、`/wiki/` 等系统路由，HTML 会被静默跳过 |
 | 警告 | `orphan-page` | 没有任何页面指向它。读者只能靠直接输 URL 找到 |
 | 警告 | `missing-summary` | 缺摘要，agent 只能靠标题猜内容 |
 | 警告 | `empty-body` | 空正文。没写完就加 `draft: true` |

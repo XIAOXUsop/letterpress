@@ -1,8 +1,6 @@
 ---
 import { site } from '../config.js';
 import { path } from '../lib/url.js';
-
-const year = new Date().getFullYear();
 ---
 
 <footer class="site-footer">
@@ -11,7 +9,7 @@ const year = new Date().getFullYear();
       {site.footer.text}
     </p>
     <p style="margin-block-start: var(--space-2)">
-      © {year} {site.author.name}
+      © {site.author.name}
       {
         site.author.url && (
           <>

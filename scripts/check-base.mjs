@@ -18,7 +18,8 @@
  */
 
 import { runAstro } from './lib/astro.mjs';
-import { readFile, readdir, rm } from 'node:fs/promises';
+import { cleanBuildState } from './lib/clean.mjs';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 /** 用这个假 base 构建。选它是因为长度与真实的仓库名接近。 */
@@ -31,8 +32,7 @@ console.log(`\n子路径部署检查（SITE_BASE=${FAKE_BASE}）`);
 console.log('─'.repeat(64));
 
 // 干净的构建，避免缓存的产物混进来
-await rm(join(root, '.astro'), { recursive: true, force: true });
-await rm(dist, { recursive: true, force: true });
+await cleanBuildState(root);
 
 console.log('\n用假 base 构建…');
 // 环境变量在 Node 里传给子进程，不经过任何 shell —— Git Bash 的路径转换
@@ -232,6 +232,82 @@ if (textLinkProblems.length === 0) {
   for (const p of textLinkProblems.slice(0, 8)) console.log(`      ${p}`);
 }
 
+// RSS 的 self-link 是 XML 属性，不属于 HTML / llms / JSON 三类扫描。
+// 现在除了全站源还有每个标签的源，必须递归检查，不能只守住根目录那一份。
+console.log('\n检查所有 RSS self-link');
+const rssFiles = [];
+async function collectRss(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) await collectRss(full);
+    else if (entry.name === 'rss.xml') rssFiles.push(full);
+  }
+}
+
+try {
+  await collectRss(dist);
+  if (rssFiles.length === 0) throw new Error('没有生成任何 rss.xml');
+
+  let rssProblems = 0;
+  for (const full of rssFiles) {
+    const rel = full.slice(dist.length + 1).replace(/\\/g, '/');
+    const rss = await readFile(full, 'utf8');
+    const match = /<atom:link\b[^>]*\bhref="([^"]+)"[^>]*\brel="self"/.exec(rss);
+    if (!match?.[1]) {
+      problems.set(`${rel} 缺少 atom:link rel="self"`, ['RSS']);
+      rssProblems++;
+      continue;
+    }
+
+    const pathname = decodeURIComponent(new URL(match[1]).pathname);
+    const expected = `${FAKE_BASE}/${rel}`;
+    if (pathname !== expected) {
+      problems.set(`${rel} self-link 路径错误：${pathname}`, ['RSS']);
+      rssProblems++;
+    }
+  }
+
+  if (rssProblems === 0) {
+    console.log(`  ✓ ${rssFiles.length} 份 RSS 都带且只带一次 base 前缀`);
+  } else {
+    console.log(`  ✗ ${rssProblems} 份 RSS 的 self-link 错误`);
+  }
+} catch (error) {
+  const problem = `RSS 不存在或无法读取：${error instanceof Error ? error.message : String(error)}`;
+  problems.set(problem, ['RSS']);
+  console.log(`  ✗ ${problem}`);
+}
+
+// JSON 内容清单里的 URL 同样必须带且只带一次 base；它不是 HTML 属性，
+// 也不属于 llms.txt，少这一层就会成为第四个扫描盲区。
+console.log('\n检查内容清单里的链接');
+try {
+  const manifest = JSON.parse(await readFile(join(dist, 'content-manifest.json'), 'utf8'));
+  const manifestProblems = [];
+  const urls = [manifest.site?.home, ...manifest.documents.flatMap((doc) => Object.values(doc.urls ?? {}))];
+  for (const value of urls) {
+    if (typeof value !== 'string') {
+      manifestProblems.push('存在非字符串 URL');
+      continue;
+    }
+    const pathname = value.startsWith('http') ? new URL(value).pathname : value;
+    if (!pathname.startsWith(`${FAKE_BASE}/`)) manifestProblems.push(`缺 base 前缀 ${value}`);
+    if (pathname.includes(`${FAKE_BASE}${FAKE_BASE}`)) manifestProblems.push(`前缀翻倍 ${value}`);
+  }
+
+  if (manifestProblems.length === 0) {
+    console.log('  ✓ content-manifest.json 里的链接前缀正确');
+  } else {
+    for (const problem of manifestProblems) problems.set(problem, ['内容清单']);
+    for (const problem of manifestProblems.slice(0, 8)) console.log(`  ✗ ${problem}`);
+  }
+} catch (error) {
+  const problem = `内容清单不存在或无法解析：${error instanceof Error ? error.message : String(error)}`;
+  problems.set(problem, ['内容清单']);
+  console.log(`  ✗ ${problem}`);
+}
+
 console.log('\n检查脚本里的资源路径是否带 base 前缀');
 if (scriptProblems.size === 0) {
   console.log('  ✓ 脚本里的资源路径都带 base 前缀');
@@ -253,8 +329,39 @@ if (problems.size === 0) {
   }
 }
 
+// 链接地址正确不代表导航状态正确：pathname 含 base，而配置项不含。
+console.log('\n检查子路径下的当前导航状态');
+for (const [page, label] of [
+  ['posts/index.html', '文章'],
+  ['wiki/index.html', '知识库'],
+  ['search/index.html', '搜索'],
+]) {
+  try {
+    const html = await readFile(join(dist, page), 'utf8');
+    const current = /<a\b[^>]*aria-current="page"[^>]*>([^<]+)<\/a>/.exec(html)?.[1];
+    if (current === label) {
+      console.log(`  ✓ ${label}页正确标记当前导航`);
+    } else {
+      const problem = `${label}页当前导航错误（实际 ${current ?? '无'}）`;
+      problems.set(problem, [page]);
+      console.log(`  ✗ ${problem}`);
+    }
+  } catch {
+    const problem = `${label}页不存在，无法检查当前导航`;
+    problems.set(problem, [page]);
+    console.log(`  ✗ ${problem}`);
+  }
+}
+
 // ── 顺带确认产物结构没被 base 弄坏 ──────────────────────────────
-const required = ['index.html', 'posts/index.html', 'wiki/index.html', 'og.png', 'robots.txt'];
+const required = [
+  'index.html',
+  'posts/index.html',
+  'wiki/index.html',
+  'content-manifest.json',
+  'og.png',
+  'robots.txt',
+];
 for (const rel of required) {
   try {
     await readFile(join(dist, rel));

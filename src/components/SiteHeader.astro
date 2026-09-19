@@ -1,10 +1,16 @@
 ---
 import { site } from '../config.js';
+import SearchShortcut from './SearchShortcut.astro';
 import ThemeToggle from './ThemeToggle.astro';
-import { path } from '../lib/url.js';
+import { basePath, path } from '../lib/url.js';
 
 // 局部变量叫 currentPath 而不是 path——后者已经是上面那个链接构造函数的名字
-const currentPath = Astro.url.pathname;
+// Astro.url.pathname 在子路径部署时含 base，而导航配置永远写站内逻辑路径。
+const prefix = basePath();
+const currentPath =
+  prefix && Astro.url.pathname.startsWith(prefix)
+    ? Astro.url.pathname.slice(prefix.length) || '/'
+    : Astro.url.pathname;
 
 /** 当前项判定。首页要精确匹配，其余按前缀匹配（这样 /posts/foo/ 也算「文章」）。 */
 const isCurrent = (href: string): boolean =>
@@ -25,12 +31,19 @@ const nav = [
     <nav class="site-nav" aria-label="主导航">
       {
         nav.map((item) => (
-          <a href={path(item.href)} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+          <a
+            href={path(item.href)}
+            aria-current={isCurrent(item.href) ? 'page' : undefined}
+            aria-keyshortcuts={item.href === '/search/' ? '/' : undefined}
+            data-search-link={item.href === '/search/' ? true : undefined}
+            title={item.href === '/search/' ? '搜索（快捷键 /）' : undefined}
+          >
             {item.label}
           </a>
         ))
       }
       <ThemeToggle />
     </nav>
+    {site.search.enabled && <SearchShortcut />}
   </div>
 </header>

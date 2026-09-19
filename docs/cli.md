@@ -4,33 +4,36 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **220 项**单元测试，全部离线 |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 104 项契约（条数由脚本自己打印） |
-| `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物，四类载体） |
-| `npm run verify:formats` | 内容格式探针：真的放一个 `.md`、一个 `.mdx` 与一个**草稿**进去，看前两者能不能产出页面、草稿会不会泄漏 |
+| `npm test` | **246 项**单元测试，全部离线 |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 177 项契约（条数由脚本自己打印） |
+| `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单） |
+| `npm run verify:formats` | 内容发布探针：真的放入 `.md`、`.mdx`、草稿和占用 `/about/` 的文章，验证格式产出、草稿隔离与系统路由冲突 |
 | `npm run verify:search` | 搜索可用性：页面语言一致性、索引语言、索引覆盖面。**不查结果**——查询行为只能在浏览器里测，原因见脚本注释 |
-| `npm run verify:online` | **线上烟测**：只打线上地址，验内容协商真的生效。需要 `SITE_ORIGIN`，没配就直接失败（不退回本地） |
-| `npm run verify:all` | 上面**六道**依次跑一遍（`check` + `test` + `verify` + `verify:search` + `verify:base` + `verify:formats`），**不含** `verify:online` |
+| `npm run verify:reproducible` | 扫描生产源码的构建时钟读取，并在 UTC / America/Los_Angeles 做完整构建、逐文件比较 SHA-256；覆盖 Astro 产物与 Pagefind 索引 |
+| `npm run verify:online` | **线上烟测**：只打线上地址，验内容协商与内容清单真的生效。需要 `SITE_ORIGIN`，没配就直接失败（不退回本地） |
+| `npm run verify:all` | 七道依次跑一遍（`check` + `test` + `verify` + `verify:search` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
 | `npm run check` | 类型检查（Astro + TypeScript） |
-| `npm run clean` | 删掉 `.astro/` 与 `dist/` |
+| `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 
 ---
 
 ## 两个会咬人的地方
 
-### 改了 markdown 配置后必须 `npm run clean`
+### 改了 markdown 配置或插件后必须 `npm run clean`
 
-内容层有缓存，不清理会让你以为改动没生效。这个坑我们踩过——当时所有
+Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你以为改动没生效。
+只删除根目录 `.astro/` 也不够。这个坑我们踩过——当时所有
 `[[链接]]` 都没渲染出来，而**全部测试全绿、构建成功、lint 通过**。
 
 原因：Astro 7 把默认 Markdown 处理器换掉后，`markdown.remarkPlugins`
 这个老写法**会被接受但不会执行**，只打印一条弃用警告。正确写法是
 `markdown.processor: unified({ ... })`，见 `astro.config.mjs` 里的注释。
 
-### `verify:base` 与 `verify:formats` 不是构建命令
+### 哪些验证会改写 `dist`
 
 - `verify:base` 会**重建** `dist`，而且用的是假 base
 - `verify:formats` 跑完会**清空** `dist`
+- `verify:reproducible` 会在两个时区重建，并保留 America/Los_Angeles 下的完整默认产物
 
 两者都是检查。跑完想要可部署的产物，请重新 `npm run build`。
 

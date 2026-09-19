@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 线上烟测：对着**真实部署**验内容协商，只查一两个稳定 URL，不抓全站。
+ * 线上烟测：对着**真实部署**验内容协商与内容清单，只查少量稳定出口，不抓全站。
  *
  * ── 为什么必须跑线上，而不是本地起个服务器 ──────────────────────────
  *
@@ -16,12 +16,14 @@
  *   SITE_ORIGIN=https://your-demo.example node scripts/smoke-online.mjs
  *   npm run verify:online -- --origin=https://your-demo.example
  */
+import { createHash } from 'node:crypto';
 
 const MARKDOWN_PAGE = '/markdown-for-agents/';
 /** 这个页面没有 markdown 孪生文件，用来验证"安全回落到 HTML" */
 const HTML_ONLY_PAGE = '/';
 /** 静态资源不应被重写 */
 const STATIC_ASSET = '/robots.txt';
+const CONTENT_MANIFEST = '/content-manifest.json';
 
 const args = process.argv.slice(2);
 const originArg = args.find((a) => a.startsWith('--origin='))?.slice('--origin='.length);
@@ -115,6 +117,94 @@ record(
   `静态资源没有被改写成 markdown（实际 ${asset.contentType || '无'}）`,
 );
 
+// ── ⑤ 内容清单必须能驱动一次真实的增量同步 ─────────────────────
+console.log(`\n⑤ ${CONTENT_MANIFEST}`);
+let manifestResponse;
+try {
+  manifestResponse = await request(CONTENT_MANIFEST, 'application/json');
+} catch (error) {
+  console.error(`\n内容清单请求失败：${error.message}`);
+  process.exit(1);
+}
+
+record(
+  manifestResponse.response.status === 200,
+  `内容清单返回 200（实际 ${manifestResponse.response.status}）`,
+);
+record(
+  manifestResponse.contentType.includes('application/json'),
+  `内容清单返回 application/json（实际 ${manifestResponse.contentType || '无'}）`,
+);
+
+let manifest;
+try {
+  manifest = await manifestResponse.response.json();
+  record(true, '内容清单是合法 JSON');
+} catch (error) {
+  record(false, `内容清单是合法 JSON（${error.message}）`);
+}
+
+if (manifest) {
+  record(manifest.format === 'letterpress-content-manifest', '内容清单格式名正确');
+  record(manifest.version === 1, '内容清单版本为 1');
+  const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
+  record(documents.length > 0, `内容清单包含文档（实际 ${documents.length} 篇）`);
+  record(manifest.documentCount === documents.length, 'documentCount 与真实条目数一致');
+
+  const ids = new Set(documents.map((doc) => doc.id));
+  const relationsResolve = documents.every((doc) =>
+    [...(doc.relations?.outgoing ?? []), ...(doc.relations?.backlinks ?? [])].every((id) => ids.has(id)),
+  );
+  record(relationsResolve, '所有链接关系都指向清单内的已知 ID');
+
+  // 只抽一篇，避免烟测变成全站爬虫；目标从清单推导，不写死使用者的内容。
+  const sample = documents[0];
+  if (sample?.urls?.markdown && sample?.markdown?.sha256) {
+    /*
+     * 清单里是站点配置的 canonical URL，烟测地址却可能是同一构建的预览域名。
+     * 直接请求 canonical 会测到另一个部署。先相对 `site.home` 取出文档路径，
+     * 再挂到本次 SITE_ORIGIN 下，才能保证验证的就是当前目标环境。
+     */
+    const manifestHome = new URL(manifest.site?.home ?? '/', `${origin}/`);
+    const canonicalSample = new URL(sample.urls.markdown, manifestHome);
+    const homeHref = manifestHome.href.endsWith('/') ? manifestHome.href : `${manifestHome.href}/`;
+    const belongsToSite = canonicalSample.href.startsWith(homeHref);
+    record(belongsToSite, `抽样孪生文件位于清单声明的站点根下（${sample.id}）`);
+    if (belongsToSite) {
+      const relative = canonicalSample.href.slice(homeHref.length);
+      const sampleUrl = new URL(relative, `${origin}/`);
+      try {
+        const sampleResponse = await fetch(sampleUrl, {
+          headers: { Accept: 'text/markdown' },
+          redirect: 'follow',
+        });
+        const body = Buffer.from(await sampleResponse.arrayBuffer());
+        const digest = createHash('sha256').update(body).digest('hex');
+
+        record(sampleResponse.status === 200, `抽样孪生文件返回 200（${sample.id}）`);
+        record(
+          (sampleResponse.headers.get('content-type') ?? '')
+            .toLowerCase()
+            .includes('text/markdown'),
+          `抽样孪生文件返回 text/markdown（${sample.id}）`,
+        );
+        record(
+          body.byteLength === sample.markdown.bytes,
+          `抽样孪生文件字节数与清单一致（${sample.id}）`,
+        );
+        record(
+          digest === sample.markdown.sha256,
+          `抽样孪生文件 SHA-256 与清单一致（${sample.id}）`,
+        );
+      } catch (error) {
+        record(false, `无法抓取清单指向的抽样孪生文件（${error.message}）`);
+      }
+    }
+  } else {
+    record(false, '清单没有可用于抽样的 markdown 文档');
+  }
+}
+
 // ── 汇总 ───────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(64));
 if (notes.length) {
@@ -127,4 +217,4 @@ if (problems.length) {
   }
   process.exit(1);
 }
-console.log('线上烟测通过：内容协商在真实部署上生效。');
+console.log('线上烟测通过：内容协商与增量同步清单在真实部署上均可用。');

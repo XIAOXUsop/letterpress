@@ -8,6 +8,7 @@
  */
 import { render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatContentDate } from '../../lib/date.js';
 import { path } from '../../lib/url.js';
 import Backlinks from '../../components/Backlinks.astro';
 import {
@@ -90,7 +91,7 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
               <span class="meta__sep">·</span>
               <span>
                 修订于
-                {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(updated)}
+                {formatContentDate(updated, { dateStyle: 'medium' })}
               </span>
             </>
           )

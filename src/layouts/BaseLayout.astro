@@ -50,6 +50,11 @@ interface Props {
    * 去抓一个 404，然后据此判断这个站不可靠。
    */
   markdownTwin?: boolean;
+  /** 当前页面更精确的 RSS（例如标签订阅）；全站 RSS 仍然保留。 */
+  alternateFeed?: {
+    readonly href: string;
+    readonly title: string;
+  };
 }
 
 const {
@@ -60,6 +65,7 @@ const {
   modifiedTime,
   ogImage,
   markdownTwin = false,
+  alternateFeed,
 } = Astro.props;
 
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
@@ -154,6 +160,16 @@ const shareImage = site.url ? absolute(ogImage ?? '/og.png', site.url) : null;
     {modifiedTime && <meta property="article:modified_time" content={modifiedTime.toISOString()} />}
 
     <link rel="alternate" type="application/rss+xml" title={site.title} href={rssHref} />
+    {
+      alternateFeed && (
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title={alternateFeed.title}
+          href={alternateFeed.href}
+        />
+      )
+    }
     {site.url && <link rel="sitemap" type="application/xml" href={sitemapHref} />}
 
     <script is:inline>

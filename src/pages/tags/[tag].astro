@@ -1,7 +1,9 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PostList from '../../components/PostList.astro';
+import { site } from '../../config.js';
 import { loadContent, publishedPosts, reportIssues, tagsOf } from '../../lib/content.js';
+import { path } from '../../lib/url.js';
 
 export async function getStaticPaths() {
   const content = await loadContent();
@@ -22,12 +24,19 @@ export async function getStaticPaths() {
 }
 
 const { tag, docs, content } = Astro.props;
+const feedHref = path(`/tags/${encodeURIComponent(tag)}/rss.xml`);
 ---
 
-<BaseLayout title={`标签：${tag}`} description={`带有「${tag}」标签的全部文章。`}>
+<BaseLayout
+  title={`标签：${tag}`}
+  description={`带有「${tag}」标签的全部文章。`}
+  alternateFeed={{ href: feedHref, title: `${tag} · ${site.title}` }}
+>
   <div class="page-header">
     <h1 class="page-header__title">标签：{tag}</h1>
-    <p class="page-header__lead">{docs.length} 篇文章</p>
+    <p class="page-header__lead">
+      {docs.length} 篇文章 · <a href={feedHref}>订阅此标签 RSS</a>
+    </p>
   </div>
 
   <PostList docs={docs} content={content} />

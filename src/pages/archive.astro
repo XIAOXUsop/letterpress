@@ -11,6 +11,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { site } from '../config.js';
 import { dateOfDoc, loadContent, publishedPosts, reportIssues } from '../lib/content.js';
+import { contentYear, formatContentDate } from '../lib/date.js';
 import { path } from '../lib/url.js';
 
 const content = await loadContent();
@@ -22,7 +23,7 @@ const posts = publishedPosts(content);
 const byYear = new Map<string, typeof posts>();
 for (const post of posts) {
   const date = dateOfDoc(content, post.slug);
-  const year = date ? String(date.getFullYear()) : '未标日期';
+  const year = date ? String(contentYear(date)) : '未标日期';
   const list = byYear.get(year) ?? [];
   list.push(post);
   byYear.set(year, list);
@@ -36,7 +37,7 @@ const years = [...byYear.keys()].sort((a, b) => {
 });
 
 const fmtDay = (d: Date): string =>
-  new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(d);
+  formatContentDate(d, { month: '2-digit', day: '2-digit' });
 ---
 
 <BaseLayout title="归档" description={`${site.title}的全部文章，按年份排列。`}>

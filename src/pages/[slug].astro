@@ -26,6 +26,7 @@ import {
   type SiteContent,
 } from '../lib/content.js';
 import { extractToc, shouldShowToc } from '../lib/toc.js';
+import { formatContentDate } from '../lib/date.js';
 import { path } from '../lib/url.js';
 
 export async function getStaticPaths() {
@@ -70,7 +71,7 @@ const tocEntries = tocEnabled(content, doc.slug) ? extractToc(entry.body ?? '') 
 const showToc = shouldShowToc(tocEntries);
 
 const formatDate = (d: Date): string =>
-  new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+  formatContentDate(d, { year: 'numeric', month: 'long', day: 'numeric' });
 
 /**
  * 阅读时长。

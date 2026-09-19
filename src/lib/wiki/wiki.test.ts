@@ -410,6 +410,39 @@ describe('lint', () => {
     expect(dup?.message).toContain('第二篇');
   });
 
+  it('文章不能占用系统路由，否则 HTML 会被静默跳过', () => {
+    const docs = [doc({ slug: 'about', title: '我的文章', kind: 'post' })];
+    const issue = lint(docs, buildGraph(docs)).find((item) => item.rule === 'reserved-post-slug');
+
+    expect(issue?.level).toBe('error');
+    expect(issue?.message).toContain('/about/');
+    expect(issue?.message).toContain('文章 HTML');
+  });
+
+  it('所有根层系统路由都受保护', () => {
+    const reserved = ['404', 'about', 'archive', 'posts', 'search', 'tags', 'wiki'];
+    for (const slug of reserved) {
+      const docs = [doc({ slug, kind: 'post' })];
+      expect(lint(docs, buildGraph(docs)).some((item) => item.rule === 'reserved-post-slug')).toBe(
+        true,
+      );
+    }
+  });
+
+  it('知识库条目有命名空间，不误报与根层页面同名的 slug', () => {
+    const docs = [doc({ slug: 'about', kind: 'wiki' })];
+    expect(lint(docs, buildGraph(docs)).some((item) => item.rule === 'reserved-post-slug')).toBe(
+      false,
+    );
+  });
+
+  it('草稿即使使用保留 slug 也不阻塞生产构建', () => {
+    const docs = [doc({ slug: 'about', kind: 'post', draft: true })];
+    expect(lint(docs, buildGraph(docs)).some((item) => item.rule === 'reserved-post-slug')).toBe(
+      false,
+    );
+  });
+
   it('孤儿页是警告级', () => {
     const docs = [doc({ slug: 'lonely', title: '没人引用我' })];
     const issues = lint(docs, buildGraph(docs));

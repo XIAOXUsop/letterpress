@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 内容格式探针：README 宣称支持的每一种格式，都必须真的能产出页面。
+ * 内容发布探针：格式支持、草稿隔离与系统路由隔离都打在真实构建上。
  *
  * ── 为什么需要它 ────────────────────────────────────────────────────
  *
@@ -19,6 +19,7 @@
  */
 
 import { runAstro } from './lib/astro.mjs';
+import { cleanBuildState } from './lib/clean.mjs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -31,13 +32,13 @@ const PROBES = [
   {
     file: 'zprobe-markdown-format.md',
     label: 'Markdown',
-    body: '---\ntitle: 格式探针 Markdown\nsummary: 验证 .md 能产出页面。\ndate: 2026-01-01\n---\n\n正文。\n',
+    body: '---\ntitle: 格式探针 Markdown\nsummary: 验证 .md 能产出页面。\ndate: 2026-01-01\ntags: [zprobe-format-feed]\n---\n\n正文。\n',
     expect: 'zprobe-markdown-format/index.html',
   },
   {
     file: 'zprobe-mdx-format.mdx',
     label: 'MDX',
-    body: '---\ntitle: 格式探针 MDX\nsummary: 验证 .mdx 能产出页面。\ndate: 2026-01-01\n---\n\n# 标题\n\n正文，含一个表达式：{1 + 1}\n',
+    body: '---\ntitle: 格式探针 MDX\nsummary: 验证 .mdx 能产出页面。\ndate: 2026-01-01\ntags: [zprobe-format-feed]\n---\n\n# 标题\n\n正文，含一个表达式：{1 + 1}\n',
     expect: 'zprobe-mdx-format/index.html',
   },
 ];
@@ -51,10 +52,19 @@ const DRAFT_PROBE = {
   file: 'zprobe-draft-must-not-ship.md',
   slug: 'zprobe-draft-must-not-ship',
   marker: 'DRAFT_PROBE_MUST_NOT_SHIP',
-  body: '---\ntitle: DRAFT_PROBE_MUST_NOT_SHIP\nsummary: 这条内容只用于验证草稿隔离。\ndate: 2026-01-01\ndraft: true\n---\n\nDRAFT_PROBE_MUST_NOT_SHIP\n',
+  body: '---\ntitle: DRAFT_PROBE_MUST_NOT_SHIP\nsummary: 这条内容只用于验证草稿隔离。\ndate: 2026-01-01\ntags: [zprobe-private-tag]\ndraft: true\n---\n\nDRAFT_PROBE_MUST_NOT_SHIP\n',
 };
 
-console.log('\n内容格式探针');
+/**
+ * 负向探针：Astro 原生只警告并跳过冲突文章，退出码仍是 0。
+ * lint 必须把它升级为构建失败，否则 HTML 与其他发布出口会互相矛盾。
+ */
+const RESERVED_ROUTE_PROBE = {
+  file: 'zprobe-reserved-route.md',
+  body: '---\ntitle: 保留路由探针\nsummary: 验证系统路由不会被文章占用。\ndate: 2026-01-01\nslug: about\n---\n\nRESERVED_ROUTE_PROBE\n',
+};
+
+console.log('\n内容发布探针');
 console.log('─'.repeat(64));
 
 const problems = [];
@@ -69,8 +79,7 @@ try {
   console.log(`\n放入 ${PROBES.length} 个格式探针和 1 个草稿隔离探针，构建…`);
 
   // 干净的构建：不要被上一次的产物骗到
-  await rm(join(root, '.astro'), { recursive: true, force: true });
-  await rm(dist, { recursive: true, force: true });
+  await cleanBuildState(root);
 
   const code = await runAstro(['build']);
   if (code !== 0) {
@@ -95,6 +104,47 @@ try {
       );
       console.log(`  ✗ ${probe.label} 没有产出页面`);
     }
+  }
+
+  // 新增机器可读出口后，格式支持与草稿隔离也必须覆盖它。
+  // 否则页面是对的，增量同步清单却可能漏掉 MDX 或泄漏草稿。
+  try {
+    const manifest = JSON.parse(await readFile(join(dist, 'content-manifest.json'), 'utf8'));
+    const ids = new Set(manifest.documents.map((doc) => doc.id));
+    for (const probe of PROBES) {
+      const slug = probe.file.replace(/\.(?:md|mdx)$/, '');
+      if (ids.has(`post:${slug}`)) {
+        console.log(`  ✓ ${probe.label} 进入了内容清单`);
+      } else {
+        problems.push(`${probe.label} 页面存在，但内容清单漏掉了 post:${slug}`);
+      }
+    }
+    if (ids.has(`post:${DRAFT_PROBE.slug}`)) {
+      problems.push(`草稿泄漏到内容清单：post:${DRAFT_PROBE.slug}`);
+    } else {
+      console.log('  ✓ 草稿没有进入内容清单');
+    }
+  } catch (error) {
+    problems.push(
+      `内容清单不存在或无法解析：${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  // 两种受支持格式共用一个标签，真实构建必须把它们都放进同一份全文订阅。
+  try {
+    const tagFeed = await readFile(join(dist, 'tags', 'zprobe-format-feed', 'rss.xml'), 'utf8');
+    const includesMarkdown = tagFeed.includes('<title>格式探针 Markdown</title>');
+    const includesMdx = tagFeed.includes('<title>格式探针 MDX</title>');
+    const fullItems = tagFeed.match(/<content:encoded>/g)?.length ?? 0;
+    if (includesMarkdown && includesMdx && fullItems === 2) {
+      console.log('  ✓ 标签 RSS 同时支持 Markdown、MDX 与全文输出');
+    } else {
+      problems.push('标签 RSS 没有完整收录 Markdown、MDX 两种格式的全文');
+    }
+  } catch (error) {
+    problems.push(
+      `格式探针的标签 RSS 不存在或无法读取：${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   const forbiddenOutputs = [
@@ -130,20 +180,39 @@ try {
     problems.push(`草稿泄漏到 ${unique.join('、')}`);
     console.log(`  ✗ 草稿泄漏到 ${unique.join('、')}`);
   }
+
+  try {
+    await readFile(join(dist, 'tags', 'zprobe-private-tag', 'rss.xml'));
+    problems.push('只被草稿使用的标签仍生成了公开 RSS');
+  } catch {
+    console.log('  ✓ 只被草稿使用的标签不会生成 RSS');
+  }
+
+  // 前面的正向构建已通过，所以这一次唯一新增变量就是冲突文章。
+  await writeFile(join(probeDir, RESERVED_ROUTE_PROBE.file), RESERVED_ROUTE_PROBE.body, 'utf8');
+  await cleanBuildState(root);
+  console.log('\n放入占用 /about/ 的文章，确认构建会明确失败…');
+  const reservedCode = await runAstro(['build']);
+  if (reservedCode === 0) {
+    problems.push('文章占用系统路由时构建仍然成功——HTML 会被静默跳过');
+    console.log('  ✗ 系统路由冲突没有阻断构建');
+  } else {
+    console.log('  ✓ 系统路由冲突会阻断构建');
+  }
 } finally {
   // 无论如何都要清掉探针，别把它们留在仓库里
   for (const probe of PROBES) {
     await rm(join(probeDir, probe.file), { force: true });
   }
   await rm(join(probeDir, DRAFT_PROBE.file), { force: true });
-  await rm(join(root, '.astro'), { recursive: true, force: true });
-  await rm(dist, { recursive: true, force: true });
+  await rm(join(probeDir, RESERVED_ROUTE_PROBE.file), { force: true });
+  await cleanBuildState(root);
   console.log('\n探针已清理（内容层缓存与产物也一并清掉，避免污染后续构建）');
 }
 
 console.log('\n' + '─'.repeat(64));
 if (problems.length === 0) {
-  console.log('内容格式探针通过。\n');
+  console.log('内容发布探针通过。\n');
 } else {
   for (const p of problems) console.log(`  ✗ ${p}`);
   console.log('');

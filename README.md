@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-220%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-246%20项-2C5E2E)
 
 </div>
 
@@ -35,7 +35,7 @@
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
-- **0 external JS files** · 220 unit tests · 104 end-to-end contracts · MIT
+- **0 external JS files** · 246 unit tests · 177 end-to-end contracts · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -80,6 +80,11 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
 实测同一页面的 markdown 比 HTML 省 **64.5% / 66.5%** 的 token。
+
+需要长期同步内容的 Agent / RAG 管线还可以读取
+[`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
+它为每篇真实 `.md` 产物提供稳定 ID、SHA-256、字节数与链接关系，先比较 hash，
+只下载变化的内容。清单不写构建时间，因此相同源码会得到逐字节相同的结果。
 
 三个会**静默失败**的地方——不报错，只是永远不生效：
 
@@ -132,12 +137,13 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **220 项**，全部离线，无网络依赖 |
-| 端到端契约 | **104 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
+| 单元测试 | **246 项**，全部离线，无网络依赖 |
+| 端到端契约 | **177 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
+| 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **93 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **约 1.1 秒**，整条 `npm run build` 约 **2.6 秒**（差值是 npm 启动开销 + Pagefind 索引 0.14 秒） |
 | 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
-| CSS | 单文件 **21.7 KB / gzip 4.6 KB** |
+| CSS | 单文件 **22.8 KB / gzip 4.9 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
 
@@ -191,6 +197,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 | [竞品对照](docs/compare.md) | vs AstroPaper / Fuwari / PaperMod，以及本项目缺什么 |
 | [功能清单](docs/features.md) | 完整功能表、没有做的、为什么删掉「定时发布」 |
 | [内容协商](docs/content-negotiation.md) | 原理、七个 agent、会静默失败的三个地方、收益率 |
+| [内容清单](docs/content-manifest.md) | Agent / RAG 如何按 SHA-256 增量同步，以及格式的真实边界 |
 | [中文排版取值](docs/cjk-typography.md) | 行高 / 字重 / 行宽 / 原生属性 / 字体栈 |
 | [部署](docs/deploy.md) | 四个平台、子路径、`Vary: Accept`、安全头 |
 | [命令行](docs/cli.md) | 每个脚本做什么、两个会咬人的地方 |
