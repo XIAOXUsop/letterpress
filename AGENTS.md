@@ -40,7 +40,8 @@ tags: [标签一, 标签二]
 
 **`summary` 不能省。** 它是 agent 判断「要不要读这一页」的唯一依据。
 
-未写完的加 `draft: true`——草稿不进构建、不进列表、不进 llms.txt。
+未写完的加 `draft: true`——草稿不进构建、不进列表、不进 llms.txt，
+也不会进入 `content-manifest.json` 或 `content.ndjson` 机器出口。
 
 ---
 

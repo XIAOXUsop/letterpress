@@ -15,7 +15,7 @@ export const config = {
    * 排除静态资源与已有 `.md` 后缀的路径。
    * matcher 只支持正则，不支持函数——所以判断条件写在这里而不是共享逻辑里。
    */
-  matcher: '/((?!_astro/|favicon|.*\\.(?:css|js|mjs|json|xml|txt|ico|svg|png|jpe?g|gif|webp|avif|woff2?|md)$).*)',
+  matcher: '/((?!_astro/|favicon|.*\\.(?:css|js|mjs|json|ndjson|xml|txt|ico|svg|png|jpe?g|gif|webp|avif|woff2?|md)$).*)',
 };
 
 export default async function middleware(request: Request): Promise<Response | undefined> {

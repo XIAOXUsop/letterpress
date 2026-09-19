@@ -47,6 +47,7 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.ndjson': 'application/x-ndjson; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
 };
 
@@ -425,12 +426,110 @@ console.log('\n[1e] Agent 增量同步清单');
   check(manifest.edgeCount === countedEdges, 'edgeCount 与实际出链数一致');
 }
 
-// ── 1f. 标题永久链接必须指回真实标题 id ────────────────────────────
+// ── 1f. NDJSON 首次全量导出 ────────────────────────────────────────
+console.log('\n[1f] Agent / RAG 全量内容导出');
+{
+  const response = await fetch(`${base}/content.ndjson`);
+  check(response.ok, '/content.ndjson 可访问');
+  check(
+    (response.headers.get('content-type') ?? '').includes('application/x-ndjson'),
+    '全量导出 Content-Type 是 application/x-ndjson',
+  );
+
+  const body = await response.text();
+  const rawLines = body.split('\n');
+  const lines = rawLines.filter((line) => line !== '');
+  check(body.endsWith('\n') && lines.length > 0, '导出非空且保留 NDJSON 结尾换行');
+
+  const records = [];
+  let parseError = '';
+  for (const [index, line] of lines.entries()) {
+    try {
+      records.push(JSON.parse(line));
+    } catch (error) {
+      parseError = `第 ${index + 1} 行：${error instanceof Error ? error.message : String(error)}`;
+      break;
+    }
+  }
+  check(parseError === '', '每一行都是独立、合法的 JSON 对象', parseError);
+  check(
+    records.every(
+      (record) =>
+        record.format === 'letterpress-content-record' && record.version === 1,
+    ),
+    '每条记录都声明明确的格式名与版本',
+  );
+
+  const manifest = JSON.parse(await readFile(join(DIST, 'content-manifest.json'), 'utf8'));
+  const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
+  const recordIds = records.map((record) => record.id);
+  const manifestIds = documents.map((document) => document.id);
+  check(
+    JSON.stringify(recordIds) === JSON.stringify(manifestIds),
+    '导出记录与 manifest 的 ID、数量和稳定顺序完全一致',
+  );
+
+  const byId = new Map(documents.map((document) => [document.id, document]));
+  let metadataMismatch = '';
+  let contentMismatch = '';
+  for (const record of records) {
+    const document = byId.get(record.id);
+    if (!document) {
+      metadataMismatch ||= `${record.id} 不在 manifest`;
+      continue;
+    }
+
+    const { markdown, ...manifestMetadata } = document;
+    const { format, version, site, content, ...recordMetadata } = record;
+    if (
+      JSON.stringify(recordMetadata) !== JSON.stringify(manifestMetadata) ||
+      JSON.stringify(site) !== JSON.stringify(manifest.site) ||
+      content?.mediaType !== markdown.mediaType ||
+      content?.bytes !== markdown.bytes ||
+      content?.sha256 !== markdown.sha256
+    ) {
+      metadataMismatch ||= record.id;
+    }
+
+    const relative = record.kind === 'wiki' ? `wiki/${record.slug}.md` : `${record.slug}.md`;
+    const actual = await readFile(join(DIST, relative), 'utf8').catch(() => null);
+    const digest =
+      typeof content?.text === 'string'
+        ? createHash('sha256').update(content.text, 'utf8').digest('hex')
+        : '';
+    if (
+      actual === null ||
+      content?.text !== actual ||
+      Buffer.byteLength(content?.text ?? '', 'utf8') !== content?.bytes ||
+      digest !== content?.sha256
+    ) {
+      contentMismatch ||= record.id;
+    }
+  }
+  check(metadataMismatch === '', '每条导出的元数据与 manifest 完全一致', metadataMismatch);
+  check(
+    contentMismatch === '',
+    '每条导出的正文与真实 .md 文件逐字节一致，bytes 与 SHA-256 正确',
+    contentMismatch,
+  );
+
+  const staticHeaders = await readFile(join(DIST, '_headers'), 'utf8').catch(() => '');
+  const vercelConfig = await readFile(join(process.cwd(), 'vercel.json'), 'utf8').catch(() => '');
+  check(
+    staticHeaders.includes('/content.ndjson') &&
+      staticHeaders.includes('application/x-ndjson') &&
+      vercelConfig.includes('"source": "/content.ndjson"') &&
+      vercelConfig.includes('application/x-ndjson'),
+    'Cloudflare Pages、Netlify 与 Vercel 都显式配置 NDJSON MIME',
+  );
+}
+
+// ── 1g. 标题永久链接必须指回真实标题 id ────────────────────────────
 /**
  * 单测能证明插件会改一棵假 AST，但证明不了它真的接进 Astro 管线，
  * 也证明不了标题 id 是在插件之前生成的。这里直接检查构建产物。
  */
-console.log('\n[1f] 小节永久链接');
+console.log('\n[1g] 小节永久链接');
 {
   const response = await fetch(`${base}/reproducible-builds/`);
   const html = await response.text();

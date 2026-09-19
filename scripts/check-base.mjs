@@ -157,7 +157,7 @@ async function scanDoubled(dir) {
     }
     // HTML 之外还有 llms.txt / rss.xml / sitemap —— 它们是纯文本产物，
     // 恰恰是最容易漏、也最容易被 agent 与阅读器读到的那几份
-    if (!/\.(html|txt|xml|json)$/.test(entry.name)) continue;
+    if (!/\.(html|txt|xml|json|ndjson)$/.test(entry.name)) continue;
 
     const text = await readFile(full, 'utf8');
     const rel = full.slice(dist.length + 1).replace(/\\/g, '/');
@@ -209,6 +209,15 @@ for (const name of ['llms.txt', 'llms-full.txt']) {
     ...[...text.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]),
     ...[...text.matchAll(/(?:^|\s)(https?:\/\/\S+)/gm)].map((m) => m[1]),
   ];
+
+  // 给机器看的同步入口也必须是可直接访问的完整地址。只扫描文章链接会漏掉
+  // notes 里写死的 `/content.ndjson`，在项目站子路径下它会悄悄指向域名根。
+  for (const endpoint of ['content.ndjson', 'content-manifest.json']) {
+    const expected = `https://xiaoxusop.github.io${FAKE_BASE}/${endpoint}`;
+    if (!urls.includes(expected)) {
+      textLinkProblems.push(`${name}: 缺少带 base 的机器入口 ${expected}`);
+    }
+  }
 
   for (const url of urls) {
     if (!url.startsWith('http')) continue;
@@ -305,6 +314,42 @@ try {
 } catch (error) {
   const problem = `内容清单不存在或无法解析：${error instanceof Error ? error.message : String(error)}`;
   problems.set(problem, ['内容清单']);
+  console.log(`  ✗ ${problem}`);
+}
+
+// NDJSON 每一行都是 JSON，但扩展名与 manifest 不同，必须单独验证其中全部 URL。
+console.log('\n检查全量内容导出里的链接');
+try {
+  const body = await readFile(join(dist, 'content.ndjson'), 'utf8');
+  const records = body
+    .trimEnd()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const exportProblems = [];
+  for (const record of records) {
+    const urls = [record.site?.home, ...Object.values(record.urls ?? {})];
+    for (const value of urls) {
+      if (typeof value !== 'string') {
+        exportProblems.push(`${record.id ?? '未知记录'} 存在非字符串 URL`);
+        continue;
+      }
+      const pathname = value.startsWith('http') ? new URL(value).pathname : value;
+      if (!pathname.startsWith(`${FAKE_BASE}/`)) exportProblems.push(`缺 base 前缀 ${value}`);
+      if (pathname.includes(`${FAKE_BASE}${FAKE_BASE}`)) exportProblems.push(`前缀翻倍 ${value}`);
+    }
+  }
+
+  if (records.length > 0 && exportProblems.length === 0) {
+    console.log(`  ✓ content.ndjson 的 ${records.length} 条记录链接前缀正确`);
+  } else {
+    if (records.length === 0) exportProblems.push('content.ndjson 没有记录');
+    for (const problem of exportProblems) problems.set(problem, ['全量内容导出']);
+    for (const problem of exportProblems.slice(0, 8)) console.log(`  ✗ ${problem}`);
+  }
+} catch (error) {
+  const problem = `全量内容导出不存在或无法解析：${error instanceof Error ? error.message : String(error)}`;
+  problems.set(problem, ['全量内容导出']);
   console.log(`  ✗ ${problem}`);
 }
 

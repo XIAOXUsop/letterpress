@@ -163,6 +163,7 @@ describe('negotiate', () => {
     '/favicon.ico',
     '/rss.xml',
     '/llms.txt',
+    '/content.ndjson',
     '/sitemap-index.xml',
     '/image.png',
     '/font.woff2',

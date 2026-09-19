@@ -32,9 +32,10 @@ SITE_BASE=/仓库名 npm run build
 npm run verify:base
 ```
 
-它用一个假 base 重建产物，然后扫**五类载体**：`href`/`src` 属性、
+它用一个假 base 重建产物，然后扫**六类载体**：`href`/`src` 属性、
 `<script>` 里拼出来的路径、`https://` 开头的绝对 URL、纯文本产物
-（`llms.txt` / `robots.txt`），以及 JSON 内容清单。每一类都是踩过之后才补上的。
+（`llms.txt` / `robots.txt`）、JSON 内容清单，以及逐行 JSON 全量导出。
+每一类都是踩过之后才补上的。
 
 > ⚠️ 在 Windows 的 Git Bash 里，`SITE_BASE=/仓库名` 会被 MSYS 当成路径转换成
 > `D:/App/Git/仓库名`。加 `MSYS_NO_PATHCONV=1` 前缀。
@@ -55,6 +56,10 @@ npm run verify:base
 
 - Cloudflare / Netlify → `public/_headers`（两者都认这个文件）
 - Vercel → `vercel.json`（内容与 `_headers` 逐条对应）
+
+两份配置还显式把 `/content.ndjson` 声明为
+`application/x-ndjson; charset=utf-8`。这个扩展名不是所有静态托管都认识；若换到
+其他平台，应补同等规则，不能在开启 `nosniff` 后仍让它返回二进制兜底类型。
 
 > ⚠️ **Vercel 这一份没有在 Vercel 上实际部署验证过。** 本项目只把 Demo 跑在
 > GitHub Pages 上（那是唯一一个**不支持**内容协商的平台）。`vercel.json` 是按
@@ -93,7 +98,9 @@ SITE_ORIGIN=https://your-demo.example npm run verify:online
 `Vary: Accept`、markdown 侧带 `Content-Location` 与 `rel="alternate"` 的 `Link`、
 没有 markdown 孪生的页面安全回落到 HTML、静态资源不被重写；还会读取
 `content-manifest.json`，从中推导一篇真实文档，确认线上 `.md` 的字节数和
-SHA-256 与清单一致。它只抽一篇，不会退化成每次全站抓取。
+SHA-256 与清单一致；还会直接消费响应流、逐行解析 `content.ndjson`，确认其 MIME、
+ID 集合、版本、全部元数据及全部正文 hash。`.md` 仍只抽一篇，不会退化成每次逐页爬站；
+NDJSON 本来就已整份下载，因此逐条校验不会增加请求数。
 
 > **它不会因为线上不可用就退回本地服务器。** 没有配置 `SITE_ORIGIN` 时它直接失败退出。
 > 一个能自己找退路的烟测，唯一的作用是把部署事故伪装成绿色。

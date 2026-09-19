@@ -17,6 +17,8 @@
  *   npm run verify:online -- --origin=https://your-demo.example
  */
 import { createHash } from 'node:crypto';
+import { createInterface } from 'node:readline';
+import { Readable } from 'node:stream';
 
 const MARKDOWN_PAGE = '/markdown-for-agents/';
 /** 这个页面没有 markdown 孪生文件，用来验证"安全回落到 HTML" */
@@ -24,6 +26,7 @@ const HTML_ONLY_PAGE = '/';
 /** 静态资源不应被重写 */
 const STATIC_ASSET = '/robots.txt';
 const CONTENT_MANIFEST = '/content-manifest.json';
+const CONTENT_EXPORT = '/content.ndjson';
 
 const args = process.argv.slice(2);
 const originArg = args.find((a) => a.startsWith('--origin='))?.slice('--origin='.length);
@@ -205,6 +208,84 @@ if (manifest) {
   }
 }
 
+// ── ⑥ 全量导出必须能作为 manifest 的首次同步快照 ───────────────
+console.log(`\n⑥ ${CONTENT_EXPORT}`);
+let exportResponse;
+try {
+  exportResponse = await request(CONTENT_EXPORT, 'application/x-ndjson');
+} catch (error) {
+  console.error(`\n全量内容导出请求失败：${error.message}`);
+  process.exit(1);
+}
+
+record(
+  exportResponse.response.status === 200,
+  `全量内容导出返回 200（实际 ${exportResponse.response.status}）`,
+);
+record(
+  exportResponse.contentType.includes('application/x-ndjson'),
+  `全量内容导出返回 application/x-ndjson（实际 ${exportResponse.contentType || '无'}）`,
+);
+
+let exportRecords = [];
+try {
+  if (!exportResponse.response.body) throw new Error('响应没有可读正文');
+  const lines = createInterface({
+    input: Readable.fromWeb(exportResponse.response.body),
+    crlfDelay: Infinity,
+  });
+  for await (const line of lines) {
+    if (line) exportRecords.push(JSON.parse(line));
+  }
+  record(
+    exportRecords.length > 0,
+    `全量内容导出可通过响应流逐行解析（实际 ${exportRecords.length} 条）`,
+  );
+} catch (error) {
+  record(false, `全量内容导出可通过响应流逐行解析（${error.message}）`);
+}
+
+if (manifest && exportRecords.length > 0) {
+  const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
+  record(
+    exportRecords.map((item) => item.id).join('\n') === documents.map((item) => item.id).join('\n'),
+    '全量导出的 ID、数量与顺序和 manifest 一致',
+  );
+  record(
+    exportRecords.every(
+      (item) => item.format === 'letterpress-content-record' && item.version === 1,
+    ),
+    '全量导出的格式名与版本正确',
+  );
+
+  const documentsById = new Map(documents.map((document) => [document.id, document]));
+  const metadataMatch = exportRecords.every((item) => {
+    const document = documentsById.get(item.id);
+    if (!document) return false;
+    const { markdown, ...manifestMetadata } = document;
+    const { format, version, site, content, ...exportMetadata } = item;
+    return (
+      JSON.stringify(exportMetadata) === JSON.stringify(manifestMetadata) &&
+      JSON.stringify(site) === JSON.stringify(manifest.site) &&
+      content?.mediaType === markdown.mediaType &&
+      content?.bytes === markdown.bytes &&
+      content?.sha256 === markdown.sha256
+    );
+  });
+  record(metadataMatch, '全量导出的每条元数据都与 manifest 一致');
+
+  const contentsMatch = exportRecords.every((item) => {
+    if (typeof item.content?.text !== 'string') return false;
+    const bytes = Buffer.from(item.content.text, 'utf8');
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    return bytes.byteLength === item.content.bytes && digest === item.content.sha256;
+  });
+  record(
+    contentsMatch,
+    `全部 ${exportRecords.length} 条导出正文的字节数与 SHA-256 正确`,
+  );
+}
+
 // ── 汇总 ───────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(64));
 if (notes.length) {
@@ -217,4 +298,4 @@ if (problems.length) {
   }
   process.exit(1);
 }
-console.log('线上烟测通过：内容协商与增量同步清单在真实部署上均可用。');
+console.log('线上烟测通过：内容协商、全量导出与增量同步清单在真实部署上均可用。');

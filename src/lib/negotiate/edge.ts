@@ -40,7 +40,7 @@ function isExcluded(pathname: string): boolean {
   // 已经有 .md 后缀的不重复处理，否则 /foo.md 会被改写成 /foo.md.md
   if (pathname.endsWith('.md')) return true;
   // 非页面资源
-  if (/\.(css|js|mjs|json|xml|txt|ico|svg|png|jpe?g|gif|webp|avif|woff2?|ttf|map)$/i.test(pathname)) {
+  if (/\.(css|js|mjs|json|ndjson|xml|txt|ico|svg|png|jpe?g|gif|webp|avif|woff2?|ttf|map)$/i.test(pathname)) {
     return true;
   }
   return false;

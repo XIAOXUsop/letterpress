@@ -33,6 +33,12 @@
   Content-Type: text/markdown; charset=utf-8
   Vary: Accept
 
+# 首次导入用的逐行 JSON 内容快照。扩展名不是所有静态托管都认识，
+# 所以不能依赖平台猜 MIME。
+/content.ndjson
+  Content-Type: application/x-ndjson; charset=utf-8
+  X-Content-Type-Options: nosniff
+
 # 带指纹的静态资源可以永久缓存——文件名随内容变化，缓存不会过期。
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable

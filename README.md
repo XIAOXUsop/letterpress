@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-246%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-263%20项-2C5E2E)
 
 </div>
 
@@ -35,7 +35,7 @@
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
-- **0 external JS files** · 246 unit tests · 185 end-to-end contracts · MIT
+- **0 external JS files** · 263 unit tests · 194 end-to-end contracts · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -85,6 +85,17 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
 它为每篇真实 `.md` 产物提供稳定 ID、SHA-256、字节数与链接关系，先比较 hash，
 只下载变化的内容。清单不写构建时间，因此相同源码会得到逐字节相同的结果。
+
+首次接入不必按清单逐篇请求：[`/content.ndjson`](https://xiaoxusop.github.io/letterpress/content.ndjson)
+把同一批元数据与完整 Markdown 逐行输出，一次请求即可流式导入；后续再切回 manifest
+做增量同步。它只负责可靠交付原文，不假装替消费端决定分块、向量模型或检索策略。
+
+仓库还提供了可直接运行的参考同步器，把首次导入、按 hash 更新、删除传播、本地损坏修复
+和失败回滚串成闭环：
+
+```bash
+npm run sync:content -- --origin=https://example.com --output=.verify/content-mirror
+```
 
 三个会**静默失败**的地方——不报错，只是永远不生效：
 
@@ -137,10 +148,10 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **246 项**，全部离线，无网络依赖 |
-| 端到端契约 | **185 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
+| 单元测试 | **263 项**，全部离线，无网络依赖 |
+| 端到端契约 | **194 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
-| 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **106 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
+| 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **107 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **约 1.1 秒**，整条 `npm run build` 约 **2.6 秒**（差值是 npm 启动开销 + Pagefind 索引 0.14 秒） |
 | 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
 | CSS | 单文件 **23.7 KB / gzip 5.1 KB** |
@@ -198,6 +209,8 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 | [功能清单](docs/features.md) | 完整功能表、没有做的、为什么删掉「定时发布」 |
 | [内容协商](docs/content-negotiation.md) | 原理、七个 agent、会静默失败的三个地方、收益率 |
 | [内容清单](docs/content-manifest.md) | Agent / RAG 如何按 SHA-256 增量同步，以及格式的真实边界 |
+| [内容镜像同步](docs/content-sync.md) | 可运行的首次导入、增量更新、删除传播、损坏修复与失败回滚 |
+| [全量导出](docs/content-export.md) | NDJSON 首次导入、逐行格式、校验与适用边界 |
 | [中文排版取值](docs/cjk-typography.md) | 行高 / 字重 / 行宽 / 原生属性 / 字体栈 |
 | [部署](docs/deploy.md) | 四个平台、子路径、`Vary: Accept`、安全头 |
 | [命令行](docs/cli.md) | 每个脚本做什么、两个会咬人的地方 |

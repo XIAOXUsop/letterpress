@@ -50,5 +50,5 @@ export const config: Config = {
    * `.md` 也要排除，否则 `/foo.md` 会再次进入函数被改写成 `/foo.md.md`。
    * （共享逻辑里也有这个判断，这里是省额度的第一道拦截。）
    */
-  path: '/((?!_astro|favicon|.*\\.(?:css|js|mjs|json|xml|txt|ico|svg|png|jpe?g|gif|webp|avif|woff2?|md)$).*)',
+  path: '/((?!_astro|favicon|.*\\.(?:css|js|mjs|json|ndjson|xml|txt|ico|svg|png|jpe?g|gif|webp|avif|woff2?|md)$).*)',
 };

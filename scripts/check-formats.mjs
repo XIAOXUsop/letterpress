@@ -130,6 +130,32 @@ try {
     );
   }
 
+  // 首次全量导出必须与增量清单覆盖同一批内容；否则接入方式不同，看到的站点也不同。
+  try {
+    const lines = (await readFile(join(dist, 'content.ndjson'), 'utf8'))
+      .trimEnd()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const byId = new Map(lines.map((record) => [record.id, record]));
+    const markdown = byId.get('post:zprobe-markdown-format');
+    const mdx = byId.get('post:zprobe-mdx-format');
+    const draft = byId.get(`post:${DRAFT_PROBE.slug}`);
+    if (
+      markdown?.content?.text.includes('格式探针 Markdown') &&
+      mdx?.content?.text.includes('格式探针 MDX') &&
+      !draft
+    ) {
+      console.log('  ✓ 全量导出收录 Markdown / MDX 正文且排除草稿');
+    } else {
+      problems.push('全量导出没有正确覆盖 Markdown、MDX 与草稿隔离');
+    }
+  } catch (error) {
+    problems.push(
+      `全量内容导出不存在或无法解析：${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   // 两种受支持格式共用一个标签，真实构建必须把它们都放进同一份全文订阅。
   try {
     const tagFeed = await readFile(join(dist, 'tags', 'zprobe-format-feed', 'rss.xml'), 'utf8');
@@ -163,7 +189,7 @@ try {
   }
 
   for (const relative of await readdir(dist, { recursive: true })) {
-    if (!/\.(?:html|md|txt|xml|json)$/i.test(relative)) continue;
+    if (!/\.(?:html|md|txt|xml|json|ndjson)$/i.test(relative)) continue;
     const full = join(dist, relative);
     try {
       const text = await readFile(full, 'utf8');

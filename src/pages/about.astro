@@ -91,6 +91,9 @@ const onGitHubPages = site.url.includes('github.io');
         <a href={path('/content-manifest.json')}>/content-manifest.json</a>——可版本化的增量同步清单，包含 URL、摘要、链接关系与内容 hash
       </li>
       <li>
+        <a href={path('/content.ndjson')}>/content.ndjson</a>——首次全量导入，一行一篇，可流式处理
+      </li>
+      <li>
         <a href={path('/rss.xml')}>/rss.xml</a>——订阅
       </li>
     </ul>

@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "check": "astro check",
     "clean": "node scripts/clean.mjs",
+    "sync:content": "node scripts/sync-content.mjs",
     "verify": "npm run clean && npm run build && node scripts/bundle-and-verify.mjs",
     "verify:only": "node scripts/bundle-and-verify.mjs",
     "verify:base": "node scripts/check-base.mjs",

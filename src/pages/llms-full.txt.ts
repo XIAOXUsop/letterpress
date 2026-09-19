@@ -16,6 +16,7 @@ import { buildLlmsFullTxt } from '../lib/wiki/llms.js';
 export const GET: APIRoute = async () => {
   const content = await loadContent();
   reportIssues(content.issues);
+  const siteUrl = siteOrigin(site.url) + basePath();
 
   const body = buildLlmsFullTxt(content.docs, {
     siteName: site.title,
@@ -29,12 +30,13 @@ export const GET: APIRoute = async () => {
      * 合起来就是「域名 + 且仅一个部署前缀」。
      * 少了后半截，llms.txt 里所有链接都会指向域名根。
      */
-    siteUrl: siteOrigin(site.url) + basePath(),
+    siteUrl,
     tagline: site.tagline,
     // 纯文本产物里中英文之间要手动加空格——`text-autospace` 只在 HTML 里生效。
     notes: [
       `本站以 ${site.lang} 为主。`,
-      '需要增量同步时，先读取 /content-manifest.json，按 sha256 只抓取变化的 .md 文件。',
+      `首次全量导入可读取 [content.ndjson](${siteUrl}/content.ndjson)：一行一篇，包含完整原文。`,
+      `后续读取 [content-manifest.json](${siteUrl}/content-manifest.json)，按 sha256 只抓取变化的 .md 文件。`,
     ],
   });
 
