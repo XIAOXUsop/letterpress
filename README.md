@@ -167,6 +167,13 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 - **Demo 部署在 GitHub Pages 上，因此跑不了内容协商**（Pages 的响应头不可改）。
   其余功能都可在线验证；内容协商需要 Cloudflare Pages / Netlify / Vercel，
   本地可用 `npm run verify` 实测——它会打印真实的 token 节省数字。
+- **同一个限制还影响 `/content.ndjson` 的 Content-Type。** 源码里设的是
+  `application/x-ndjson`，三个平台的配置也都声明了它，但 **Pages 上下不来**——
+  2026-09-20 实测线上 Demo 返回的是 `application/octet-stream`
+  （`.ndjson` 不在 Pages 认识的扩展名表里，响应头又不可改）。
+  **按行解析不受影响**（`fetch(...).text()`、逐行读都照常），
+  但按 MIME 分流、把 `octet-stream` 当下载附件的客户端会中招。
+  详见 `docs/content-export.md`。
 - **内容协商只对三个平台有现成实现。** GitHub Pages 不行；其他平台需自写垫片，
   共享逻辑在 `src/lib/negotiate/edge.ts`，约 40 行。
 - **Vercel 的头配置（`vercel.json`）没有在 Vercel 上实际部署验证过**——

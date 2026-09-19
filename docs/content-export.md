@@ -18,6 +18,26 @@
 响应使用业界常见但未冒充正式通用标准的 `application/x-ndjson`。Cloudflare Pages、
 Netlify 与 Vercel 的仓库配置都显式声明了这个 MIME，不依赖托管平台按扩展名猜测。
 
+> ⚠️ **GitHub Pages 是例外，而且是实测出来的。** 2026-09-20 对线上 Demo
+> （README 里给的就是它）curl 一次 `/content.ndjson`，拿到的是
+>
+> ```
+> HTTP/2 200
+> content-type: application/octet-stream      ← 不是 application/x-ndjson
+> ```
+>
+> 原因是 Pages **不允许自定义响应头**，而 `.ndjson` 又不在它认识的扩展名表里，
+> 于是退回默认的二进制类型。这与「Pages 上跑不了内容协商」是同一个限制，
+> 只是那条已经在 README 与 `docs/deploy.md` 里写过、这条此前没写。
+>
+> **影响与不影响的**：按行解析不受影响——`fetch(...).text()` / 逐行读都照常，
+> 消费端不该按 Content-Type 拒绝它。真正会受影响的是那些**按 MIME 分流**的客户端
+> （例如某些抓取器把 `application/octet-stream` 当成下载附件）。
+> 要在意的话：换三个平台之一，或自己给响应补头。
+>
+> 另外 Pages 也不会下发源码里那行 `X-Content-Type-Options: nosniff`——同样因为它
+> 不可改响应头。
+
 ## 一条记录包含什么
 
 下面只展示结构，示例值不对应仓库中的真实文章：
