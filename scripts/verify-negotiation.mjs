@@ -831,6 +831,9 @@ console.log(
   `  ${'页面'.padEnd(24)} ${'HTML token'.padStart(12)} ${'MD token'.padStart(10)} ${'节省'.padStart(8)}`,
 );
 
+/** 逐页实测结果，供下面与文档里的数字比对（文档那张表就是这段输出的快照）。 */
+const measured = [];
+
 for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/content-negotiation/']) {
   const html = await fetch(`${base}${page}`, { headers: { Accept: 'text/html' } });
   const htmlText = await html.text();
@@ -846,6 +849,7 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
   const t1 = estimateTokens(htmlText);
   const t2 = estimateTokens(mdText);
   const saved = (100 - (t2 / t1) * 100).toFixed(1);
+  measured.push({ page, t1, t2, saved });
 
   console.log(
     `  ${page.padEnd(24)} ${String(t1).padStart(12)} ${String(t2).padStart(10)} ${(saved + '%').padStart(8)}`,
@@ -853,18 +857,58 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
 }
 
 /**
- * 文档一致性：README 里抄的契约条数，必须等于这里数出来的数。
+ * ── 文档一致性：手抄的快照必须等于这里数出来的数 ──────────────────────
  *
- * 上面那段注释写得很清楚——「这类数字一旦靠手抄，就必然会漂，**而且漂了没有任何
- * 东西会提醒你**」。**这句话对这个数字自己也成立**：2026-09-19 实测 README 写 177、
- * 脚本打印 180，已经漂了，而不出声。
+ * 脚本上方那段注释写得很清楚——「这类数字一旦靠手抄，就必然会漂，**而且漂了没有
+ * 任何东西会提醒你**」。**这句话对下面这几个数字自己也成立**：2026-09-19 实测，
+ * README 写 177 项契约而实际 180；`docs/content-negotiation.md` 写着 4728 / 5416 / 3055
+ * 而实际 5164 / 5880 / 3458（页面内容变长，节省率从 64.5/66.5/63.5 涨到 67.5/69.1/67.8）。
+ * 两处都漂了，都没有出声。
  *
- * 所以把闭环补上：既然计数就在这里，那就顺手比一下。
- *
- * 注意 `assertions + 1`——**这一条自己也算一项契约**（`check()` 会先自增），
- * 所以 README 该写的正是脚本最终打印的那个数。照抄即可，抄错了会红。
+ * 所以把闭环补上：既然数字都在这里，那就顺手比一下。
  */
 const readme = await readFile(join(process.cwd(), 'README.md'), 'utf8');
+
+/** 文档里的实测表就是 [5] 段那段输出的快照。 */
+const negotiationDoc = await readFile(join(process.cwd(), 'docs', 'content-negotiation.md'), 'utf8');
+const docRows = [...negotiationDoc.matchAll(/^\s*(\/\S+\/)\s+(\d+)\s+(\d+)\s+([\d.]+)%\s*$/gm)].map((m) => ({
+  page: m[1],
+  t1: Number(m[2]),
+  t2: Number(m[3]),
+  saved: m[4],
+}));
+check(
+  docRows.length === measured.length &&
+    docRows.every(
+      (row, i) =>
+        row.page === measured[i].page &&
+        row.t1 === measured[i].t1 &&
+        row.t2 === measured[i].t2 &&
+        row.saved === measured[i].saved,
+    ),
+  'docs/content-negotiation.md 的实测表与本次输出一致',
+  docRows.length !== measured.length
+    ? `文档里 ${docRows.length} 行、实测 ${measured.length} 行`
+    : `文档写 ${docRows.map((r) => `${r.t1}/${r.saved}%`).join(' ')}，实测 ${measured.map((r) => `${r.t1}/${r.saved}%`).join(' ')}`,
+);
+
+/** README 摘要那行的 `**X% / Y%**` 对应实测的前两页。 */
+const claimedSavings = (readme.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
+  [...s.matchAll(/([\d.]+)%/g)].map((m) => m[1]),
+);
+const expectedSavings = measured.slice(0, 2).map((r) => r.saved);
+check(
+  claimedSavings.length > 0 && claimedSavings.every(([a, b]) => a === expectedSavings[0] && b === expectedSavings[1]),
+  'README 摘要那行的 token 节省率与实测一致',
+  `README 写 ${claimedSavings.map((p) => p.join('/')).join(' ') || '（没有）'}，实测前两页 ${expectedSavings.join(' / ')}%`,
+);
+
+/**
+ * README 里抄的契约条数，必须等于脚本最终打印的那个数。
+ *
+ * 注意 `assertions + 1`——**这一条自己也算一项契约**（`check()` 会先自增），
+ * 所以 README 该写的正是最终打印的那个数。照抄即可，抄错了会红。
+ */
 const claimed = [
   ...readme.matchAll(/(\d+)\s*end-to-end contracts/g),
   ...readme.matchAll(/端到端契约\s*\|\s*\*\*(\d+)\s*项\*\*/g),

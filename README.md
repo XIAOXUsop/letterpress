@@ -28,14 +28,14 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Measured saving: **64.5% / 66.5%** of tokens. → [details](docs/content-negotiation.md)
+  Measured saving: **67.5% / 69.1%** of tokens. → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
   → [details](docs/cjk-typography.md)
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
-- **0 external JS files** · 246 unit tests · 181 end-to-end contracts · MIT
+- **0 external JS files** · 246 unit tests · 183 end-to-end contracts · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -79,7 +79,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-实测同一页面的 markdown 比 HTML 省 **64.5% / 66.5%** 的 token。
+实测同一页面的 markdown 比 HTML 省 **67.5% / 69.1%** 的 token。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -138,7 +138,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 | 项 | 结果 |
 |---|---|
 | 单元测试 | **246 项**，全部离线，无网络依赖 |
-| 端到端契约 | **181 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
+| 端到端契约 | **183 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **93 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **约 1.1 秒**，整条 `npm run build` 约 **2.6 秒**（差值是 npm 启动开销 + Pagefind 索引 0.14 秒） |
