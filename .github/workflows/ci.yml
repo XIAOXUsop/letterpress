@@ -121,11 +121,16 @@ jobs:
   online-smoke:
     name: 线上内容协商烟测
     # 只在仓库变量 DEMO_ORIGIN 配好之后才跑：没部署就没有可测的东西。
-    # 注意这里**不**把"未配置"显示成通过——未配置时这个 job 根本不出现，
-    # 而不是绿着出现。把没测过的东西画成绿的，是这类检查最常见的失效方式。
     #
-    # 配好 DEMO_ORIGIN 之后（Settings → Secrets and variables → Actions → Variables），
-    # 每次推送都会对着真实部署验一次内容协商。
+    # 未配置时这个 job 会以 `skipped` 出现（灰色），不是绿——这一点是刻意的：
+    # 把一个没跑过的检查画成绿的，是这类检查最常见的失效方式。
+    # 实测确认过（2026-09-19，run 35417922989）：4 个 job 里它是唯一一个 skipped，
+    # 其余三个绿。此前这里的注释写的是"根本不出现"——**那是错的**，
+    # 它会出现在 job 列表里，只是状态是 skipped。
+    #
+    # ⚠️ 但也别把 `skipped` 当成"通过"来读：它同样不告诉你任何关于内容协商的事。
+    # 要让它真正跑起来，得去 Settings → Secrets and variables → Actions → Variables
+    # 里配上 DEMO_ORIGIN。
     if: ${{ vars.DEMO_ORIGIN != '' }}
     runs-on: ubuntu-latest
     steps:
