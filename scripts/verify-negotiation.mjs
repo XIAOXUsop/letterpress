@@ -782,6 +782,25 @@ console.log('\n[4c] 页面结构：区块不得重复');
       check(n <= 1, `${url} 的「${label}」不重复`, `出现 ${n} 次`);
     }
   }
+
+  let brokenMarkdownActions = 0;
+  for (const { url, html } of contentPages) {
+    const twin = `${url.replace(/\/$/, '')}.md`;
+    const hasPublishedTarget = html.includes(`data-markdown-url="${twin}"`);
+    const hasLink = html.includes(`href="${twin}"`);
+    const buttons = html.match(/<button\b[^>]*\bdata-copy-markdown\b[^>]*>/g) ?? [];
+    if (!hasPublishedTarget || !hasLink || buttons.length !== 1) brokenMarkdownActions++;
+  }
+  check(
+    brokenMarkdownActions === 0,
+    '每个内容页都能打开并复制对应的真实 markdown 孪生文件',
+    `${brokenMarkdownActions} 个内容页的 Markdown 操作未接通`,
+  );
+
+  const actionScript = contentPages.some(
+    ({ html }) => html.includes('navigator.clipboard') && html.includes('text/markdown'),
+  );
+  check(actionScript, 'Markdown 复制按钮接入 Clipboard API，并请求 text/markdown');
 }
 
 /**

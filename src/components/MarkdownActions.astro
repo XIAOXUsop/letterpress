@@ -1,0 +1,55 @@
+---
+/**
+ * Markdown 孪生文件的可见操作区。
+ *
+ * 链接永远可用；“复制”只是渐进增强，并且复制的是实际发布出去的 `.md`，
+ * 不是在浏览器里重新拼一份。这样用户贴给 Agent 的内容与机器端点完全一致。
+ */
+interface Props {
+  href: string;
+}
+
+const { href } = Astro.props;
+---
+
+<p class="md-available" data-pagefind-ignore data-markdown-url={href}>
+  这一页也有 markdown 版本：<a href={href}>{href}</a>
+  <button class="md-available__copy" type="button" data-copy-markdown hidden>复制 Markdown</button>
+  <span class="md-available__status" role="status" aria-live="polite" data-copy-status></span>
+  <br />
+  请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。
+</p>
+
+<script>
+  (() => {
+    const blocks = document.querySelectorAll<HTMLElement>('[data-markdown-url]');
+
+    for (const block of blocks) {
+      const button = block.querySelector<HTMLButtonElement>('[data-copy-markdown]');
+      const status = block.querySelector<HTMLElement>('[data-copy-status]');
+      const url = block.dataset.markdownUrl;
+
+      // Clipboard API 只在安全上下文可用。能力不存在时保留普通链接，
+      // 不展示一个注定失败的按钮。
+      if (!button || !status || !url || !navigator.clipboard?.writeText) continue;
+      button.hidden = false;
+
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        status.textContent = '正在读取…';
+
+        try {
+          const response = await fetch(url, { headers: { Accept: 'text/markdown' } });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          await navigator.clipboard.writeText(await response.text());
+          status.textContent = '已复制';
+        } catch {
+          status.textContent = '复制失败，请打开链接后手动复制。';
+        } finally {
+          button.disabled = false;
+        }
+      });
+    }
+  })();
+</script>

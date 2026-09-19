@@ -636,13 +636,36 @@
    * 这是本项目一个差异化能力的可见入口：把同一篇文章的 markdown 版本
    * 直接给出去。对人有用（复制去别处引用），对 agent 有用（少一次解析）。
    *
-   * 刻意做成低调的一行，不做成按钮——它不是主操作。
+   * 整块仍然低调；复制按钮做成文字操作，不与正文主操作争抢视觉层级。
    */
   .md-available {
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
     margin-block-start: var(--space-4);
+  }
+
+  .md-available__copy {
+    margin-inline-start: var(--space-3);
+    padding: 0;
+    border: 0;
+    border-block-end: 1px solid currentColor;
+    background: transparent;
+    color: var(--color-link);
+    font: inherit;
+  }
+
+  .md-available__copy:hover {
+    color: var(--color-link-hover);
+  }
+
+  .md-available__copy:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  .md-available__status:not(:empty) {
+    margin-inline-start: var(--space-2);
   }
 
   /* ── 状态页（404 等） ──────────────────────────────────────── */

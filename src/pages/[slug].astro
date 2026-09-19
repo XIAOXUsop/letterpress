@@ -11,6 +11,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Backlinks from '../components/Backlinks.astro';
 import Cover from '../components/Cover.astro';
 import JsonLd from '../components/JsonLd.astro';
+import MarkdownActions from '../components/MarkdownActions.astro';
 import PostNav from '../components/PostNav.astro';
 import Toc from '../components/Toc.astro';
 import {
@@ -184,10 +185,6 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
     </div>
 
 
-    <p class="md-available" data-pagefind-ignore>
-      这一页也有 markdown 版本：<a href={markdownHref}>{markdownHref}</a>
-      <br />
-      请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。
-    </p>
+    <MarkdownActions href={markdownHref} />
   </article>
 </BaseLayout>

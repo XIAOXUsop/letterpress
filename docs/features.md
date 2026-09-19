@@ -12,7 +12,7 @@
 | 📡 **订阅** | 全站及**每个标签**的 RSS 全文输出（含分类、作者与 Atom self-link）、sitemap、robots.txt |
 | 🌏 **中文** | 行高 1.75、标题字重按中文字体特性选、行宽 `34em`、`text-autospace` 中西文自动间距、中文不用斜体 —— 详见 [中文排版取值](cjk-typography.md) |
 | ♿ **无障碍** | 跳转链接、100% 可见焦点、`prefers-reduced-motion`；**对比度有自动化测试**（解析 `tokens.css` 逐对验算，亮暗双模式） |
-| 🤖 **给机器** | **文章与知识库条目**有 `.md` 孪生文件；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt`；`content-manifest.json` 支持按 hash 增量同步 —— 详见 [内容协商](content-negotiation.md)与[内容清单](content-manifest.md) |
+| 🤖 **给机器** | **文章与知识库条目**有 `.md` 孪生文件并可一键复制；`Accept: text/markdown` 直接返回 markdown；`llms.txt` 与 `llms-full.txt`；`content-manifest.json` 支持按 hash 增量同步 —— 详见 [内容协商](content-negotiation.md)与[内容清单](content-manifest.md) |
 | 🧠 **知识层** | 用 `[[方括号]]` 互链的独立知识库；断链**会让构建失败**；**有问题时**打印体检报告（干净构建不打印） |
 | 🌗 **主题** | 三态（跟随系统 / 亮 / 暗），无闪烁（恢复脚本在 `<head>` 同步执行） |
 | 📦 **交付** | 纯静态，零外部 JS 文件；提供去导航、代码不裁切的打印 / PDF 样式；字体只含拉丁子集 100 KB |
