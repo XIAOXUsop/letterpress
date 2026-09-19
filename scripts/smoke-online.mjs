@@ -59,6 +59,23 @@ async function request(path, accept) {
   return { url, response, contentType: (response.headers.get('content-type') ?? '').toLowerCase() };
 }
 
+/**
+ * `Vary` 有没有真的把 `Accept` 列成一个**独立 token**。
+ *
+ * **不能写 `vary.includes('accept')`。** `Accept-Encoding` 里也含 "accept" 这个子串，
+ * 于是「带 Vary: Accept」这一条会在**根本没做协商**的响应上判 ✓。
+ * 2026-09-20 对 GitHub Pages 上的 Demo 实跑就是这样：那条 `Vary` 只有
+ * `Accept-Encoding`，而这一行印出来是绿色的——**唯一一个本该发现
+ * “协商没生效”的检查，恰好在最需要它的那个环境上给了假信号。**
+ *
+ * `Vary` 是逗号分隔的 token 列表，要比的是**列表元素**，不是子串。
+ */
+function variesOnAccept(headerValue) {
+  return (headerValue ?? '')
+    .split(',')
+    .some((token) => token.trim().toLowerCase() === 'accept');
+}
+
 console.log(`\n线上烟测（${origin}）`);
 console.log('─'.repeat(64));
 
@@ -87,11 +104,11 @@ record(
   '两种 Accept 拿到了**不同**的 Content-Type（相同就说明协商没生效）',
 );
 record(
-  (html.response.headers.get('vary') ?? '').toLowerCase().includes('accept'),
+  variesOnAccept(html.response.headers.get('vary')),
   `HTML 响应带 Vary: Accept（实际 ${html.response.headers.get('vary') ?? '无'}）`,
 );
 record(
-  (markdown.response.headers.get('vary') ?? '').toLowerCase().includes('accept'),
+  variesOnAccept(markdown.response.headers.get('vary')),
   `Markdown 响应带 Vary: Accept（实际 ${markdown.response.headers.get('vary') ?? '无'}）`,
 );
 

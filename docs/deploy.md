@@ -94,6 +94,19 @@ CDN 有没有吃掉 `Vary: Accept`。这些在本地一个都测不到：
 SITE_ORIGIN=https://your-demo.example npm run verify:online
 ```
 
+> **别拿它去跑本仓库的 Demo。** Demo 在 GitHub Pages 上，而 Pages 改不了响应头，
+> 内容协商本来就不生效——对着它跑，协商那几项**必然全红**。2026-09-20 实测线上 Demo，
+> 7 项不通过：两种 `Accept` 拿到同一个 `Content-Type`、`Vary` 只有 `Accept-Encoding`
+> 而没有 `Accept`、没有 `Content-Location`、`Link` 里没有 `rel="alternate"`、
+> `content.ndjson` 是 `application/octet-stream`。**那不是部署事故**，
+> 就是 README「已知限制」里写的那两条。反过来说，Pages 能做到的那些——
+> `.md` 孪生文件的字节数与 SHA-256 与清单一致、清单本身、NDJSON 可逐行解析——
+> 这个脚本是**绿的**：它区分得开"平台做不到"和"部署坏了"。
+>
+> 顺带一提，`Vary` 这一条此前写的是 `vary.includes('accept')`，而 `Accept-Encoding`
+> 里也含这个子串，于是**它在 Pages 上判过 ✓**——最该发现"协商没生效"的检查，
+> 恰好在最需要它的环境上给了假信号。现在比的是逗号分隔后的**列表元素**。
+
 它验的是：同一个页面在两种 `Accept` 下拿到**不同**的 `Content-Type`、两侧都带
 `Vary: Accept`、markdown 侧带 `Content-Location` 与 `rel="alternate"` 的 `Link`、
 没有 markdown 孪生的页面安全回落到 HTML、静态资源不被重写；还会读取

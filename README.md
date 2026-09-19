@@ -167,6 +167,8 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 - **Demo 部署在 GitHub Pages 上，因此跑不了内容协商**（Pages 的响应头不可改）。
   其余功能都可在线验证；内容协商需要 Cloudflare Pages / Netlify / Vercel，
   本地可用 `npm run verify` 实测——它会打印真实的 token 节省数字。
+  （对着 Demo 跑 `npm run verify:online` 会在协商那几项上报红——**那是这条限制本身，
+  不是部署事故**；同一个脚本会同时证明 Pages 能做到的部分是好的。）
 - **同一个限制还影响 `/content.ndjson` 的 Content-Type。** 源码里设的是
   `application/x-ndjson`，三个平台的配置也都声明了它，但 **Pages 上下不来**——
   2026-09-20 实测线上 Demo 返回的是 `application/octet-stream`
