@@ -11,10 +11,10 @@ jobs:
     name: 构建与测试
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: 安装 Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -95,10 +95,10 @@ jobs:
     name: 内容体检
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: 安装 Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -129,10 +129,10 @@ jobs:
     if: ${{ vars.DEMO_ORIGIN != '' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: 安装 Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -141,3 +141,32 @@ jobs:
         env:
           SITE_ORIGIN: ${{ vars.DEMO_ORIGIN }}
         run: node scripts/smoke-online.mjs
+
+  secret-scan:
+    name: 密钥扫描
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # 无依赖的密钥扫描：不引第三方服务、不需要 token，纯 grep，跑完不到一秒。
+      #
+      # 为什么这个仓库需要：这个站点的**内容本身就是代码与配置**——文章里贴示例、
+      # 文档里写连接串。别的仓库泄露密钥要靠代码，这里贴一段"顺手粘进来"的
+      # 真实配置就够了，而博客的 diff 评审比代码松得多。
+      #
+      # 同族的四个 Java 仓库都有这一步，本仓库此前没有。
+      #
+      # ⚠️ 加新模式前先在本地跑一遍，确认不误报——文章里的示例串、
+      # 文档里的占位符都可能被误伤，而一条会无缘无故变红的检查只会被关掉。
+      # 也要反向验证：造一个真密钥，确认它真的会红。
+      - name: 扫描密钥
+        run: |
+          if grep -rInE \
+            --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.astro \
+            --exclude-dir=.git --exclude='*.lock' --exclude='package-lock.json' \
+            "(sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|api[_-]?key[[:space:]]*[:=][[:space:]]*['\"][A-Za-z0-9_-]{16,})" \
+            . ; then
+            echo "::error::检测到疑似密钥/私钥泄露"
+            exit 1
+          fi
+          echo "未检测到密钥/私钥泄露"
