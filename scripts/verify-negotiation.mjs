@@ -853,6 +853,29 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
 }
 
 /**
+ * 文档一致性：README 里抄的契约条数，必须等于这里数出来的数。
+ *
+ * 上面那段注释写得很清楚——「这类数字一旦靠手抄，就必然会漂，**而且漂了没有任何
+ * 东西会提醒你**」。**这句话对这个数字自己也成立**：2026-09-19 实测 README 写 177、
+ * 脚本打印 180，已经漂了，而不出声。
+ *
+ * 所以把闭环补上：既然计数就在这里，那就顺手比一下。
+ *
+ * 注意 `assertions + 1`——**这一条自己也算一项契约**（`check()` 会先自增），
+ * 所以 README 该写的正是脚本最终打印的那个数。照抄即可，抄错了会红。
+ */
+const readme = await readFile(join(process.cwd(), 'README.md'), 'utf8');
+const claimed = [
+  ...readme.matchAll(/(\d+)\s*end-to-end contracts/g),
+  ...readme.matchAll(/端到端契约\s*\|\s*\*\*(\d+)\s*项\*\*/g),
+].map((m) => m[1]);
+check(
+  claimed.length > 0 && claimed.every((n) => Number(n) === assertions + 1),
+  'README 里抄的契约条数与实际一致',
+  `README 写 ${claimed.join(' / ') || '（一处都没有写）'}，实际 ${assertions + 1}`,
+);
+
+/**
  * 收尾时先断开保活连接再关服务器。
  *
  * 直接 `process.exit()` 会在还有句柄未关闭时触发 libuv 的断言

@@ -35,7 +35,7 @@
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
-- **0 external JS files** · 246 unit tests · 177 end-to-end contracts · MIT
+- **0 external JS files** · 246 unit tests · 181 end-to-end contracts · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -138,7 +138,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 | 项 | 结果 |
 |---|---|
 | 单元测试 | **246 项**，全部离线，无网络依赖 |
-| 端到端契约 | **177 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
+| 端到端契约 | **181 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **93 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **约 1.1 秒**，整条 `npm run build` 约 **2.6 秒**（差值是 npm 启动开销 + Pagefind 索引 0.14 秒） |
