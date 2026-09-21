@@ -594,11 +594,25 @@ console.log('\n[4] 降级行为');
   check(res.status === 404, `不存在的页面返回 404 而不是 500（实际 ${res.status}）`);
 }
 {
-  // 没有 .md 孪生文件的路径（比如 404 页），要回落而不是崩
-  const res = await fetch(`${base}/this-page-has-no-twin/`, {
-    headers: { Accept: 'text/markdown' },
-  });
-  check(res.status < 500, `没有孪生文件时回落（实际 ${res.status}）`);
+  /*
+   * **存在的** HTML 页、但没有 .md 孪生时，必须回落到 HTML —— 200 + text/html，
+   * 而不是 404。`edge.ts` 把这件事说得很重：「没有孪生文件时同样回落，不能返回 404……
+   * 回落是正确行为，不是兜底」。
+   *
+   * ⚠️ 这一条此前是**空的**。它请求的是 `/this-page-has-no-twin/` ——
+   * **那个路径根本不存在**，于是拿到 404，而断言写的是 `status < 500`，404 天然满足它。
+   * 也就是说它和上面那条「不存在的页面返回 404」测的是同一件事，
+   * 而它声称要验的回落行为**一次都没被验过**。
+   *
+   * 现在用的是站内真实存在的 `/about/`（有 index.html、没有 about.md）：
+   * 两条断言都打在真正该看的东西上——**状态码与 Content-Type**。
+   */
+  const res = await fetch(`${base}/about/`, { headers: { Accept: 'text/markdown' } });
+  check(res.status === 200, `没有孪生文件的真实页面返回 200（实际 ${res.status}）`);
+  check(
+    (res.headers.get('content-type') ?? '').includes('text/html'),
+    `没有孪生文件时回落到 HTML（实际 ${res.headers.get('content-type') ?? '无'}）`,
+  );
 }
 {
   const res = await fetch(`${base}/_astro/`, { headers: { Accept: 'text/markdown' } });
@@ -1022,19 +1036,49 @@ check(
 );
 
 /**
- * README 里抄的契约条数，必须等于脚本最终打印的那个数。
+ * README 与 `docs/` 里抄的契约条数，必须等于脚本最终打印的那个数。
  *
- * 注意 `assertions + 1`——**这一条自己也算一项契约**（`check()` 会先自增），
- * 所以 README 该写的正是最终打印的那个数。照抄即可，抄错了会红。
+ * ── 先说清 `finalTotal` 是怎么来的 ────────────────────────────────
+ *
+ * `check()` 会**先自增再判定**，也就是说每一条对账检查**自己也算一项契约**。
+ * 早先这里写的是 `assertions + 1`，只有一条这样的检查时才成立；再加一条就会错位。
+ * 所以改成一次性把后面的检查条数算进去，两条都去比同一个数——比"每条自己 +1"
+ * 好读，也不容易在下一次增删时算错。
+ *
+ * ── 为什么要连 `docs/` 一起查 ──────────────────────────────────────
+ *
+ * 此前只匹配 README 的两种写法，而 `docs/cli.md` 与 `docs/design-notes.md`
+ * 里各抄了一次，**没人管**——同一个事实有几个表面，只查一个等于给漂移留后门。
+ * 这个文件的注释里记着更早的两回：契约数 177 → 180、`docs/content-negotiation.md`
+ * 里的 4728 / 5416 / 3055 漂过都没出声。前者早就补上了，后者这次一并补。
  */
+const reconciliationChecks = 2;
+const finalTotal = assertions + reconciliationChecks;
+
 const claimed = [
   ...readme.matchAll(/(\d+)\s*end-to-end contracts/g),
   ...readme.matchAll(/端到端契约\s*\|\s*\*\*(\d+)\s*项\*\*/g),
 ].map((m) => m[1]);
 check(
-  claimed.length > 0 && claimed.every((n) => Number(n) === assertions + 1),
+  claimed.length > 0 && claimed.every((n) => Number(n) === finalTotal),
   'README 里抄的契约条数与实际一致',
-  `README 写 ${claimed.join(' / ') || '（一处都没有写）'}，实际 ${assertions + 1}`,
+  `README 写 ${claimed.join(' / ') || '（一处都没有写）'}，实际 ${finalTotal}`,
+);
+
+const docsMentions = [];
+for (const name of (await readdir('docs')).sort()) {
+  if (extname(name) !== '.md') continue;
+  const text = await readFile(join('docs', name), 'utf8');
+  for (const m of text.matchAll(/(\d+)\s*项契约/g)) {
+    docsMentions.push(`${name} 写 ${m[1]}`);
+  }
+}
+check(
+  docsMentions.every((d) => Number(d.split('写 ')[1]) === finalTotal),
+  'docs/ 里写到的契约条数与实际一致',
+  docsMentions.length === 0
+    ? '（docs/ 里一处都没提到——若本来是有的，说明这条检查没覆盖到，别让它静默失效）'
+    : `${docsMentions.join('；')}，实际 ${finalTotal}`,
 );
 
 /**
