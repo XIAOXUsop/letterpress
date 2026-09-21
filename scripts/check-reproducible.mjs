@@ -32,6 +32,15 @@ async function cleanBuild(timeZone) {
  * 跨时区比较抓不到“今年”这种一年才变化一次的时钟泄漏，所以额外禁止生产源码
  * 无参数读取系统时钟。内容解析用 `new Date(value)` 不受影响；若未来真需要当前时间，
  * 必须显式注入，才能在测试和构建中固定它。
+ *
+ * ⚠️ **`Date()` 的裸调用曾经漏在外面**（2026-09-22 修）。原先的模式是
+ * `\b(?:new\s+Date\s*\(\s*\)|Date\.now\s*\()`——只覆盖 `new Date()` 与
+ * `Date.now()`，而 `Date()` **不带 `new` 也是一个读当前时间的调用**
+ * （ECMAScript 里无参数调用返回当前时间的字符串，行为与 `new Date()` 同）。
+ *
+ * 实测：往 `src/config.ts` 里放一行 `export const published = Date();`，
+ * 跨时区可复现检查**照常通过**（0 处违规）。也就是说这条门禁写着"禁止读构建时钟"，
+ * 实际只禁了两种写法——**第三种写法一次都没被守过**。
  */
 async function assertNoBuildClock(dir) {
   const violations = [];
@@ -48,7 +57,11 @@ async function assertNoBuildClock(dir) {
       if (!/\.(?:astro|ts)$/.test(entry.name) || entry.name.endsWith('.test.ts')) continue;
 
       const source = await readFile(full, 'utf8');
-      const pattern = /\b(?:new\s+Date\s*\(\s*\)|Date\.now\s*\()/g;
+      // `Date()` 裸调用也要抓：它和 `new Date()` 一样读当前时间。
+      // `(?<![\w.])` 排除掉 `new Date()`（那是允许的形态，上面单独判）
+      // 与任何 `x.Date()` 这类成员调用。
+      const pattern =
+        /\bnew\s+Date\s*\(\s*\)|\bDate\.now\s*\(|(?<![\w.])Date\s*\(\s*\)/g;
       for (const match of source.matchAll(pattern)) {
         const line = source.slice(0, match.index).split('\n').length;
         violations.push(`${full.slice(root.length + 1).replace(/\\/g, '/')}:${line}`);

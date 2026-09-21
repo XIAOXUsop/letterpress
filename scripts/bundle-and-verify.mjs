@@ -12,7 +12,24 @@
  * ——这是 TS + ESM 的标准写法，编译后路径才对——于是 Node 找不到文件。
  *
  * 用 esbuild 打成一个包就绕过了这个问题：esbuild 懂 TS 的路径约定。
- * 它已经作为 Vite 的依赖存在于 node_modules，不需要额外装。
+ */
+
+/*
+ * ── esbuild 是**幽灵依赖**，这里必须点名 ──────────────────────────────
+ *
+ * 上面那句"它已经作为 Vite 的依赖存在于 node_modules，不需要额外装"是**真的**，
+ * 但它成立的原因是 npm 把传递依赖**提升**到了顶层 node_modules——
+ * 而不是因为 esbuild 是本项目的依赖。package.json 的 dependencies 与
+ * devDependencies 里都没有它。
+ *
+ * 这个区别不是学究：提升是 npm 的实现细节（hoisting），换成 pnpm 或
+ * 开启 `--install-strategy=nested` 就不成立，那时这个脚本会在
+ * `import { build } from 'esbuild'` 上直接崩，而崩的地方离原因很远。
+ *
+ * 所以**要么在 devDependencies 里显式声明它，要么在脚本里明确注释这个依赖来源**。
+ * 现在选后者——升级 Vite 时它会连带给一个 esbuild 大版本，
+ * 显式钉版本反而要多维护一处；而这条路径只用于验证脚本，不进产物。
+ * 触发条件是"换了包管理器或安装策略"，那时会立刻炸出来，不是静默的。
  */
 
 import { build } from 'esbuild';
