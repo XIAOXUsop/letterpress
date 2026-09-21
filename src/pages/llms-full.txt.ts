@@ -32,6 +32,10 @@ export const GET: APIRoute = async () => {
      */
     siteUrl,
     tagline: site.tagline,
+    // 传链接图，正文里的 `[[…]]` 才会渲染成 markdown 链接。
+    // 不传的话，agent 拿到的是一份带 `[[方括号]]` 的"同一内容"——
+    // 页内链接变成半可读的括号串，而这正是这个出口存在的唯一理由。
+    graph: content.graph,
     // 纯文本产物里中英文之间要手动加空格——`text-autospace` 只在 HTML 里生效。
     notes: [
       `本站以 ${site.lang} 为主。`,

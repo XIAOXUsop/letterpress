@@ -40,17 +40,18 @@ function toDoc(
 
   /**
    * `related` 是作者在 frontmatter 里显式声明的关系。
-   * 把它折算成正文末尾的 wiki 链接，让链接图、反向链接、孤儿页判定
-   * 都能看到它——否则声明了 `related` 却没在正文里再写一遍的条目，
-   * 会被误判成孤儿页。
    *
-   * 链接图去重（同一来源指向同一目标只记一次），所以正文里已写过也不会重复。
+   * <p>它**不再被折进正文**。这里早先的做法是在 `body` 末尾追加一行
+   * `[[a]] [[b]]`，好让链接图、反向链接、孤儿页判定都能看到它——
+   * 目的没错，代价是那一行会跟着 `body` 一路进机器出口：
+   * `.md` 孪生与 `llms-full.txt` 里于是出现一行**作者从没写过**的链接，
+   * 和一句"相关条目"正文并排躺着，读的人分不清哪句是作者写的。
+   * （HTML 页面不受影响——它渲染的是 Astro 的 `entry.body`，从来没见过这一行。
+   * 也就是说这行噪音**只出现在给机器看的那两个出口里**，而那正是它们的全部意义。）
+   *
+   * <p>现在图直接读 `declaredRelations`（见 `graph.ts` 的 `Doc`），正文保持原样。
    */
   const related = kind === 'wiki' ? ((data as { related?: string[] }).related ?? []) : [];
-  const body =
-    related.length > 0
-      ? `${entry.body ?? ''}\n\n${related.map((r) => `[[${r}]]`).join(' ')}\n`
-      : (entry.body ?? '');
 
   return {
     kind,
@@ -59,7 +60,8 @@ function toDoc(
     slug: resolveSlug(data.title, data.slug, entry.id),
     title: data.title,
     summary: data.summary,
-    body,
+    body: entry.body ?? '',
+    declaredRelations: related,
     explicitSlug: explicit,
     // posts 与 wiki 的 schema 现在都声明了 draft（wiki 一直有，posts 是补上的——
     // 缺它时 Zod 静默剥离，过滤逻辑拿到的永远是 false，见 content.config.ts 的注释）

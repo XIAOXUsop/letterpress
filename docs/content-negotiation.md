@@ -57,9 +57,9 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 ```
 页面                         HTML token   MD token       节省
-/markdown-for-agents/            5386       1677    68.9%
-/cjk-web-typography/             6102       1816    70.2%
-/wiki/content-negotiation/       3681       1115    69.7%
+/markdown-for-agents/            5386       1693    68.6%
+/cjk-web-typography/             6102       1847    69.7%
+/wiki/content-negotiation/       3681       1106    70.0%
 ```
 
 > **为什么低于 Cloudflare 的 80% 和 Vercel 的 99.6%？**

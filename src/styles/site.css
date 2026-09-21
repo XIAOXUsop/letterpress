@@ -335,12 +335,19 @@
    * 「锌-500 落在锌-100 上」作为反例记录在案——记了却没检查这个组合。
    *
    * 改成悬停时文字提到次要色（锌-700 落在锌-100 上是 10:1）。
+   *
+   * ⚠️ **这条覆盖漏了 `.meta__sep`，而它才是那个"记了却没检查"的组合本身。**
+   * 分隔点自带 `color: var(--color-text-subtle)`（锌-500），而它是**自己的声明**——
+   * 父级 `.meta` 在悬停时改色对它没用（声明赢过继承）。于是悬停时它仍然是
+   * 锌-500 落在锌-100 上，也就是注释里点名的不达标组合 4.40:1。
+   * 实测（2026-09-22）：首页 10 个 `post-list__row` 里有 3 个的标签串含 `·`。
    */
   .post-list__row:hover {
     background-color: var(--color-surface-sunken);
   }
 
   .post-list__row:hover .meta,
+  .post-list__row:hover .meta__sep,
   .post-list__row:hover .post-list__tag {
     color: var(--color-text-muted);
   }

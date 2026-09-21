@@ -148,20 +148,65 @@ if (entry) {
 
   // ── 3. 该进索引的页面一个都不能少 ─────────────────────────────────
   //
-  // 索引范围由 data-pagefind-body 决定。漏标的页面**不会报错**，
-  // 它只是从此搜不到——而文章、知识条目、列表页都靠它。
-  let marked = 0;
-  for (const file of pages) {
-    const html = await readFile(file, 'utf-8');
-    if (html.includes('data-pagefind-body')) marked += 1;
+  // ⚠️ **这里的断言必须从别处独立推导"应被索引的页面集"，否则它会恒真。**
+  //
+  // 索引范围由 data-pagefind-body 决定。原先这条是拿
+  // `total`（Pagefind 报的已索引页数）与 `marked`（HTML 里数 data-pagefind-body）
+  // 相比——**两者来自同一个属性**：漏标时两边等量下降，相等照样成立。
+  //
+  // 实测（2026-09-22）：把知识库模板里的 `data-pagefind-body` 去掉、干净重建后，
+  // 6 个 wiki 条目整类退出索引（11 → 5），而这条打印的是
+  // 「✓ 索引覆盖 5 个页面，与标记了 data-pagefind-body 的页面数一致」并**通过**。
+  // 它要防的正是这件事，却量不出这件事——注释里那句「漏标的页面不会报错，
+  // 它只是从此搜不到」说的就是它自己。
+  //
+  // 现在改成从**内容清单**取：清单是构建期按内容层生成的（文章 + 知识条目），
+  // 与"HTML 上有没有那个属性"没有关系。两边对不上才是真信号。
+  const manifestFile = join(DIST, 'content-manifest.json');
+  let expected = null;
+  try {
+    const manifest = JSON.parse(await readFile(manifestFile, 'utf-8'));
+    const home = manifest.site?.home ?? '';
+    expected = (manifest.documents ?? []).map((doc) => {
+      const url = doc.urls?.html ?? '';
+      const rel = home && url.startsWith(home) ? url.slice(home.length) : url;
+      return { id: doc.id, path: rel.endsWith('/') ? `${rel}index.html` : rel };
+    });
+  } catch {
+    console.log('  ✗ 读不到 dist/content-manifest.json —— 没有它就无法独立推出"该进索引的页面集"');
+    problems.push('内容清单不存在，索引覆盖面无法独立核对（读不到 ≠ 通过）');
   }
+
   const counts = Object.values(entry.languages ?? {}).map((l) => l.page_count ?? 0);
   const total = counts.reduce((a, b) => a + b, 0);
-  if (total === marked) {
-    console.log(`  ✓ 索引覆盖 ${total} 个页面，与标记了 data-pagefind-body 的页面数一致`);
-  } else {
-    console.log(`  ✗ 索引里 ${total} 个页面，产物里有 ${marked} 个页面标了 data-pagefind-body`);
-    problems.push(`索引覆盖数（${total}）与标了 data-pagefind-body 的页面数（${marked}）对不上`);
+
+  if (expected) {
+    // ① 逐个内容页确认它真的标了 —— 这才能抓住"整类页面漏标"
+    const unmarked = [];
+    for (const doc of expected) {
+      const file = join(DIST, doc.path);
+      if (!existsSync(file)) {
+        unmarked.push(`${doc.id}（产物里没有 ${doc.path}）`);
+        continue;
+      }
+      const html = await readFile(file, 'utf-8');
+      if (!html.includes('data-pagefind-body')) {
+        unmarked.push(`${doc.id}（${doc.path} 没有 data-pagefind-body）`);
+      }
+    }
+
+    // ② 再要求索引页数与内容条目数一致（清单有 11 条，索引就该收 11 页）
+    if (unmarked.length === 0 && total === expected.length) {
+      console.log(`  ✓ 内容清单里的 ${expected.length} 个条目全部进了索引，且都标了 data-pagefind-body`);
+    } else if (unmarked.length > 0) {
+      console.log(`  ✗ ${unmarked.length}/${expected.length} 个内容页没进索引：`);
+      for (const u of unmarked.slice(0, 5)) console.log(`      ${u}`);
+      problems.push(`${unmarked.length} 个内容页没有 data-pagefind-body，会静默退出搜索：`
+        + unmarked.slice(0, 3).join('、') + (unmarked.length > 3 ? ' 等' : ''));
+    } else {
+      console.log(`  ✗ 索引收了 ${total} 个页面，而内容清单里有 ${expected.length} 个条目`);
+      problems.push(`索引页数（${total}）与内容清单条目数（${expected.length}）对不上`);
+    }
   }
 }
 

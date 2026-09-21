@@ -16,8 +16,22 @@ export interface Doc {
   readonly title: string;
   /** 一句话摘要。喂给 llms.txt，也用作 meta description */
   readonly summary: string;
-  /** markdown 正文（不含 frontmatter） */
+  /** markdown 正文（不含 frontmatter）——**就是作者写的那份，不做任何追加** */
   readonly body: string;
+  /**
+   * 作者在 frontmatter 里用 `related` 声明的出链。
+   *
+   * <p>它**不进 `body`**：这里早先是把声明折成正文末尾的一行 wiki 链接追加进去的，
+   * 好让链接图、反向链接、孤儿页判定都能看见它。那个目的没错，代价是那行会跟着
+   * `body` 一路进机器出口（`.md` 孪生、`llms-full.txt`）——读者会看到一行
+   * 作者从没写过的 `[[a]] [[b]]`。现在图（`buildGraph`）直接读这个字段。
+   *
+   * <p>注意 `refsOf` **不**包含它——那个函数返回的是"正文里出现的引用"，
+   * 带原文偏移、供替换用；声明来的关系不在正文里，给它一个 -1 偏移是陷阱。
+   *
+   * <p>可选：绝大多数文档没有声明 `related`，而测试里的 fixture 也不必逐个补上。
+   */
+  readonly declaredRelations?: readonly string[];
   /** 作者是否显式指定过 slug（用于 lint 提示中文 URL 的代价） */
   readonly explicitSlug: boolean;
   readonly draft: boolean;
@@ -100,7 +114,21 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     const targets = new Set<string>();
     outbound.set(doc.slug, targets);
 
-    for (const ref of parseWikiLinks(doc.body)) {
+    // ── 两个来源：正文里的 `[[…]]`，以及 frontmatter 里声明的 `related` ──
+    //
+    // 后者**不改写正文**。早先的做法是把它折成正文末尾的一行 `[[x]] [[y]]` 追加进
+    // `body`，好让图看见——代价是那一行会跟着 `body` 一起进机器出口
+    // （`.md` 孪生与 `llms-full.txt`），变成**作者从没写过的一行**。
+    // 现在图直接读 `declaredRelations`，正文保持作者写的样子。
+    //
+    // `offset`/`end` 对声明来的引用没有意义（它不在原文里），给 -1：
+    // 图只用 `target` 与 `label`，而替换/报错定位只走 `parseWikiLinks` 的结果。
+    const refs: WikiLinkRef[] = [...parseWikiLinks(doc.body)];
+    for (const target of doc.declaredRelations ?? []) {
+      refs.push({ target, anchor: null, label: target, offset: -1, end: -1 });
+    }
+
+    for (const ref of refs) {
       const resolved = lookup.get(normalizeTarget(ref.target));
 
       if (resolved === undefined) {

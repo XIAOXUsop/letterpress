@@ -4,15 +4,16 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **263 项**单元测试，全部离线 |
+| `npm test` | **272 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 196 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
 | `npm run verify:formats` | 内容发布探针：真的放入 `.md`、`.mdx`、草稿和占用 `/about/` 的文章，验证格式产出、草稿隔离与系统路由冲突 |
-| `npm run verify:search` | 搜索可用性：页面语言一致性、索引语言、索引覆盖面。**不查结果**——查询行为只能在浏览器里测，原因见脚本注释 |
+| `npm run verify:search` | 搜索可用性：页面语言一致性、索引语言，以及**内容清单里的每一条都真的标了 `data-pagefind-body` 并进了索引**。**不查结果**——查询行为只能在浏览器里测，原因见脚本注释 |
 | `npm run verify:reproducible` | 扫描生产源码的构建时钟读取，并在 UTC / America/Los_Angeles 做完整构建、逐文件比较 SHA-256；覆盖 Astro 产物与 Pagefind 索引 |
 | `npm run verify:online` | **线上烟测**：只打线上地址，验内容协商、NDJSON 全量导出与增量清单真的生效。需要 `SITE_ORIGIN`，没配就直接失败（不退回本地） |
-| `npm run verify:all` | 七道依次跑一遍（`check` + `test` + `verify` + `verify:search` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
+| `npm run verify:testcount` | 单元测试**条数**对账：`npm test` 写出的 JSON 报告 vs README 与 `docs/` 里抄的四个数。读不到报告就失败（读不动 ≠ 通过） |
+| `npm run verify:all` | 八道依次跑一遍（`check` + `test` + `verify` + `verify:testcount` + `verify:search` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 

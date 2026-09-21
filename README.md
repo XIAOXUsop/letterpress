@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-263%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-272%20项-2C5E2E)
 
 </div>
 
@@ -28,7 +28,7 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Measured saving: **68.9% / 70.2%** of tokens. → [details](docs/content-negotiation.md)
+  Measured saving: **68.6% / 69.7%** of tokens. → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
   → [details](docs/cjk-typography.md)
@@ -36,7 +36,7 @@
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 263 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 272 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -80,7 +80,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-实测同一页面的 markdown 比 HTML 省 **68.9% / 70.2%** 的 token。
+实测同一页面的 markdown 比 HTML 省 **68.6% / 69.7%** 的 token。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -149,7 +149,7 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **263 项**，全部离线，无网络依赖 |
+| 单元测试 | **272 项**，全部离线，无网络依赖 |
 | 端到端契约 | **196 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **107 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
@@ -200,8 +200,17 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
   静默退回那个模式：文章还在，只是再也搜不到，而构建与测试全都不出声。
 
   所以 `npm run verify:search` 不去假装能查询，它断言的是这件事的前提：每个页面
-  都声明了正确的语言，且索引覆盖的页面数与标了 `data-pagefind-body` 的页面数一致。
-  真实浏览器里的完整实测基线写在 `scripts/check-search.mjs` 的注释里。
+  都声明了正确的语言，且**内容清单里的每一条都真的标了 `data-pagefind-body`、
+  都进了索引**。真实浏览器里的完整实测基线写在 `scripts/check-search.mjs` 的注释里。
+
+  > 前半句原先写的是「索引覆盖的页面数与标了 `data-pagefind-body` 的页面数一致」——
+  > **那条断言是自比自的**：两个数来自同一个属性，页面漏标时两边等量下降，
+  > 相等照样成立。实测（2026-09-22）：把知识库模板上的 `data-pagefind-body` 去掉、
+  > 干净重建，6 个 wiki 条目整类退出索引（11 → 5），而它打印的是
+  > 「✓ 索引覆盖 5 个页面，与标记了 data-pagefind-body 的页面数一致」并**通过**。
+  > 现在改成从 `content-manifest.json` 独立推出"应被索引的页面集"（那是按内容层生成的，
+  > 与 HTML 上有没有那个属性无关），再逐个页面确认。同一次变异现在会红：
+  > `✗ 6/11 个内容页没进索引`，退出码 1。
 - **`llms.txt` 的实际效果被高估。** Ahrefs 实测 13.7 万个域名里 97% 从未被
   请求过。本项目生成它是因为零成本，**但不把它当卖点**。
 - **`text-autospace` 与 `text-spacing-trim` 在 Safari / Firefox 上不支持**

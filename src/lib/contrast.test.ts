@@ -58,6 +58,30 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/**
+ * 解析一个自定义属性，**跟着 `var(--x)` 别名走到底**。
+ *
+ * <p>`token()` 只认直接的十六进制值，而语义色几乎都是别名
+ * （`--color-text-subtle: var(--zinc-500)`、`--color-surface-sunken: var(--zinc-100)`）。
+ * 要按"元素自己声明的那个颜色"去算对比度，就得把这层别名解开——
+ * 否则只能测试手抄进来的 zinc-500/zinc-100，而那正是"抄一份就会漂移"。
+ *
+ * <p>同名 token 有多处定义时（亮色块 + 暗色媒体查询 + 强制暗色选择器），
+ * 取**第一处**即亮色那份，与 `token()` 的行为一致。
+ */
+function resolveColor(name: string, depth = 0): string {
+  if (depth > 4) throw new Error(`--${name} 的别名链太深或成环`);
+  const m = new RegExp(`--${name}:\\s*([^;]+)`).exec(TOKENS);
+  if (!m) throw new Error(`tokens.css 里找不到 --${name}`);
+  const value = m[1]!.trim();
+  const alias = /^var\(--([a-z0-9-]+)\)$/i.exec(value);
+  if (alias) return resolveColor(alias[1]!, depth + 1);
+  if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+    throw new Error(`--${name} 不是色值（解析到 ${value}）——别名链要在 hex 上收住`);
+  }
+  return value.toLowerCase();
+}
+
 /** 断言一对颜色达到要求。失败信息里带上实测值，省得再算一遍。 */
 function expectContrast(fg: string, bg: string, min: number, label: string): void {
   const ratio = contrast(fg, bg);
@@ -131,6 +155,102 @@ describe('亮色模式的配色对比度', () => {
   it('装饰性分隔线保持浅色（不要求达标，但记录在案）', () => {
     const ratio = contrast(token('zinc-200'), token('zinc-50'));
     expect(ratio).toBeLessThan(3);
+  });
+});
+
+describe('悬停态的改色覆盖', () => {
+  const SITE_CSS = readFileSync(join(process.cwd(), 'src', 'styles', 'site.css'), 'utf8');
+  const POST_LIST = readFileSync(
+    join(process.cwd(), 'src', 'components', 'PostList.astro'),
+    'utf8',
+  );
+
+  const looksLikeClass = (c: string) => /^[a-z][a-z0-9_-]*$/i.test(c);
+
+  /** 模板里会出现的类名（`class="a b"` 与 `class:list={['a', 'b']}` 两种写法都抓） */
+  function templateClasses(): Set<string> {
+    const found = new Set<string>();
+    for (const m of POST_LIST.matchAll(/class="([^"]*)"/g)) {
+      for (const c of (m[1] ?? '').split(/\s+/)) if (looksLikeClass(c)) found.add(c);
+    }
+    for (const m of POST_LIST.matchAll(/class:list=\{\[([^\]]*)\]\}/g)) {
+      for (const c of (m[1] ?? '').split(/['",\s]+/)) if (looksLikeClass(c)) found.add(c);
+    }
+    return found;
+  }
+
+  /** site.css 里**自带** color 声明的类 → 它用的颜色 token（`inherit` 之类返回 null） */
+  function selfColoredClasses(): Map<string, string | null> {
+    const found = new Map<string, string | null>();
+    for (const m of SITE_CSS.matchAll(/\.([a-z0-9_-]+)\s*\{([^}]*)\}/gi)) {
+      const decl = /(?:^|[;\s])color\s*:\s*([^;]+)/.exec(m[2] ?? '');
+      if (!decl) continue;
+      const value = decl[1]!.trim();
+      // `inherit` / `currentColor` 是**跟着父级走**的，不是自带颜色——悬停改父级就够
+      const fromToken = /^var\(--([a-z0-9-]+)\)$/i.exec(value);
+      found.set(m[1]!, fromToken ? fromToken[1]! : null);
+    }
+    return found;
+  }
+
+  /** `.post-list__row:hover <某类>` 的改色规则覆盖到了哪些类 */
+  function hoverCoveredClasses(): Set<string> {
+    const found = new Set<string>();
+    for (const m of SITE_CSS.matchAll(/\.post-list__row:hover\s+([^{]+)\{([^}]*)\}/g)) {
+      if (!/(^|[;\s])color\s*:/.test(m[2] ?? '')) continue;
+      for (const sel of (m[1] ?? '').split(',')) {
+        const name = sel.trim().replace(/^\.post-list__row:hover\s+/, '').replace(/^\./, '');
+        if (looksLikeClass(name)) found.add(name);
+      }
+    }
+    return found;
+  }
+
+  /**
+   * **悬停时行内每一个会显示的字符，都得在悬停底色上读得清。**
+   *
+   * <p>这条是补的，补的是一次真实的 4.40:1。`site.css` 里那段注释已经承认
+   * 「锌-500 落在锌-100 上只有 4.39:1，**记了却没检查这个组合**」，并因此加了
+   * `.post-list__row:hover` 的改色规则——**但那条规则漏了 `.meta__sep`**。
+   *
+   * <p>原因正是 CSS 里最常见的那种"我以为它继承了"：分隔点自带
+   * `color: var(--color-text-subtle)`（锌-500），而它是**自己的声明**，
+   * 父级 `.meta` 在悬停时改色对它无效（声明赢过继承）。于是悬停时它仍然是
+   * 锌-500 落在锌-100 上，也就是上面那个"记在案却没检查"的组合本身。
+   *
+   * <p>手测不可能发现它：要悬停、要恰好那一行有标签、还要去量一个 `·` 的对比度。
+   *
+   * <p>判据是**逐元素二选一**，而不是"必须都在改色列表里"：
+   * 要么被 `.post-list__row:hover` 改到（那改后的颜色另行断言），
+   * 要么它自带的那个颜色本身就在悬停底色上达标。
+   * `color: inherit` / `currentColor` 不算自带颜色——它跟着父级走，父级已覆盖。
+   */
+  it('悬停时行内每个自带颜色的字符都达标', () => {
+    const covered = hoverCoveredClasses();
+    const offenders: string[] = [];
+
+    for (const [name, colorToken] of selfColoredClasses()) {
+      if (!templateClasses().has(name)) continue; // 不在这个行内出现
+      if (colorToken === null) continue; // inherit / currentColor：跟着父级
+      if (covered.has(name)) continue; // 已被悬停规则改色，改后的颜色另有一条断言
+
+      const hex = resolveColor(colorToken);
+      const ratio = contrast(hex, resolveColor('color-surface-sunken'));
+      if (ratio < 4.5) {
+        offenders.push(`.${name}（--${colorToken} → ${hex} 在悬停底色上只有 ${ratio.toFixed(2)}:1）`);
+      }
+    }
+
+    expect(
+      offenders,
+      `悬停时底色变成 zinc-100。这些元素自带颜色、又没被 .post-list__row:hover 覆盖，`
+        + `而在那个底色上不达标：${offenders.join('；')}`,
+    ).toEqual([]);
+  });
+
+  /** 被悬停规则改色之后，用的那个颜色必须达标 */
+  it('悬停态的文字色在悬停底色上达标', () => {
+    expectContrast(token('zinc-700'), token('zinc-100'), 4.5, '悬停态文字');
   });
 });
 

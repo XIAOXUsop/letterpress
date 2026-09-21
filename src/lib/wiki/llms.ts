@@ -28,7 +28,38 @@
  */
 
 import type { Doc, LinkGraph } from './graph.js';
-import { urlOf } from './graph.js';
+import { resolverFor, urlOf } from './graph.js';
+import { renderWikiLinks } from './wikilink.js';
+
+/**
+ * 把正文里的 `[[…]]` 渲染成 markdown 链接——**与 HTML 页面走同一套解析**。
+ *
+ * <p>**这是补的，而且补得晚。** `.md` 孪生与 `llms-full.txt` 此前直接把 `doc.body`
+ * 原样吐出去，于是机器出口里躺着未渲染的 `[[方括号]]`：
+ *
+ * <pre>
+ *   grep -l "\[\[" dist/*.md dist/wiki/*.md   → 11 个文件全部命中
+ *   llms-full.txt 里 36 处，wiki/letterpress.md 里 10 处
+ * </pre>
+ *
+ * 而这两个出口的全部意义就是"给机器读的同一份内容"。对照：HTML 页面与 RSS
+ * 里这些链接都是正常渲染的——缺口精确地只在这两条只做 `doc.body.trim()` 的路径上，
+ * 所以它既不是"设计如此"、也不是"渲染没做"，是**这两条路径漏掉了那一步**。
+ *
+ * <p>解析不了的目标保持原样（`renderWikiLinks` 的行为）：断链在构建期就已经让构建
+ * 失败了，走到这里说明是没被 lint 覆盖到的历史内容，原样留下比编一个链接诚实。
+ */
+function bodyRenderer(graph: LinkGraph | undefined, siteUrl: string | undefined) {
+  if (!graph) {
+    return (doc: Doc) => doc.body.trim();
+  }
+  const resolve = resolverFor(graph);
+  const withSite = (target: string) => {
+    const href = resolve(target);
+    return href === null ? null : `${siteUrl ?? ''}${href}`;
+  };
+  return (doc: Doc) => renderWikiLinks(doc.body.trim(), withSite);
+}
 
 export interface LlmsOptions {
   readonly siteName: string;
@@ -41,6 +72,14 @@ export interface LlmsOptions {
    * 比如「这里的内容是中文为主的」「草稿不会被构建」。
    */
   readonly notes?: readonly string[];
+
+  /**
+   * 链接图。给了就把正文里的 `[[…]]` 渲染成 markdown 链接；不给则原样保留。
+   *
+   * <p>可选是出于兼容：`llms.txt`（目录页）用不到它，而测试 fixture 也不必都建图。
+   * 但**线上那两条出口都应该传**——不传的后果是 AI 读到的正文里带 `[[方括号]]`。
+   */
+  readonly graph?: LinkGraph;
 }
 
 /** 一行条目：`- [标题](URL): 一句话说明` */
@@ -113,6 +152,8 @@ export function buildLlmsFullTxt(docs: readonly Doc[], options: LlmsOptions): st
     for (const note of options.notes) lines.push(note, '');
   }
 
+  const render = bodyRenderer(options.graph, options.siteUrl);
+
   for (const doc of [...core, ...posts]) {
     const path = urlOf(doc).replace(/^\//, '').replace(/\/$/, '');
     lines.push(`<doc title="${escapeAttr(doc.title)}" path="${escapeAttr(`${path}.md`)}">`);
@@ -120,7 +161,7 @@ export function buildLlmsFullTxt(docs: readonly Doc[], options: LlmsOptions): st
     if (doc.summary) {
       lines.push(`> ${doc.summary}`, '');
     }
-    lines.push(doc.body.trim());
+    lines.push(render(doc));
     lines.push('');
     lines.push('</doc>');
     lines.push('');
@@ -168,7 +209,9 @@ export function buildMarkdownTwin(
   }
 
   lines.push('## 正文', '');
-  lines.push(doc.body.trim());
+  // 与 HTML 页面同一套解析——`.md` 孪生是"给机器读的同一份内容"，
+  // 里面不该出现未渲染的 `[[方括号]]`（此前正是如此，11 个孪生文件全部命中）。
+  lines.push(bodyRenderer(graph, options.siteUrl)(doc));
   lines.push('');
 
   return lines.join('\n');
