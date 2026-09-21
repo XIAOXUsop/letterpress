@@ -39,6 +39,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const DIST = join(process.cwd(), 'dist');
 const problems = [];
@@ -57,6 +58,22 @@ async function htmlFiles(dir) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) found.push(...(await htmlFiles(full)));
     else if (entry.name.endsWith('.html')) found.push(full);
+  }
+  return found;
+}
+
+/**
+ * 递归列出**文件**（不含目录），返回相对 `dir` 的路径，用 `/` 分隔。
+ *
+ * 别退化成 `readdir` 一层：`dist/pagefind/` 下的 `index/` 与 `fragment/`
+ * 就是索引本体，漏掉它们量出来的体积会少一个数量级，而表面上看不出少了什么。
+ */
+async function walkFiles(dir, prefix = '') {
+  const found = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) found.push(...(await walkFiles(join(dir, entry.name), rel)));
+    else found.push(rel);
   }
   return found;
 }
@@ -146,6 +163,124 @@ if (entry) {
     console.log(`  ✗ 索引里 ${total} 个页面，产物里有 ${marked} 个页面标了 data-pagefind-body`);
     problems.push(`索引覆盖数（${total}）与标了 data-pagefind-body 的页面数（${marked}）对不上`);
   }
+}
+
+// ── 4. JS 体积：文档写着「文章页 0 个 JS 文件」，这里把它钉住 ──────────
+//
+// 这一节的由来（2026-09-22）：`docs/compare.md` 那一行原先写作
+// 「外部 JS | **0 个文件** | 少量 + Pagefind | Swup + Svelte | 少量 + Fuse.js」。
+// 那句话**不算错**——「外部」= 第三方域名，确实是 0——**但读起来会得出错误结论**：
+// 对照列里那三家列的都是**自己站内的脚本**，同一行两端口径不同，
+// 读出来的就是「本项目不加载 JS，它们加载」。而实测搜索页要取 183 KB（gzip）。
+//
+// 而且这件事**用 `<script src>` 是扫不出来的**：Pagefind 由内联加载器 + 动态
+// `import()` 拉取，全站任何一个 HTML 里的 `src=` 计数都是 0。
+// 换句话说，一个只会数 `src=` 的检查**永远给不出这个数**——
+// 这已经不是「检查没写」，是「用错了尺子」。
+//
+// 所以这里分三条钉，每条对应文档里一句可以被验证的话：
+//   a. 全站 `<script src>` 为 0（无论外链还是站内脚本文件）——「外链 JS 0 个」
+//   b. 恰好一个页面（搜索页）内联加载 `pagefind/pagefind.js`——「只有搜索页加载」
+//   c. 那个 loader 要取的脚本与 wasm 在产物里真的存在
+//      （取不到时 loader 自己 `catch` 掉，搜索**静默失效**，正是本项目最防的那类）
+
+const scriptSrcRe = /<script[^>]*\ssrc\s*=\s*["']([^"']*)["']/gi;
+const pagesWithSrc = [];
+const externalSrc = [];
+let searchPages = [];
+
+for (const file of pages) {
+  const rel = file.slice(DIST.length + 1).replace(/\\/g, '/');
+  const html = await readFile(file, 'utf-8');
+  const srcs = [...html.matchAll(scriptSrcRe)].map((m) => m[1]);
+  if (srcs.length > 0) pagesWithSrc.push(`${rel}（${srcs.join('、')}）`);
+  for (const src of srcs) {
+    if (/^(https?:)?\/\//i.test(src)) externalSrc.push(`${rel} → ${src}`);
+  }
+  if (html.includes('pagefind/pagefind.js')) searchPages.push({ rel, html });
+}
+
+if (pagesWithSrc.length === 0) {
+  console.log('  ✓ 全站无 `<script src>`：外链 0 个，站内脚本文件 0 个');
+} else if (externalSrc.length > 0) {
+  console.log(`  ✗ ${externalSrc.length} 处脚本指向站外域名：`);
+  for (const e of externalSrc.slice(0, 3)) console.log(`      ${e}`);
+  problems.push(`出现外链 JS（文档与徽章承诺全站 0 个）：${externalSrc[0]}`);
+} else {
+  console.log(`  ✗ ${pagesWithSrc.length} 个页面用 <script src> 引了脚本文件：`);
+  for (const p of pagesWithSrc.slice(0, 3)) console.log(`      ${p}`);
+  problems.push(`文章页不再是「0 个 JS 文件」（${pagesWithSrc.length} 个页面引了脚本文件）：`
+    + pagesWithSrc[0] + '——若这是有意为之，README 与 docs/compare.md 的数字要一起改');
+}
+
+if (searchPages.length === 1) {
+  console.log(`  ✓ 只有 ${searchPages[0].rel} 内联加载 Pagefind（其余页面不搜索就不下载）`);
+
+  const PF = join(DIST, 'pagefind');
+  const produced = existsSync(PF) ? await walkFiles(PF) : [];
+  const sizes = new Map();
+  for (const rel of produced) {
+    const buf = await readFile(join(PF, rel));
+    sizes.set(rel, { raw: buf.length, gz: gzipSync(buf, { level: 9 }).length });
+  }
+  const missing = ['pagefind.js', 'pagefind-worker.js', 'pagefind-entry.json']
+    .filter((f) => !existsSync(join(PF, f)));
+  const hasIndex = produced.some((f) => f.startsWith('wasm.') || f.endsWith('.pf_meta'));
+
+  // Pagefind 的运行时会请求哪些文件——**按它的文件命名约定分类，不是 grep 出来的**。
+  // 为什么不能 grep：索引分片名里的 hash 是运行时拼的（`pagefind.${hash}.pf_meta`），
+  // 静态搜文件名一个都搜不到；而反过来，那三套没用上的 UI 包**搜也搜不到**，
+  // 因为它们同样没有出现在任何已加载文件的正文里——同一个方法给出两种错。
+  const isRuntime = (rel) => rel === 'pagefind.js' || rel === 'pagefind-worker.js'
+    || rel === 'pagefind-entry.json' || rel.startsWith('wasm.')
+    || rel.endsWith('.pf_meta') || rel.startsWith('index/') || rel.startsWith('fragment/');
+  const isShard = (rel) => rel.startsWith('index/') || rel.startsWith('fragment/');
+
+  if (missing.length === 0 && hasIndex) {
+    // 体积只打印不硬断言：Pagefind 升级会让它变，那是正常的。
+    // 但**数字必须量对**——文档里写死的数是会被读的人当真的。
+    //
+    // 这里踩过两次，都记在这：
+    //   ① 只 `readdir` 顶层 → 漏掉 `index/` 与 `fragment/` 两个子目录，**整个索引没算**
+    //   ② 把顶层文件全算成"要下载的" → 多算了三套本站根本不用的 UI 包
+    //      （`pagefind-ui.js` 120 KB、`pagefind-component-ui.js` 175 KB、
+    //       `pagefind-modular-ui.js` 14 KB）。实测确认过：`pagefind.js` 正文里
+    //       只出现 `pagefind-entry.json` 与 `pagefind-worker.js`，三个 UI 包名一个都没有。
+    // 两次都是"看着挺对"的数。所以现在按运行时文件集分类，并把**从不请求的那部分**
+    // 也单独报出来——它不该混进访问者的下载量里。
+    const sum = (list) => list.reduce((a, rel) => a + sizes.get(rel).raw, 0);
+    const sumGz = (list) => list.reduce((a, rel) => a + sizes.get(rel).gz, 0);
+    const used = produced.filter(isRuntime);
+    const shards = used.filter(isShard);
+    const unused = produced.filter((rel) => !isRuntime(rel));
+    const html = searchPages[0].html;
+    const inline = [...html.matchAll(/<script((?![^>]*\ssrc=)[^>]*)>([\s\S]*?)<\/script>/g)]
+      .filter((m) => !m[1].includes('ld+json'))
+      .reduce((n, m) => n + Buffer.byteLength(m[2]), 0);
+
+    console.log('  ✓ 搜索页要加载的 Pagefind 入口、worker、索引与分词器都在产物里');
+    console.log(`      搜索页内联 ${(inline / 1024).toFixed(2)} KB`);
+    console.log(`      搜索页用到的 Pagefind（${used.length} 个文件）`
+      + ` ${(sum(used) / 1024).toFixed(0)} KB → gzip ${(sumGz(used) / 1024).toFixed(0)} KB`);
+    console.log(`        其中索引分片 index/ + fragment/ 共 ${shards.length} 个：`
+      + `${(sum(shards) / 1024).toFixed(0)} KB（按语言与查询取，不是一次性下完）`);
+    if (unused.length > 0) {
+      console.log(`      · 产物里另有 ${unused.length} 个 Pagefind 自带 UI 包本站**从不请求**：`
+        + `${(sum(unused) / 1024).toFixed(0)} KB（只增加产物体积，不进任何访问者的带宽）`);
+    }
+  } else {
+    const lack = missing.length > 0 ? missing : ['索引或分词器（wasm.*.pagefind / *.pf_meta）'];
+    console.log(`  ✗ 搜索页的内联加载器会去取 dist/pagefind/ 下的文件，但产物里缺：${lack.join('、')}`);
+    console.log('      loader 取不到时会自己 catch 掉，搜索**静默失效**——构建与页面都不报错');
+    problems.push('dist/pagefind/ 缺少搜索页要加载的文件，搜索会静默失效');
+  }
+} else if (searchPages.length === 0) {
+  console.log('  ✗ 没有任何页面加载 Pagefind —— 搜索页的 loader 不见了');
+  problems.push('找不到加载 Pagefind 的页面，搜索入口失效');
+} else {
+  console.log(`  ✗ ${searchPages.length} 个页面都在加载 Pagefind：`
+    + searchPages.map((p) => p.rel).join('、'));
+  problems.push(`${searchPages.length} 个页面加载了 Pagefind——文档说的是「只在搜索页加载」`);
 }
 
 console.log('\n' + '─'.repeat(64));

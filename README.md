@@ -35,7 +35,8 @@
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
-- **0 external JS files** · 263 unit tests · 196 end-to-end contracts · MIT
+- **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
+  search page on-demand loads same-origin Pagefind. · 263 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -153,7 +154,8 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **107 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **约 1.1 秒**，整条 `npm run build` 约 **2.6 秒**（差值是 npm 启动开销 + Pagefind 索引 0.14 秒） |
-| 外部 JS | **0 个文件**（首页仅 2.4 KB 内联） |
+| 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
+| 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind，实测 17 个文件、**146 KB / gzip** |
 | CSS | 单文件 **23.7 KB / gzip 5.1 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
