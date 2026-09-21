@@ -80,16 +80,44 @@ jobs:
       - name: 内容发布探针
         run: npm run verify:formats
 
-      # 零配置必须能构建成功——这是对使用者的核心承诺。
-      # 上面所有步骤跑的都是出厂配置（site.url 为空），
-      # 所以这一步其实已经被隐含验证了，这里显式记一笔。
+      # 零配置必须能构建成功——这是对使用者的核心承诺（README「30 秒开始」）。
+      #
+      # ⚠️ **这一步此前是空的。** 它只 grep 一下 config.ts 里的 url 是不是空的，
+      # 不是就打一条 `::warning::` 然后**以 0 退出**。而本仓库的 url **一直是有值的**
+      # （`https://xiaoxusop.github.io/letterpress`），所以它从来没检查过任何东西；
+      # 上面那些步骤跑的全是**已配置**的 config。也就是说"零配置能构建"这条承诺
+      # 在 CI 里没有任何门禁——而步骤上的注释还写着"已经被隐含验证了"，正好说反。
+      #
+      # 现在真的把它清空再构建一次，并断言产物与那条用户可见的提示都在。
       - name: 确认零配置可构建
         run: |
-          if grep -q "url: ''" src/config.ts; then
-            echo "出厂配置下构建通过 ✓（site.url 未填写时也能正常工作）"
-          else
-            echo "::warning::src/config.ts 的 url 已被填写，零配置路径未被覆盖"
+          set -euo pipefail
+          cp src/config.ts src/config.ts.bak
+          trap 'mv -f src/config.ts.bak src/config.ts' EXIT
+
+          # **清空失败必须红**，否则这一步又会静默退化成空操作——它已经那样过一次了。
+          #
+          # 注意分隔符用的是 `|` 不是 `#`：**`$#` 在双引号里是 shell 的特殊参数**
+          # （位置参数个数，这里是 0），写 `s#...#...#` 会被 shell 先展开成 `...0...`，
+          # 表达式直接变成垃圾。这不是 sed 的问题（把同样一行放进 `-f` 文件里是好的），
+          # 所以换分隔符不是绕开，是修掉。别"顺手"改回 `#`。
+          sed -i "s|^  url: '.*',$|  url: '',|" src/config.ts
+          if ! grep -q "^  url: '',$" src/config.ts; then
+            echo "::error::没能把 site.url 清空，这一步没有在测零配置"
+            exit 1
           fi
+
+          npm run build
+          test -f dist/index.html || { echo "::error::零配置构建没有产出首页"; exit 1; }
+
+          # README 写着「关于页会列出还差哪些字段」，一并断言——
+          # 那句话是给使用者的承诺，不该只靠人偶尔打开看一眼
+          if ! grep -q "site.url：你的域名" dist/about/index.html; then
+            echo "::error::关于页没有列出未配置的字段（site.url）——README 承诺过这一条"
+            exit 1
+          fi
+
+          echo "出厂配置（site.url 为空）下构建通过 ✓，关于页也列出了待填字段 ✓"
 
   lint-content:
     name: 内容体检
