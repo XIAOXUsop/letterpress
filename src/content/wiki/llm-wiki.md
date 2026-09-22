@@ -2,8 +2,39 @@
 title: LLM 知识库
 summary: Karpathy 2026 年 4 月提出的模式——让 agent 主动读写并维护一层知识库，新素材进来时做的是「重构」而不是「追加」。
 kind: concept
-updated: 2026-09-22
+updated: 2026-09-23
 related: [content-negotiation, letterpress]
+# ── 可证伪声明 ────────────────────────────────────────────────────────
+# 下面这张表里每一行「已实现」都对应一个文件。检查会问两件事：
+#   ① 表里那句话**还在不在页面上**（改正文忘改声明 → 报错）
+#   ② 它对应的文件**在不在**（功能落地了、页面没跟上 → 报错，反之亦然）
+# 这一页原先有三行写着「计划中，尚未实现」，而它们**全都已经落地**了，
+# 却没有任何检查发现——lint 只管断链与孤儿页，管不着「页与仓库之间」。
+verify:
+  - claim: 知识层页面与互链
+    stated: 知识层页面（`src/content/wiki/`）与互链
+    path: src/content/wiki/*.md
+    expect: exists
+  - claim: 机械检查进 CI
+    stated: 机械检查（`src/lib/wiki/lint.ts`）进 CI
+    path: src/lib/wiki/lint.ts
+    expect: exists
+  - claim: 来源登记与版本固定
+    stated: 来源登记与版本固定 | **已实现**
+    path: knowledge/sources/*.json
+    expect: exists
+  - claim: 页面级的引用与复核字段
+    stated: 页面级的引用与复核字段 | **已实现**
+    path: src/components/Provenance.astro
+    expect: exists
+  - claim: 摄取与影响分析的工作流脚本
+    stated: 摄取 / 影响分析的工作流脚本 | **已实现**
+    path: scripts/wiki-impact.mjs
+    expect: exists
+  - claim: 面向 agent 的检索与金标
+    stated: 面向 agent 的检索与问题金标
+    path: knowledge/questions.md
+    expect: exists
 ---
 
 一份由 AI 持续读写的结构化知识库，通常就是一堆 markdown 文件。
@@ -45,12 +76,25 @@ related: [content-negotiation, letterpress]
 | 知识层页面（`src/content/wiki/`）与互链 | **已实现** |
 | 机械检查（`src/lib/wiki/lint.ts`）进 CI | **已实现** |
 | 文章 → 知识页的人工综合 | **已实现**（本页就是） |
-| 来源登记与版本固定 | 计划中，尚未实现 |
-| 页面级的引用与复核字段 | 计划中，尚未实现 |
-| 摄取 / 影响分析的工作流脚本 | 计划中，尚未实现 |
+| 来源登记与版本固定 | **已实现**（`knowledge/sources/`） |
+| 页面级的引用与复核字段 | **已实现**（`Doc.sources` / `Doc.review`） |
+| 摄取 / 影响分析的工作流脚本 | **已实现**（`scripts/wiki-impact.mjs`） |
+| 面向 agent 的检索与问题金标 | **已实现**（`knowledge/questions.md`） |
+| 语义级的矛盾检测（「这两页说法冲突」） | 计划中，尚未实现 |
 
 > 这张表是 2026-09-22 补的。此前本页通篇以「本项目怎么做」的口吻描述这套模式，
 > 而其中大半尚未落地——**读者无从分辨哪些是真的、哪些是打算做的**。
+>
+> **勘误（2026-09-23）**：这张表自己就出过这个毛病。上面三行原先写着
+> 「计划中，尚未实现」，而它们**在写下那句话的时候就已经落地了**——
+> 来源登记（`knowledge/sources/`）、引用与复核字段（`Doc.sources` / `Doc.review`）、
+> 影响分析脚本（`scripts/wiki-impact.mjs`）全都存在。
+> **没有任何检查会发现这件事**：lint 管的是断链、重复 slug、孤儿页，
+> 那些都是**页与页之间**的问题；而这一条是**页与仓库之间**的问题。
+>
+> 现在这张表的每一行都带一条 `verify:` 声明（见本页 frontmatter）：
+> 检查同时核对**那句话还在不在页面上**、以及**它对应的文件在不在**。
+> 只查文件是不够的——正文改了、声明没改的话，声明还在验一句没人说过的话。
 
 ## 本项目的取舍：把 lint 做成确定性的
 

@@ -9,6 +9,7 @@ import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
 // 直接从它所在的模块拿——remark-wikilink 只是**导入**它，没有**再导出**，
 // 从那里拿会得到 undefined，而报错是 'not a function'，看不出是 import 错了。
 import { collectFrontmatterProblems } from './src/lib/wiki/frontmatter.ts';
+import { checkVerifyClaims, formatVerifyProblems } from './src/lib/wiki/verify-run.ts';
 import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
 import { rehypeHeadingLinks } from './src/lib/rehype-heading-links.ts';
 
@@ -38,6 +39,39 @@ if (frontmatterProblems.length > 0) {
       `块标量（| / >）、值写到下一行、行尾注释都不支持——\n` +
       `原因与取舍见 src/lib/wiki/remark-wikilink.ts 里 frontmatterField 的注释。`,
   );
+}
+
+/**
+ * ── 可证伪声明（`verify:`）的核对：同样必须在**加载期** ──────────────
+ *
+ * 这一条检查的是**页与仓库之间**的事实：页面说「X 已实现」，
+ * 而 X 对应的文件在不在。
+ *
+ * 它存在的原因是一次实测：`llm-wiki.md` 的「已实现 / 计划实现」表里，
+ * **三行写着「计划中，尚未实现」，而它们全都已经落地**。
+ * 没有任何东西会发现——lint 管的是断链、重复 slug、孤儿页，
+ * 那些都是页与页之间的问题。
+ *
+ * 放在这里而不是 remark 管道里，理由与上面那条完全一样：
+ * **在 remark 里抛错，Astro 不会让构建失败**（实测：错误打印 22 次、
+ * 页面退化、而 `Build exit code: 0`）。
+ */
+const verifyResults = checkVerifyClaims(join(process.cwd(), 'src', 'content'));
+const verifyProblems = formatVerifyProblems(verifyResults);
+if (verifyProblems.length > 0) {
+  throw new Error(
+    `有 ${verifyProblems.length} 处可证伪声明对不上（页面说的与仓库里的不一致）：\n\n` +
+      verifyProblems.map((p) => `  ✗ ${p}`).join('\n\n') +
+      `\n\n每条声明都查两件事：那句话**还在不在页面上**、以及它对应的**文件在不在**。\n` +
+      `只查文件是不够的——正文改了、声明没改时，声明就在验一句没人说过的话。\n` +
+      `声明写在知识页的 frontmatter 里，格式见 src/lib/wiki/verify.ts 开头。`,
+  );
+}
+const claimCount = verifyResults.reduce((n, r) => n + r.problems.length, 0) === 0
+  ? verifyResults.length
+  : 0;
+if (claimCount > 0) {
+  console.log(`✓ ${claimCount} 个知识页的可证伪声明全部成立`);
 }
 
 /**
