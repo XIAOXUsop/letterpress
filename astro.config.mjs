@@ -5,7 +5,10 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
 import { unified } from '@astrojs/markdown-remark';
-import { remarkWikilink, collectFrontmatterProblems } from './src/lib/wiki/remark-wikilink.ts';
+import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
+// 直接从它所在的模块拿——remark-wikilink 只是**导入**它，没有**再导出**，
+// 从那里拿会得到 undefined，而报错是 'not a function'，看不出是 import 错了。
+import { collectFrontmatterProblems } from './src/lib/wiki/frontmatter.ts';
 import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
 import { rehypeHeadingLinks } from './src/lib/rehype-heading-links.ts';
 

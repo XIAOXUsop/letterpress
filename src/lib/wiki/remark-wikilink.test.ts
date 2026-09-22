@@ -22,7 +22,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach } from 'vitest';
-import { frontmatterField, collectFrontmatterProblems, buildLookup } from './remark-wikilink.js';
+import { buildLookup } from './remark-wikilink.js';
+// frontmatter 的解析已抽成独立模块（脚本也要用它，重写一份就是三份实现）
+import { frontmatterField, collectFrontmatterProblems } from './frontmatter.js';
 
 const doc = (frontmatter: string) => `---\n${frontmatter}\n---\n正文\n`;
 
