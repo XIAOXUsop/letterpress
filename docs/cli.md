@@ -10,7 +10,7 @@
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
 | `npm run verify:formats` | 内容发布探针：真的放入 `.md`、`.mdx`、草稿和占用 `/about/` 的文章，验证格式产出、草稿隔离与系统路由冲突 |
 | `npm run verify:search` | 搜索可用性：页面语言一致性、索引语言，以及**内容清单里的每一条都真的标了 `data-pagefind-body` 并进了索引**。**不查结果**——查询行为只能在浏览器里测，原因见脚本注释 |
-| `npm run verify:anchors` | 锚点契约：产物里**每一个带片段的站内链接**都必须在目标页里找得到那个 `id`。在产物上查而不是从源码再推一遍——小节 ID 是渲染期用 `github-slugger` 生成的，重复标题还带 `-1` 后缀，从源码推算等于再造第三套解析器 |
+| `npm run verify:anchors` | 站内链接与锚点契约：产物里**每个站内链接**都要指向存在的文件，**每个带片段的**还要在目标页里找得到那个 `id`。在产物上查而不是从源码再推一遍——小节 ID 是渲染期用 `github-slugger` 生成的，重复标题还带 `-1` 后缀，从源码推算等于再造第三套解析器。**它同时是"两套解析漂开"的探测器**：链接图与 remark 查找表只要对 URL 有分歧，这里就会出现死链 |
 | `npm run verify:reproducible` | 扫描生产源码的构建时钟读取，并在 UTC / America/Los_Angeles 做完整构建、逐文件比较 SHA-256；覆盖 Astro 产物与 Pagefind 索引 |
 | `npm run verify:online` | **线上烟测**：只打线上地址，验内容协商、NDJSON 全量导出与增量清单真的生效。需要 `SITE_ORIGIN`，没配就直接失败（不退回本地） |
 | `npm run verify:testcount` | 单元测试**条数**对账：`npm test` 写出的 JSON 报告 vs README 与 `docs/` 里抄的四个数。读不到报告就失败（读不动 ≠ 通过） |

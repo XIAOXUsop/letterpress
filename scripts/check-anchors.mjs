@@ -64,7 +64,45 @@ function collectPages(dir, out = new Map()) {
   return out;
 }
 
+/**
+ * 产物里所有文件的**相对路径集合**，用来判断"这个链接指向的东西存不存在"。
+ *
+ * 不能只收 `.html`：`/slug.md` 孪生、`/robots.txt`、`/rss.xml` 都是合法目标。
+ * 第一版只收了 HTML，于是 76 个正当链接被误报成死链。
+ */
+function collectAllFiles(dir, out = new Set()) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) collectAllFiles(full, out);
+    else out.add(relative(dist, full).split(sep).join('/'));
+  }
+  return out;
+}
+
+/**
+ * 一个站内路径在产物里存不存在。
+ *
+ * 两种命中方式：**直接是文件**（`/a.md`、`/robots.txt`），
+ * 或**是目录**（`/tags/中文/` → `tags/中文/index.html`）。
+ *
+ * 路径先按百分号解码——HTML 里的中文标签链接是编码过的
+ * （`/tags/%E6%8E%92%E7%89%88/`），而磁盘上是原文。
+ */
+function existsInDist(pathname) {
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    /* 非法编码：按原样试 */
+  }
+  const rel = decoded.replace(/^\/+|\/+$/g, '');
+  if (rel === '') return allFiles.has('index.html');
+  if (allFiles.has(rel)) return true;
+  return allFiles.has(`${rel}/index.html`);
+}
+
 const pages = collectPages(dist);
+const allFiles = collectAllFiles(dist);
 if (pages.size === 0) {
   console.error(`\n${dist} 里一个 HTML 都没有——这一步什么都没检查，不能报通过。`);
   process.exit(1);
@@ -82,6 +120,7 @@ for (const [route, file] of pages) ids.set(route, idsOf(readFileSync(file, 'utf8
 
 const problems = [];
 let checkedAnchors = 0;
+let checkedLinks = 0;
 let checkedPages = 0;
 
 for (const [route, file] of pages) {
@@ -96,9 +135,35 @@ for (const [route, file] of pages) {
     if (/\.(?:png|jpe?g|svg|ico|xml|txt|json|ndjson|css|js|webmanifest)$/i.test(href)) continue;
 
     const hash = href.indexOf('#');
-    if (hash === -1) continue; // 不带片段的链接不归本脚本管
-    const frag = href.slice(hash + 1);
-    if (frag === '') continue; // 空的 `#` 不算锚点
+    const frag = hash === -1 ? '' : href.slice(hash + 1);
+    const pathPart = hash === -1 ? href : href.slice(0, hash);
+
+    /*
+     * ── 这一条此前**完全没有** ────────────────────────────────────────
+     *
+     * 全站没有任何检查断言过「HTML 里的站内链接都指向存在的页面」。
+     * 这不是理论风险：这个项目**故意**有两套解析（`graph.ts` 走 Astro
+     * 内容层、`remark-wikilink.ts` 走 fs 扫描），两边一旦对 URL 有分歧，
+     * HTML 里就会出现死链，而**链接图会说自己一切正常**。
+     *
+     * 所以这条检查同时是那个分歧的**探测器**：两套解析算出的 URL
+     * 只要对不上，这里就红。
+     */
+    if (pathPart !== '' && pathPart !== '/') {
+      const normalized = pathPart.replace(/^\.\//, '');
+      // 先去掉部署前缀，再问产物里有没有
+      const withoutBase = base !== '' && normalized.startsWith(base + '/')
+        ? normalized.slice(base.length)
+        : normalized;
+      if (!existsInDist(withoutBase)) {
+        problems.push(`${route} → ${href}：产物里没有 ${normalized} 对应的文件`);
+        continue;
+      }
+      checkedLinks++;
+    }
+
+    if (frag === '') continue; // 不带片段的链接到此为止
+    const targetRouteForAnchor = hash === 0 ? route : base + '/' + pathPart.replace(/^\/+/, '');
 
     // 片段是百分号编码的（中文标题会走 encodeURIComponent）
     let decoded = frag;
@@ -108,41 +173,47 @@ for (const [route, file] of pages) {
       /* 非法编码：按原样比对，下面的检查自然会报出来 */
     }
 
-    // 目标页：`#x` 是本文档，`/a/#x` 是别的文档
-    const targetRoute = hash === 0 ? route : base + '/' + href.slice(0, hash).replace(/^\/+/, '');
-
-    const targetIds = ids.get(targetRoute);
+    const targetIds = ids.get(targetRouteForAnchor);
     if (targetIds === undefined) {
-      problems.push(`${route} → ${href}：目标页面 ${targetRoute} 不在产物里`);
+      problems.push(`${route} → ${href}：目标页面 ${targetRouteForAnchor} 不在产物里`);
       continue;
     }
 
     checkedAnchors++;
     if (!targetIds.has(decoded)) {
       problems.push(
-        `${route} → ${href}：${targetRoute} 里没有 id="${decoded}" 的元素` +
+        `${route} → ${href}：${targetRouteForAnchor} 里没有 id="${decoded}" 的元素` +
           `（该页共 ${targetIds.size} 个 id）`,
       );
     }
   }
 }
 
-console.log('\n锚点契约');
+console.log('\n站内链接与锚点契约');
 console.log('─'.repeat(64));
-console.log(`  · 检查了 ${checkedPages} 个页面、${checkedAnchors} 个带片段的站内链接`);
+console.log(
+  `  · 检查了 ${checkedPages} 个页面、${checkedLinks} 个站内链接、` +
+    `${checkedAnchors} 个带片段的锚点`,
+);
 
-if (checkedAnchors === 0) {
+if (checkedLinks === 0 || checkedAnchors === 0) {
   // 与其它检查同一条原则：**量到 0 个不等于通过**
-  console.error('  ✗ 一个带片段的站内链接都没找到——这一步什么都没验证，不能报通过');
+  console.error(
+    `  ✗ 站内链接 ${checkedLinks} 个、锚点 ${checkedAnchors} 个——` +
+      `任一类为 0 就说明这一步什么都没验证，不能报通过`,
+  );
   process.exit(1);
 }
 
 if (problems.length > 0) {
-  console.error(`\n  ✗ ${problems.length} 个锚点无法解析：`);
+  console.error(`\n  ✗ ${problems.length} 个站内链接无法解析：`);
   for (const p of problems.slice(0, 20)) console.error(`      ${p}`);
   if (problems.length > 20) console.error(`      …还有 ${problems.length - 20} 个`);
-  console.error('\n  读者点过去会落在页面顶部而不知道走错了。修链接，或补上那个 id。');
+  console.error(
+    '\n  死链会让读者撞 404；锚点错位会让他落在页面顶部而不知道走错了。' +
+      '\n  修链接，或补上那个 id。',
+  );
   process.exit(1);
 }
 
-console.log('  ✓ 所有站内片段的锚点都存在');
+console.log('  ✓ 所有站内链接指向存在的页面，所有锚点都存在');
