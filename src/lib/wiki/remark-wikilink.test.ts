@@ -22,7 +22,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach } from 'vitest';
-import { frontmatterField, collectFrontmatterProblems } from './remark-wikilink.js';
+import { frontmatterField, collectFrontmatterProblems, buildLookup } from './remark-wikilink.js';
 
 const doc = (frontmatter: string) => `---\n${frontmatter}\n---\n正文\n`;
 
@@ -174,5 +174,53 @@ describe('collectFrontmatterProblems：给配置加载期用的全量扫描', ()
   it('目录不存在时返回空，而不是抛', () => {
     // 关掉知识层、或者内容目录还没建，都是合法状态
     expect(collectFrontmatterProblems(join(tmpdir(), 'lp-definitely-missing-xyz'))).toEqual([]);
+  });
+});
+
+describe('两套查找表必须算出同一批 URL', () => {
+  /**
+   * 这个项目**故意**有两套解析：`graph.ts` 走 Astro 内容层（真 YAML），
+   * `remark-wikilink.ts` 走 fs 扫描（手写子集解析）。理由是 remark 插件在
+   * markdown 管线里拿不到内容集合。
+   *
+   * 重复本身可以接受，**漂开不可以**——两边一旦不一致，
+   * HTML 里的链接与链接图/内容清单就会各指各的，而构建照样通过。
+   *
+   * URL 前缀原先就是手写的第二份（`collect('posts', '/')` /
+   * `collect('wiki', '/wiki/')`）。这条用例钉住的就是"现在只有一份规则"。
+   */
+  const dirs: string[] = [];
+  const root = () => {
+    const r = mkdtempSync(join(tmpdir(), 'lp-consist-'));
+    dirs.push(r);
+    return r;
+  };
+  const write = (r: string, rel: string, body: string) => {
+    const full = join(r, rel);
+    mkdirSync(join(full, '..'), { recursive: true });
+    writeFileSync(full, body, 'utf8');
+  };
+  afterEach(() => {
+    while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+  });
+
+  it('文章与 wiki 条目的前缀对得上', () => {
+    const r = root();
+    write(r, 'posts/a.md', '---\ntitle: 文章甲\n---\n正文');
+    write(r, 'wiki/b.md', '---\ntitle: 条目乙\n---\n正文');
+
+    const lookup = buildLookup(r);
+    // 与 `urlFor` 同一套规则；写死在这里，是为了让规则变化时这条会红
+    expect(lookup.byName.get('文章甲')).toBe('/a/');
+    expect(lookup.byName.get('条目乙')).toBe('/wiki/b/');
+  });
+
+  it('部署子路径会统一加在前面', () => {
+    const r = root();
+    write(r, 'posts/a.md', '---\ntitle: 甲\n---\n正文');
+    write(r, 'wiki/b.md', '---\ntitle: 乙\n---\n正文');
+    const lookup = buildLookup(r, '/letterpress/');
+    expect(lookup.byName.get('甲')).toBe('/letterpress/a/');
+    expect(lookup.byName.get('乙')).toBe('/letterpress/wiki/b/');
   });
 });

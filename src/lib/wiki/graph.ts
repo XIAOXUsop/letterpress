@@ -93,9 +93,24 @@ export interface LinkGraph {
   readonly orphans: readonly string[];
 }
 
+/**
+ * 文档的对外 URL。**这是全站唯一的 URL 规则**。
+ *
+ * 抽成 `(kind, slug)` 而不是只吃 `Doc`：`remark-wikilink` 在 markdown 管线里
+ * 拿不到 `Doc`（它是纯 fs 扫描），而它**曾经手写**这两个前缀：
+ *
+ *     collect('posts', '/'); collect('wiki', '/wiki/');
+ *
+ * 那是同一套规则的第二份实现——`urlOf` 一改，它就静默对不上，
+ * 于是 HTML 里的链接与链接图/清单各指各的。现在两边都走这一个函数。
+ */
+export function urlFor(kind: Doc['kind'], slug: string): string {
+  return kind === 'wiki' ? `/wiki/${slug}/` : `/${slug}/`;
+}
+
 /** 计算文档的对外 URL。文章与 wiki 页共用一套规则，便于互相链接。 */
 export function urlOf(doc: Doc): string {
-  return doc.kind === 'wiki' ? `/wiki/${doc.slug}/` : `/${doc.slug}/`;
+  return urlFor(doc.kind, doc.slug);
 }
 
 export interface GraphOptions {

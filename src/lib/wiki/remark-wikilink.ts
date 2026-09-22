@@ -30,6 +30,7 @@ import type { Root, Text } from 'mdast';
 import { visit } from 'unist-util-visit';
 import { normalizeTarget } from './wikilink.js';
 import { resolveSlug } from './slug.js';
+import { urlFor } from './graph.js';
 
 interface Lookup {
   readonly byName: ReadonlyMap<string, string>;
@@ -205,7 +206,9 @@ export function buildLookup(contentRoot: string, base = '/'): Lookup {
   const byName = new Map<string, string>();
   const basePrefix = base.endsWith('/') ? base.slice(0, -1) : base;
 
-  const collect = (subdir: string, urlPrefix: string) => {
+  // 前缀**不手写**：与链接图、内容清单共用 `urlFor` 这一份规则。
+  // 手写的那一版在这里躺了很久——`urlOf` 一改它就静默对不上。
+  const collect = (subdir: string, kind: 'post' | 'wiki') => {
     const out: Array<{ slug: string; title: string; url: string }> = [];
     for (const file of collectFiles(join(contentRoot, subdir))) {
       const source = readFileSync(file, 'utf8');
@@ -218,12 +221,12 @@ export function buildLookup(contentRoot: string, base = '/'): Lookup {
 
       const slug = resolveSlug(title, explicit, fileId);
       if (slug === '') continue;
-      out.push({ slug, title, url: `${basePrefix}${urlPrefix}${slug}/` });
+      out.push({ slug, title, url: `${basePrefix}${urlFor(kind, slug)}` });
     }
     return out;
   };
 
-  const all = [...collect('posts', '/'), ...collect('wiki', '/wiki/')];
+  const all = [...collect('posts', 'post'), ...collect('wiki', 'wiki')];
 
   // ── 先数标题，再建表：同名标题**不进查找表** ─────────────────────
   //
