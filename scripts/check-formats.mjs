@@ -188,19 +188,48 @@ try {
     }
   }
 
+  /*
+   * ── 全产物扫描：**不按扩展名白名单跳过** ──────────────────────────────
+   *
+   * 这里原先写的是 `if (!/\.(html|md|txt|xml|json|ndjson)$/.test(rel)) continue`——
+   * 一个**白名单**。它当时是对的，但它的失败方式是无声的：
+   * 将来多一个出口（换扩展名、加一种导出格式），泄漏检查会**静默地不覆盖它**，
+   * 而扫描照样打印"草稿没有进入任何文本出口"。
+   *
+   * 改成扫**全部**文件，按 UTF-8 尝试解码；解不出来的（真二进制）跳过，
+   * 但**把跳过数报出来**——范围可见，而不是"看起来全覆盖"。
+   *
+   * 二进制产物（Pagefind 的压缩索引、字体、图片）确实搜不出明文标记，
+   * 这是方法的边界，不是保证。所以这里只声称"文本产物无泄漏"；
+   * 索引那一侧由另一条性质兜住：**索引只能收录实际生成的页面**，
+   * 而草稿页面根本没生成（上面 `forbiddenOutputs` 已断言）。
+   */
+  let scanned = 0;
+  let skippedBinary = 0;
   for (const relative of await readdir(dist, { recursive: true })) {
-    if (!/\.(?:html|md|txt|xml|json|ndjson)$/i.test(relative)) continue;
     const full = join(dist, relative);
+    let bytes;
     try {
-      const text = await readFile(full, 'utf8');
-      if (text.includes(DRAFT_PROBE.marker)) leakedFiles.push(relative);
+      bytes = await readFile(full);
     } catch {
-      // 目录或非文本产物不参与内容泄漏检查
+      continue; // 目录
     }
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      skippedBinary++;
+      continue;
+    }
+    scanned++;
+    if (text.includes(DRAFT_PROBE.marker)) leakedFiles.push(relative);
   }
 
   if (leakedFiles.length === 0) {
-    console.log('  ✓ 草稿没有进入页面、孪生文件、OG 或任何文本出口');
+    console.log(
+      `  ✓ 草稿没有进入页面、孪生文件、OG 或任何文本出口` +
+        `（扫描 ${scanned} 个文本产物，跳过 ${skippedBinary} 个二进制）`,
+    );
   } else {
     const unique = [...new Set(leakedFiles)];
     problems.push(`草稿泄漏到 ${unique.join('、')}`);
