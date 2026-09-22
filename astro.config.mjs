@@ -1,12 +1,41 @@
 // @ts-check
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
 import { unified } from '@astrojs/markdown-remark';
-import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
+import { remarkWikilink, collectFrontmatterProblems } from './src/lib/wiki/remark-wikilink.ts';
 import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
 import { rehypeHeadingLinks } from './src/lib/rehype-heading-links.ts';
+
+/**
+ * ── frontmatter 写法校验：必须在**这里**，不能放在 remark 插件里 ──────────
+ *
+ * `remark-wikilink.ts` 有一个手写的 frontmatter 取值函数（刻意不实现完整
+ * YAML）。它支持的子集是写死的，越界会抛——但**在 remark 管道里抛错，
+ * Astro 不会让构建失败**。
+ *
+ * 实测（2026-09-23，清掉内容层缓存后注入一个 `title: >`）：
+ *
+ *     错误打印 22 次
+ *     [ERROR] Failed to parse Markdown file "…cjk-web-typography.md"
+ *     wiki 页里的链接从 4 条掉到 3 条     ← 页面真的退化了
+ *     Build exit code: 0                  ← 而构建自称成功
+ *
+ * 那比原来的"链接静默指错"更糟。所以挪到配置加载期：
+ * 这时什么都还没渲染，抛出去就是整个构建失败、原因一眼可见。
+ */
+const frontmatterProblems = collectFrontmatterProblems(join(process.cwd(), 'src', 'content'));
+if (frontmatterProblems.length > 0) {
+  throw new Error(
+    `有 ${frontmatterProblems.length} 处 frontmatter 用了 [[链接]] 查找表不支持的写法：\n\n` +
+      frontmatterProblems.map((p) => `  ✗ ${p}`).join('\n\n') +
+      `\n\n这些字段只支持 \`字段: 单行值\`（可整体加引号，不含转义）。\n` +
+      `块标量（| / >）、值写到下一行、行尾注释都不支持——\n` +
+      `原因与取舍见 src/lib/wiki/remark-wikilink.ts 里 frontmatterField 的注释。`,
+  );
+}
 
 /**
  * 站点根地址从 `src/config.ts` 读——那里是用户唯一要改的文件，
