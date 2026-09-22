@@ -57,7 +57,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 ```
 页面                         HTML token   MD token       节省
-/markdown-for-agents/            5857       2110    64.0%
+/markdown-for-agents/            5894       2110    64.2%
 /cjk-web-typography/             7482       2842    62.0%
 /wiki/content-negotiation/       3681       1106    70.0%
 ```

@@ -2,6 +2,7 @@
 title: LLM 知识库
 summary: Karpathy 2026 年 4 月提出的模式——让 agent 主动读写并维护一层知识库，新素材进来时做的是「重构」而不是「追加」。
 kind: concept
+updated: 2026-09-22
 related: [content-negotiation, letterpress]
 ---
 

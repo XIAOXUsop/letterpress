@@ -28,7 +28,7 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Measured saving: **64.0% / 62.0%** of tokens. → [details](docs/content-negotiation.md)
+  Measured saving: **64.2% / 62.0%** of tokens. → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
   → [details](docs/cjk-typography.md)
@@ -80,7 +80,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-实测同一页面的 markdown 比 HTML 省 **64.0% / 62.0%** 的 token。
+实测同一页面的 markdown 比 HTML 省 **64.2% / 62.0%** 的 token。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：

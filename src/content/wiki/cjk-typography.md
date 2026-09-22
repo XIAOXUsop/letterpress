@@ -2,6 +2,7 @@
 title: 中文排版
 summary: 行高、字重、行宽、中西文间距——四个参数直接套西文的值，中文读者看到的是「能读但别扭」的页面。
 kind: concept
+updated: 2026-09-22
 related: [cjk-web-typography, design-tokens]
 ---
 
