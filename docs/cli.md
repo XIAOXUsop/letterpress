@@ -4,7 +4,7 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **324 项**单元测试，全部离线 |
+| `npm test` | **348 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 196 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
@@ -16,7 +16,9 @@
 | `npm run verify:testcount` | 单元测试**条数**对账：`npm test` 写出的 JSON 报告 vs README 与 `docs/` 里抄的四个数。读不到报告就失败（读不动 ≠ 通过） |
 | `npm run wiki:review -- --slug <名字>` | 取一条知识页的**当前**正文摘要，并打印可粘进 frontmatter 的复核片段。**不自动写回**——"我复核过了"是一个承诺，不该由一次回车作出。`--list` 列出全部条目与状态 |
 | `npm run wiki:impact -- --source <id>` | 来源变更的影响分析，输出**三组且互不重叠**：直接引用者（必然要复查）、可能受影响者（一跳邻居，**只是候选**）、仓库辅助载体（docs 与代码注释，不在发布集合里所以最容易漏）。**不联网**——只读已登记的事实，不判断远端有没有出新版 |
-| `npm run verify:all` | 九道依次跑一遍（`check` + `test` + `verify` + `verify:testcount` + `verify:search` + `verify:anchors` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
+| `npm run wiki:ask -- "问题"` | 把一个自然语言问题编译成**带元数据的 context pack**：文档 ID、小节、来源版本、复核状态、与主命中的关系路径。**只挑材料，不下结论**——选错了能对照金标查出来，结论错了只能靠人读，混在一起就没法自动验证。`--json` 给机器读，`--all` 不截断 |
+| `npm run verify:questions` | 拿 `knowledge/questions.md` 当尺子量检索：19 条问题覆盖精确事实、跨文档组合、冲突、过期、无答案五类。**「无答案」那一类（5 条）是关键**——一个永远给得出答案的检索器只会在它们上面失败。失败时退出码 1 |
+| `npm run verify:all` | 十道依次跑一遍（`check` + `test` + `verify` + `verify:testcount` + `verify:search` + `verify:questions` + `verify:anchors` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 

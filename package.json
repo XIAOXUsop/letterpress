@@ -24,11 +24,13 @@
     "wiki:review": "node scripts/wiki-review.mjs",
     "wiki:impact": "node scripts/wiki-impact.mjs",
     "verify:base": "node scripts/check-base.mjs",
-    "verify:all": "npm run check && npm test && npm run verify && npm run verify:testcount && npm run verify:search && npm run verify:anchors && npm run verify:reproducible && npm run verify:base && npm run verify:formats",
+    "verify:all": "npm run check && npm test && npm run verify && npm run verify:testcount && npm run verify:search && npm run verify:questions && npm run verify:anchors && npm run verify:reproducible && npm run verify:base && npm run verify:formats",
     "verify:formats": "node scripts/check-formats.mjs",
     "verify:online": "node scripts/smoke-online.mjs",
     "verify:reproducible": "node scripts/check-reproducible.mjs",
-    "verify:search": "node scripts/check-search.mjs"
+    "verify:search": "node scripts/check-search.mjs",
+    "wiki:ask": "node scripts/wiki-ask.mjs",
+    "verify:questions": "node scripts/check-questions.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",
