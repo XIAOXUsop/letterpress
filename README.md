@@ -28,7 +28,7 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Measured saving: **64.2% / 62.0%** of tokens. → [details](docs/content-negotiation.md)
+  Estimated saving: **61.5% / 61.1%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
   → [details](docs/cjk-typography.md)
@@ -80,7 +80,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-实测同一页面的 markdown 比 HTML 省 **64.2% / 62.0%** 的 token。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **61.5% / 61.1%** 的 token——**这是估算不是真实分词器**（用真实词表 `o200k_base` 复算是 65.0% / 63.9%）。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -169,7 +169,8 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 
 - **Demo 部署在 GitHub Pages 上，因此跑不了内容协商**（Pages 的响应头不可改）。
   其余功能都可在线验证；内容协商需要 Cloudflare Pages / Netlify / Vercel，
-  本地可用 `npm run verify` 实测——它会打印真实的 token 节省数字。
+  本地可用 `npm run verify` 复算——它打印的是**启发式估算**（CJK 1 字 1 token、
+  其余 4 字符 1 token），不是模型真实用量；真实词表下的对照见 `docs/content-negotiation.md`。
   （对着 Demo 跑 `npm run verify:online` 会在协商那几项上报红——**那是这条限制本身，
   不是部署事故**；同一个脚本会同时证明 Pages 能做到的部分是好的。）
 - **同一个限制还影响 `/content.ndjson` 的 Content-Type。** 源码里设的是

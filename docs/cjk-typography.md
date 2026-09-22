@@ -18,7 +18,7 @@
 **同时满足**中文的 30–40 字与西文的 45–75 字符两个理想区间。
 
 用 `ch` 会怎样：按规范它等于**渲染所用字体**里「0」字形的 advance measure
-（[CSS Values 4 §ch](https://www.w3.org/TR/css-values-4/#ch)），
+（[CSS Values 4 §ch](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch)），
 所以「66ch 是几个汉字」**取决于字体**，换字体就变。
 粗估一个汉字约 2 `ch`，66ch ≈ **33 字**——其实也在舒适区间里，但它是估算。
 `em` 等于字号、与字体无关，所以能写成上面那种确定的换算式。
@@ -88,6 +88,6 @@ font-family: 'Archivo', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-se
 
 ## 依据
 
-- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/css-values-4/#ch) —— `ch` 的定义
-- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/css-fonts-4/#font-style-matching) —— 字重匹配
-- [CSS Fonts Level 4 §font-synthesis-weight](https://www.w3.org/TR/css-fonts-4/#font-synthesis-weight) —— 伪合成的开关
+- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch) —— `ch` 的定义
+- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-style-matching) —— 字重匹配
+- [CSS Fonts Level 4 §font-synthesis-weight](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-synthesis-weight) —— 伪合成的开关

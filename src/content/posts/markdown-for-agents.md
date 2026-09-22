@@ -2,7 +2,7 @@
 title: 你的博客该不该给 AI 一份 markdown
 summary: 内容协商是 HTTP 自带的能力，但博客圈几乎没人用。三个 agent 会主动要 markdown，四个不会——而现有工具都跳过了最难的那一步。
 date: 2026-09-12
-updated: 2026-09-22
+updated: 2026-09-23
 tags: [web, agent, http]
 featured: true
 coverAlt: 蓝底白色几何构图
@@ -114,10 +114,23 @@ markdown——它们本来接受 HTML，你硬给别的格式，属于自找麻�
 
 你可能想问为什么不提 `llms.txt`。因为它的实际效果被严重高估了：
 
-- Ahrefs 2026 年 5 月实测 **137,210 个域名：97% 的 llms.txt 从未被请求过**。
-  剩下 3% 里 96% 是机器人噪声，真正来自 AI 检索爬虫的只占 **1.1%**。
-- Google 明确不支持，2026 年 6 月的 Search Central 指南写明不需要这类文件。
+- **Google 明说不需要。** Search Central 的 AI 功能文档里写着：
+
+  > You don't need to create new machine readable files, AI text files,
+  > or markup to appear in these features.
+
+  注意原文说的是「**不需要**」而不是「不支持」——不做也不会因此缺席，
+  但 Google 也没说它有害。
+  （[原文](https://developers.google.com/search/docs/appearance/ai-features)）
 - 多个独立实验都没测到可归因的效果。
+
+> **2026-09-23 删掉了一组数字。** 这里原先写「Ahrefs 2026 年 5 月实测
+> **137,210 个域名：97% 的 llms.txt 从未被请求过**」以及后面那串百分比。
+> 我试图核实它：按几种常见路径试 `ahrefs.com/blog/*` 全部 404、
+> Ahrefs 自己的 sitemap 里**没有收录博客**、两个搜索引擎也取不到可解析的结果。
+> **查不到就不该留着**——一组精确到个位数的统计，读者无从核对，
+> 却会因为"看起来很硬"而被转引。这正是"引用制造虚假权威感"。
+> 如果谁能给出确切地址，欢迎补回来；在那之前，这一节只保留能点开的依据。
 
 它**零成本、无下行风险**，而且确实有 agent 会抓（Claude Code 抓取 llms.txt
 的频率高于任何 AI 搜索机器人），所以本站在生成它。但把它当卖点是误导。
@@ -132,11 +145,13 @@ markdown——它们本来接受 HTML，你硬给别的格式，属于自找麻�
   —— 正文里「16,180 → 3,150 token、省 80%」那组数字出自这里。
   **测量条件是 Cloudflare 拿自己的文档做的，本项目没有复现它**；
   它说明的是「干净 HTML 转 markdown 能省多少」，不是本站的节省率
-  （本站自己的实测在 [[内容协商]] 末尾，由 `npm run verify` 复算）
-- Ahrefs, *We Analyzed 137K Sites: 97% of llms.txt Files Never Get Read*, 2026-05
-  —— ⚠️ **这一条的原始链接没有核实到**：我按几种常见路径试过 ahrefs.com/blog，
-  都返回 404。**正文里那 97% 的引用暂时不可点开核对**，请当作待核验数据，
-  不要转引。找到确切地址后再补链接。
+  （本站自己的数字在 [[内容协商]] 末尾，且是**启发式估算**，那里附了真实词表的对照）
+- [Google Search Central, *AI features and your website*](https://developers.google.com/search/docs/appearance/ai-features)
+  —— 正文里「Google 明说不需要」那段引文出自这里
+- ~~Ahrefs, *We Analyzed 137K Sites…*~~ —— **已移除。**
+  原始链接核实不到（详见正文里那段说明）。**留下的引用必须能点开**，
+  核不了的就不要摆在这里充数。
 
-> **勘误（2026-09-22）**：上面三条原先都是纯文本，点不开。已核实的补了链接；
-> 没核实到的那条**如实标注**，而不是补一个看起来像那么回事的 URL。
+> **勘误（2026-09-22 / 09-23）**：这几条原先都是纯文本、点不开，已核实的补了链接；
+> **核实不到的那一条直接移除**，而不是标注"待核验"继续留着——
+> 一条精确到个位数、却没人能核对的统计，正是因为"看起来硬"才会被转引。

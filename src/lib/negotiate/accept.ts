@@ -244,7 +244,23 @@ export function markdownResponseHeaders(
  *
  * 这是**给 agent 看的提示值**，不是计费数字，所以刻意用可解释的启发式而非
  * 引入 tokenizer 依赖：CJK 约 1 字 1 token，其余按约 4 字符 1 token。
- * 宁可偏保守（高估），也不要让 agent 以为塞得下。
+ *
+ * ⚠️ **原注释写的是「宁可偏保守（高估）」——实测是反的，它一直在低估。**
+ *
+ * 2026-09-23 用真实分词器（`o200k_base`）对本站三个页面逐页对照：
+ *
+ *   页面                        HTML 估算/真实    偏低
+ *   /markdown-for-agents/        6214 / 6902     10.0%
+ *   /cjk-web-typography/         7614 / 8876     14.2%
+ *   /wiki/content-negotiation/   3681 / 3963      7.1%
+ *
+ * 三个页面**无一例外**偏低，也就是「agent 以为塞得下」的那一侧——
+ * 与注释声称的安全方向正好相反。低估的成因是中文：真实词表把常见双字词
+ * 合成一个 token，而这里按「1 字 1 token」数，对中文偏保守的是**真实侧**。
+ *
+ * 保留现有算式不改：没有证据表明有消费方依赖这个值做硬约束，
+ * 而改它就会动到 `x-markdown-tokens` 这个对外行为。先如实记录，
+ * 等有真实失败样本再调。**但注释里的那句错误说法必须去掉。**
  */
 export function estimateTokens(text: string): number {
   let cjk = 0;

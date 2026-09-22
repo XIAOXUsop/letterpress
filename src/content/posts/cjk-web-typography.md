@@ -3,7 +3,7 @@ title: 中文网页排版，多数主题都做错了
 summary: 行高、字重、行宽、中西文间距——这四个参数直接套西文的值，中文读者看到的是一份「能读但别扭」的页面。2026 年有三个原生 CSS 属性可以修好其中一半。
 date: 2026-09-12
 # 修订时间：搜索引擎与 RSS 靠它区分「刚发布」与「发布后大改过」
-updated: 2026-09-22
+updated: 2026-09-23
 tags: [排版, css, 中文]
 ---
 
@@ -38,7 +38,7 @@ tags: [排版, css, 中文]
 
 > When a weight is specified for which no face exists, a face with a
 > nearby weight is used.
-> —— [CSS Fonts Level 4 §2.2.2](https://www.w3.org/TR/css-fonts-4/#font-style-matching)
+> —— [CSS Fonts Level 4 §2.2.2](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-style-matching)
 
 也就是说 `font-weight: 600` 遇上只有 400/700 的字体，浏览器会挑 **700**——
 **前提是没有开伪合成**。开着的话它才会把 400 算法加粗：笔画发虚、字形走样，
@@ -63,7 +63,7 @@ html {
 > 让字体自己去挑最接近的真实字重」。**结论和建议都改掉了**：把伪合成归因到
 > 字重数值本身是错的——开关是 `font-synthesis-weight`；而在关掉合成的实现里，
 > 写 500 会让中文落到 400，比 600 更糟。
-> 依据见 [CSS Fonts Level 4 的字重匹配](https://www.w3.org/TR/css-fonts-4/#font-style-matching)
+> 依据见 [CSS Fonts Level 4 的字重匹配](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-style-matching)
 > 与本站 `src/styles/base.css` 的 `font-synthesis-weight`。
 
 ## 三、行宽
@@ -76,7 +76,7 @@ html {
 > `ch` — Represents the typical advance measure of **European** alphanumeric
 > characters, and measured as the used advance measure of the "0" (ZERO,
 > U+0030) glyph **in the font used to render it**.
-> —— [CSS Values and Units Level 4](https://www.w3.org/TR/css-values-4/#ch)
+> —— [CSS Values and Units Level 4](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch)
 
 两个要点：它是**欧洲字符**的度量，而且**取决于字体**。所以 `ch` 换算不出一个
 跨字体稳定的汉字数——换个字体，「66ch 能排几个汉字」这个数就变了。
@@ -109,7 +109,7 @@ html {
 > 也就是说这个改动换来的是单位的可预测性，不是行宽。
 > **结论（用 em）不变，论证方式改了。**
 >
-> 依据：[CSS Values and Units Level 4 §ch](https://www.w3.org/TR/css-values-4/#ch)。
+> 依据：[CSS Values and Units Level 4 §ch](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch)。
 
 ## 四、中西文间距与标点
 
@@ -196,9 +196,15 @@ font-family: 'Archivo', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-se
 
 ## 参考
 
-- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/css-values-4/#ch) —— `ch` 的定义
-- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/css-fonts-4/#font-style-matching) —— 缺少字重时如何匹配
-- [CSS Fonts Level 4 §font-synthesis-weight](https://www.w3.org/TR/css-fonts-4/#font-synthesis-weight) —— 伪合成的开关
+- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch) —— `ch` 的定义
+  （W3C Working Draft, 12 March 2024）
+- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-style-matching) —— 缺少字重时如何匹配
+- [CSS Fonts Level 4 §font-synthesis-weight](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-synthesis-weight) —— 伪合成的开关
+  （W3C Working Draft, 13 September 2026）
+
+> **为什么链接带日期而不是 `/TR/css-values-4/`**：后者是"最新版"，
+> 会随规范修订移动——半年后回看，不知道当时引的是哪一版。
+> W3C 自己推荐的引用方式就是带日期的固定 URL。
 
 ---
 

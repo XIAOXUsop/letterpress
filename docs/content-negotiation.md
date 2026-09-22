@@ -51,14 +51,33 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 协商成功的响应还会带上 `Content-Location`，明确实际返回的 `.md` 孪生文件；
 `Link` 同时声明 HTML canonical 与 markdown alternate，让两种表示可以双向发现。
 
-## 实测收益
+## 收益（启发式估算，附真实词表对照）
 
-`npm run verify` 会打印真实数字：
+> ⚠️ **下面这组数字是估算，不是模型真实 token 用量。**
+> `npm run verify` 用的是 `src/lib/negotiate/accept.ts` 的 `estimateTokens`——
+> 一个刻意可解释的启发式（CJK 1 字 1 token、其余约 4 字符 1 token），
+> 目的只是给 agent 一个量级提示，不是计费值。
+>
+> 2026-09-23 用真实词表 `o200k_base` 逐页复算，**估算稳定偏低 7%–14%**：
+>
+> | 页面 | HTML 估算 / 真实 | MD 估算 / 真实 | 节省 估算 / 真实 |
+> |---|---:|---:|---:|
+> | /markdown-for-agents/ | 6,214 / 6,902（−10.0%） | 2,390 / 2,413（−1.0%） | 61.5% / **65.0%** |
+> | /cjk-web-typography/ | 7,614 / 8,876（−14.2%） | 2,962 / 3,201（−7.5%） | 61.1% / **63.9%** |
+> | /wiki/content-negotiation/ | 3,681 / 3,963（−7.1%） | 1,106 / 1,103（+0.3%） | 70.0% / **72.2%** |
+>
+> **偏差两边都有，且不固定**：HTML 侧稳定低估 7–14%，markdown 侧从 −7.5% 到 +0.3%。
+> 所以估算值只能当量级，不能当用量。
+> 低估来自中文——真实词表会把常见双字词合成一个 token，而按「1 字 1 token」数
+> 会把它们各算一个。**结论方向不受影响**（省得比这里写的更多），但把估算值
+> 说成「实测」「真实数字」是不对的，这一节原先就是这么写的。
+
+`npm run verify` 会打印估算值：
 
 ```
 页面                         HTML token   MD token       节省
-/markdown-for-agents/            5894       2110    64.2%
-/cjk-web-typography/             7482       2842    62.0%
+/markdown-for-agents/            6214       2390    61.5%
+/cjk-web-typography/             7614       2962    61.1%
 /wiki/content-negotiation/       3681       1106    70.0%
 ```
 

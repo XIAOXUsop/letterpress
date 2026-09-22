@@ -24,7 +24,7 @@ related: [cjk-web-typography, design-tokens]
 - 一个西文字母平均 ≈ 0.5em 宽 → 34em 排约 **68 个字符**（理想 45–75）
 
 用 `ch` 做不到这一点：它按**渲染字体的「0」字形**计算
-（[CSS Values 4](https://www.w3.org/TR/css-values-4/#ch) 原文是
+（[CSS Values 4](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch) 原文是
 "the used advance measure of the "0" (ZERO, U+0030) glyph in the font used to render it"），
 所以「66ch 排几个汉字」**随字体变**。粗估一个汉字约 2 `ch`，66ch ≈ 33 字——
 其实也不差，但它是粗估，`em` 不是估算。
@@ -78,5 +78,5 @@ webfont 下载——**这不是回退，是分工。**
 
 ## 参考
 
-- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/css-values-4/#ch)
-- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/css-fonts-4/#font-style-matching)
+- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/2024/WD-css-values-4-20240312/#ch)
+- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/#font-style-matching)
