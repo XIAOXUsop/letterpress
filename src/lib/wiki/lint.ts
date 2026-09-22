@@ -18,6 +18,7 @@
  */
 
 import { containsCjk } from './slug.js';
+import { normalizeTarget } from './wikilink.js';
 import type { Doc, LinkGraph } from './graph.js';
 
 export type IssueLevel = 'error' | 'warn' | 'info';
@@ -115,6 +116,7 @@ export function lint(docs: readonly Doc[], graph: LinkGraph, options: LintOption
   issues.push(...checkReservedPostRoutes(docs));
   // 断链与孤儿页都依赖知识层存在才有意义，关掉时不检查
   if (opts.checkWikilinks) issues.push(...checkBrokenLinks(graph));
+  if (opts.checkWikilinks) issues.push(...checkAmbiguousTitles(graph));
   if (opts.checkOrphans) issues.push(...checkOrphans(graph));
   issues.push(...checkSummaries(docs, opts.maxSummaryLength));
   issues.push(...checkEmptyBodies(docs));
@@ -244,6 +246,66 @@ function checkBrokenLinks(graph: LinkGraph): Issue[] {
       `要么新建它，要么把引用改成已有的页面——留着断链会将「知识库」退化成「一堆文件」。` +
       `（整站都不需要知识层的话，在 src/config.ts 里把 wiki.enabled 设为 false。）`,
   }));
+}
+
+/**
+ * 歧义标题：多个页面用了同一个标题。
+ *
+ * ── 为什么这必须是一条规则，而不是"随它去" ──────────────────────────
+ *
+ * 原先的解析是**先到先得**：`if (!lookup.has(title)) lookup.set(title, slug)`。
+ * 于是 `[[那个标题]]` 指向谁，取决于**文档遍历顺序**。
+ *
+ * 实测（2026-09-22）：调换两个页面的输入顺序，同一个 `[[Shared]]`
+ * 分别指向 a 和 b——而两次 lint 都报 **0 个错误**。
+ * 链接目标由文件顺序决定，且没有任何东西发现。
+ *
+ * 现在分两档：
+ *
+ *   · **用了**歧义标题 → `error`。不能任选一个，所以构建停下来，
+ *     并把候选 slug 列出来让作者选。出口是改用显式 `[[slug]]`。
+ *   · 歧义标题**存在但没被引用** → `warn`。不阻断构建——
+ *     两页恰好同名不等于错，但作者应当知道它挡着一个链接名。
+ */
+function checkAmbiguousTitles(graph: LinkGraph): Issue[] {
+  const issues: Issue[] = [];
+
+  // 同一篇里重复引用同一个歧义标题只报一次，理由同 checkBrokenLinks
+  const seen = new Set<string>();
+  for (const a of graph.ambiguous) {
+    const key = `${a.fromSlug}\u0000${a.target}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    issues.push({
+      rule: 'ambiguous-wikilink',
+      level: 'error',
+      slug: a.fromSlug,
+      message:
+        `「${a.fromTitle}」引用了 [[${a.target}]]，但有 ${a.candidates.length} 个页面都叫这个名字：` +
+        `${a.candidates.map((s) => `[[${s}]]`).join('、')}。` +
+        `**不能替作者选一个**——所以这里报错而不是猜。` +
+        `把引用改成上面对应的 slug 即可。`,
+    });
+  }
+
+  // 只在被引用时才报错；这里补的是"存在但没人用"的那一档
+  const referenced = new Set(graph.ambiguous.map((a) => normalizeTarget(a.target)));
+  for (const [title, slugs] of graph.ambiguousTitles) {
+    if (referenced.has(title)) continue;
+    issues.push({
+      rule: 'ambiguous-title',
+      level: 'warn',
+      slug: null,
+      message:
+        `${slugs.length} 个页面共用了标题「${title}」：${slugs.map((s) => `[[${s}]]`).join('、')}。` +
+        `目前没有链接用到这个标题，所以不影响构建；` +
+        `但一旦有人写 [[${title}]]，就会报歧义错误。` +
+        `想现在就避开的话，改掉其中一个页面的标题，或改用显式 slug 引用。`,
+    });
+  }
+
+  return issues;
 }
 
 /**

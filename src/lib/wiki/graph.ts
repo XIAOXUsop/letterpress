@@ -52,6 +52,23 @@ export interface BrokenLink {
   readonly target: string;
 }
 
+/**
+ * 一条**指向歧义标题**的链接。
+ *
+ * 这是"能解析但不该解析"的一类：多个文档用了同一个标题，而 `[[那个标题]]`
+ * 指哪一个全看遍历顺序。**不能任选一个**——那等于让文档顺序决定链接目标。
+ *
+ * 分成两个字段而不是塞进 `BrokenLink`：`broken` 是"找不到"，
+ * 这里是"找到好几个"，处置也不同（前者改链接目标，后者加显式 slug）。
+ */
+export interface AmbiguousLink {
+  readonly fromSlug: string;
+  readonly fromTitle: string;
+  readonly target: string;
+  /** 同名文档的候选 slug，按字典序，供报错时直接列出。 */
+  readonly candidates: readonly string[];
+}
+
 export interface LinkGraph {
   /** slug → 文档 */
   readonly bySlug: ReadonlyMap<string, Doc>;
@@ -63,6 +80,15 @@ export interface LinkGraph {
   readonly outbound: ReadonlyMap<string, ReadonlySet<string>>;
   /** 所有解析失败的链接 */
   readonly broken: readonly BrokenLink[];
+  /**
+   * 用了歧义标题的链接。
+   *
+   * 归一化标题 → 用了这个标题的所有 slug（**至少两个**才会出现在这里）。
+   * 这些标题**不会**进 `lookup`：让它们进就等于按遍历顺序任选一个。
+   */
+  readonly ambiguousTitles: ReadonlyMap<string, readonly string[]>;
+  /** 解析到了歧义标题的引用 */
+  readonly ambiguous: readonly AmbiguousLink[];
   /** 没有任何入链、且不是入口页的文档 slug */
   readonly orphans: readonly string[];
 }
@@ -96,18 +122,45 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
   const bySlug = new Map<string, Doc>();
   const lookup = new Map<string, string>();
 
+  /*
+   * ── 先数标题，再建查找表 ────────────────────────────────────────────
+   *
+   * 原先是一个循环里 `if (!lookup.has(title)) lookup.set(title, slug)`——
+   * 也就是**先到先得**。同名标题谁先进查找表，`[[那个标题]]` 就指向谁，
+   * 而"谁先进"取决于文档遍历顺序。
+   *
+   * 实测（2026-09-22）：调换两个页面的输入顺序，同一个 `[[Shared]]`
+   * 分别指向 a 和 b，而两次 lint 都报 0 个错误——**没有任何东西发现这件事**。
+   *
+   * 现在改成：**同名标题根本不进查找表**。用了它的引用单独记录到
+   * `ambiguous`，由 lint 报错并列出候选。`[[显式 slug]]` 不受影响。
+   */
+  const titleOwners = new Map<string, string[]>();
   for (const doc of published) {
     bySlug.set(doc.slug, doc);
-    // 两个解析入口：slug 本身，以及标题。作者写 [[某页]] 时想的通常是标题。
+    // slug 是唯一的，直接进
     lookup.set(normalizeTarget(doc.slug), doc.slug);
-    if (!lookup.has(normalizeTarget(doc.title))) {
-      lookup.set(normalizeTarget(doc.title), doc.slug);
+    const key = normalizeTarget(doc.title);
+    const owners = titleOwners.get(key);
+    if (owners) owners.push(doc.slug);
+    else titleOwners.set(key, [doc.slug]);
+  }
+
+  const ambiguousTitles = new Map<string, readonly string[]>();
+  for (const [title, slugs] of titleOwners) {
+    if (slugs.length === 1) {
+      // 只有一个主人：标题照常可用。**不能覆盖已有的 slug 入口**
+      // （一个文档的标题可能与另一个文档的 slug 同名，那时 slug 优先）
+      if (!lookup.has(title)) lookup.set(title, slugs[0]!);
+    } else {
+      ambiguousTitles.set(title, [...slugs].sort());
     }
   }
 
   const backlinks = new Map<string, Backlink[]>();
   const outbound = new Map<string, Set<string>>();
   const broken: BrokenLink[] = [];
+  const ambiguous: AmbiguousLink[] = [];
   const inboundCount = new Map<string, number>();
 
   for (const doc of published) {
@@ -129,10 +182,24 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     }
 
     for (const ref of refs) {
-      const resolved = lookup.get(normalizeTarget(ref.target));
+      const key = normalizeTarget(ref.target);
+      const resolved = lookup.get(key);
 
       if (resolved === undefined) {
-        broken.push({ fromSlug: doc.slug, fromTitle: doc.title, target: ref.target });
+        // 找不到。**但要分两种**：是真的没有这个页面，还是"有，只是有多个同名"。
+        // 处置完全不同——前者改链接目标，后者加显式 slug；
+        // 混成一句"断链"会把人引向错误的改法。
+        const candidates = ambiguousTitles.get(key);
+        if (candidates) {
+          ambiguous.push({
+            fromSlug: doc.slug,
+            fromTitle: doc.title,
+            target: ref.target,
+            candidates,
+          });
+        } else {
+          broken.push({ fromSlug: doc.slug, fromTitle: doc.title, target: ref.target });
+        }
         continue;
       }
       if (resolved === doc.slug) continue; // 自链接不构成入链
@@ -162,7 +229,7 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     .map((d) => d.slug)
     .sort();
 
-  return { bySlug, lookup, backlinks, outbound, broken, orphans };
+  return { bySlug, lookup, backlinks, outbound, broken, ambiguousTitles, ambiguous, orphans };
 }
 
 /** 解析一个 wiki 链接目标，返回其 URL；无法解析时返回 null。 */

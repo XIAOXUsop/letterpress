@@ -205,7 +205,8 @@ export function buildLookup(contentRoot: string, base = '/'): Lookup {
   const byName = new Map<string, string>();
   const basePrefix = base.endsWith('/') ? base.slice(0, -1) : base;
 
-  const scan = (subdir: string, urlPrefix: string): void => {
+  const collect = (subdir: string, urlPrefix: string) => {
+    const out: Array<{ slug: string; title: string; url: string }> = [];
     for (const file of collectFiles(join(contentRoot, subdir))) {
       const source = readFileSync(file, 'utf8');
       const title = frontmatterField(source, 'title') ?? '';
@@ -217,18 +218,36 @@ export function buildLookup(contentRoot: string, base = '/'): Lookup {
 
       const slug = resolveSlug(title, explicit, fileId);
       if (slug === '') continue;
-
-      const url = `${basePrefix}${urlPrefix}${slug}/`;
-      byName.set(normalizeTarget(slug), url);
-      // 标题也作为入口：作者写 [[某页]] 时想的通常是标题
-      if (title !== '' && !byName.has(normalizeTarget(title))) {
-        byName.set(normalizeTarget(title), url);
-      }
+      out.push({ slug, title, url: `${basePrefix}${urlPrefix}${slug}/` });
     }
+    return out;
   };
 
-  scan('posts', '/');
-  scan('wiki', '/wiki/');
+  const all = [...collect('posts', '/'), ...collect('wiki', '/wiki/')];
+
+  // ── 先数标题，再建表：同名标题**不进查找表** ─────────────────────
+  //
+  // 原先这里是 `if (!byName.has(title)) byName.set(title, url)`——先到先得。
+  // 与 `graph.ts` 是同一个 bug：`[[那个标题]]` 指向谁取决于文件枚举顺序，
+  // 而两处各自算一遍，还可能算出不一样的结果。
+  //
+  // 现在两处都改成"同名就不注册"。于是 `[[Shared]]` 渲染成原样的方括号，
+  // 而 `lint` 的 `ambiguous-wikilink` 会报错并列出候选——**构建会停下来**。
+  const titleCount = new Map<string, number>();
+  for (const { title } of all) {
+    if (title === '') continue;
+    const key = normalizeTarget(title);
+    titleCount.set(key, (titleCount.get(key) ?? 0) + 1);
+  }
+
+  for (const { slug, title, url } of all) {
+    byName.set(normalizeTarget(slug), url);
+    if (title === '') continue;
+    const key = normalizeTarget(title);
+    if ((titleCount.get(key) ?? 0) === 1 && !byName.has(key)) {
+      byName.set(key, url);
+    }
+  }
 
   return { byName };
 }

@@ -517,3 +517,85 @@ describe('lint', () => {
     expect(formatIssues([])).toContain('通过');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// 同名标题歧义
+// ─────────────────────────────────────────────────────────────────────
+
+describe('同名标题：不能按遍历顺序任选一个', () => {
+  /**
+   * 这一组的存在理由是一次实测（2026-09-22）：
+   *
+   * 两篇文档都用标题「Shared」。调换输入顺序，同一个 `[[Shared]]`
+   * **分别指向 a 和 b**，而两次 lint 都报 0 个错误——
+   * 链接目标由文件顺序决定，没有任何东西发现。
+   *
+   * 下面第一条就是把这个性质钉死：**两种顺序必须给出同样多的歧义错误**。
+   */
+  const a = doc({ slug: 'a', title: 'Shared', body: '指向 [[Shared]]' });
+  const b = doc({ slug: 'b', title: 'Shared', body: '没有链接' });
+
+  it('调换输入顺序，结论必须一样（原 bug 就是顺序决定目标）', () => {
+    const first = lint([a, b], buildGraph([a, b]));
+    const second = lint([b, a], buildGraph([b, a]));
+    const pick = (issues: ReturnType<typeof lint>) =>
+      issues.filter((i) => i.rule === 'ambiguous-wikilink').length;
+    expect(pick(first)).toBe(1);
+    expect(pick(second)).toBe(1);
+  });
+
+  it('歧义标题不进查找表——不能解析成其中随便一个', () => {
+    const graph = buildGraph([a, b]);
+    expect(graph.lookup.has('shared')).toBe(false);
+    expect(graph.ambiguousTitles.get('shared')).toEqual(['a', 'b']);
+  });
+
+  it('用了歧义标题 = error，并列出全部候选 slug', () => {
+    const issues = lint([a, b], buildGraph([a, b]));
+    const hit = issues.find((i) => i.rule === 'ambiguous-wikilink');
+    expect(hit?.level).toBe('error');
+    // 候选必须列全，作者才知道该选哪个
+    expect(hit?.message).toContain('[[a]]');
+    expect(hit?.message).toContain('[[b]]');
+    expect(hit?.message).toContain('不能替作者选一个');
+  });
+
+  it('显式 slug 引用不受影响', () => {
+    // 注意 a 自己的正文里就有 [[Shared]]，所以歧义记录仍会有**一条**——
+    // 那条来自 a。这里要断言的是 **c 的 [[a]] 正常解析**，
+    // 以及 c 的引用**没有**被算成歧义。
+    const c = doc({ slug: 'c', title: 'C', body: '指向 [[a]]' });
+    const graph = buildGraph([a, b, c]);
+    expect(graph.lookup.get('a')).toBe('a');
+    expect(graph.ambiguous.map((x) => x.fromSlug)).toEqual(['a']);
+    expect(graph.backlinks.get('a')?.some((bl) => bl.fromSlug === 'c')).toBe(true);
+  });
+
+  it('歧义标题存在但没人引用 = warn，不阻断构建', () => {
+    const issues = lint([a, b], buildGraph([a, b]));
+    // 把 a 的链接去掉，歧义就只剩"存在"这一档
+    const quiet = doc({ slug: 'a', title: 'Shared', body: '没有链接' });
+    const only = lint([quiet, b], buildGraph([quiet, b]));
+    const warn = only.find((i) => i.rule === 'ambiguous-title');
+    expect(warn?.level).toBe('warn');
+    expect(hasErrors(only)).toBe(false);
+    // 而上面那个有引用的场景必须阻断
+    expect(hasErrors(issues)).toBe(true);
+  });
+
+  it('只有一个主人的标题照常可用', () => {
+    const x = doc({ slug: 'x', title: '独一无二', body: '' });
+    const y = doc({ slug: 'y', title: 'Y', body: '指向 [[独一无二]]' });
+    const graph = buildGraph([x, y]);
+    expect(graph.lookup.get('独一无二')).toBe('x');
+    expect(graph.ambiguousTitles.size).toBe(0);
+  });
+
+  it('标题与另一页的 slug 同名时，slug 赢', () => {
+    // 不能因为建标题表而把 slug 入口覆盖掉
+    const p1 = doc({ slug: 'topic', title: '主题', body: '' });
+    const p2 = doc({ slug: 'other', title: 'topic', body: '' });
+    const graph = buildGraph([p1, p2]);
+    expect(graph.lookup.get('topic')).toBe('topic');
+  });
+});
