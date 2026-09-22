@@ -1,0 +1,134 @@
+---
+/**
+ * 来源与复核状态。
+ *
+ * ── 设计上的分寸 ────────────────────────────────────────────────────
+ *
+ * 这一块的信息量可以很大（版本、定位、摘录、复核日期、摘要），
+ * 但页面是给**读者**看的，不是给维护者看的。所以：
+ *
+ *   - **默认收起**：`<details>` 一句话概括，点开才展开。读者的阅读路径
+ *     不该被元数据打断。
+ *   - **不显示 contentDigest**：它是一个内部机制（用来发现"改过但没重新
+ *     复核"），对读者没有任何意义。显示它只会让人以为那是什么可信度评分。
+ *   - **没有来源就不渲染整个区块**，而不是渲染一个空壳
+ *     ——空壳会让读者觉得"这页没依据"，而"作者没标"和"没有依据"是两回事。
+ *
+ * ── 它**不**声称什么 ────────────────────────────────────────────────
+ *
+ * 「已复核」= 有人在某天读过这一页并确认了。**不等于内容正确**，
+ * 也不等于引用的每句话都被来源支持——后者是语义判断，机械做不了。
+ * 页面上写的就是"复核过"，不要再加形容词。
+ */
+import { loadSources } from '../lib/wiki/sources.js';
+import { join } from 'node:path';
+
+interface Props {
+  readonly doc: {
+    readonly sources?: readonly { sourceId: string; revision: string; locator?: string }[];
+    readonly review?: { status: string; checkedAt?: string };
+  };
+}
+
+const { doc } = Astro.props;
+const refs = doc.sources ?? [];
+const review = doc.review;
+
+// 两者都没有就整块不渲染
+if (refs.length === 0 && !review) return;
+
+const registry = loadSources(join(process.cwd(), 'knowledge', 'sources'));
+
+const statusLabel: Record<string, string> = {
+  reviewed: '已复核',
+  pending: '待复核',
+  stale: '已过期',
+};
+
+const rows = refs.map((ref) => {
+  const source = registry.get(ref.sourceId);
+  return {
+    title: source?.title ?? ref.sourceId,
+    url: source?.url ?? '',
+    revision: ref.revision,
+    locator: ref.locator ?? '',
+  };
+});
+
+const checkedAt = review?.checkedAt ? new Date(review.checkedAt) : null;
+const dateText = checkedAt
+  ? checkedAt.toISOString().slice(0, 10)
+  : null;
+---
+
+<section class="provenance" data-pagefind-ignore>
+  <details>
+    <summary>
+      {review ? statusLabel[review.status] ?? review.status : '未标复核状态'}{dateText ? ` · ${dateText}` : ''}{rows.length > 0 ? ` · ${rows.length} 个来源` : ''}
+    </summary>
+
+    <div class="provenance__body">
+      {rows.length > 0 && (
+        <ul class="provenance__list">
+          {rows.map((row) => (
+            <li>
+              {row.url ? <a href={row.url}>{row.title}</a> : <span>{row.title}</span>}
+              <span class="provenance__rev">{row.revision}</span>
+              {row.locator && <span class="provenance__loc">{row.locator}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p class="provenance__note">
+        「已复核」指有人在上面那个日期读过这一页并确认了当时的正文。
+        <strong>它不表示内容一定正确</strong>，也不表示每条引用的原文都逐句支持了这里的结论——
+        后者只能由人判断。正文在那之后若被改动，复核会自动失效，构建会拦下来。
+      </p>
+    </div>
+  </details>
+</section>
+
+<style>
+  .provenance {
+    margin-block-start: var(--space-7);
+    border-block-start: 1px solid var(--color-border);
+    padding-block-start: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .provenance summary {
+    cursor: pointer;
+    /* 用既有令牌，不引新颜色 */
+    color: var(--color-text-muted);
+  }
+
+  .provenance__body {
+    padding-block-start: var(--space-3);
+  }
+
+  .provenance__list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-3);
+  }
+
+  .provenance__list li {
+    margin-block-end: var(--space-2);
+    line-height: var(--leading-normal);
+  }
+
+  .provenance__rev,
+  .provenance__loc {
+    margin-inline-start: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+
+  .provenance__note {
+    margin: 0;
+    line-height: var(--leading-normal);
+  }
+</style>

@@ -32,9 +32,38 @@ export interface Doc {
    * <p>可选：绝大多数文档没有声明 `related`，而测试里的 fixture 也不必逐个补上。
    */
   readonly declaredRelations?: readonly string[];
+  /**
+   * 知识类型：`concept` / `entity` / `synthesis`。文章没有这个字段。
+   *
+   * ⚠️ **别和 `kind` 搞混**——那个是**文档类型**（post / wiki），
+   * 这个是**知识类型**。两者同名不同物，而摘要要覆盖的是后者：
+   * 同一个标题从 concept 改成 synthesis 是实质变化。
+   *
+   * （第一版 `digest.ts` 用的就是 `doc.kind`，也就是恒为 "wiki" 的那个——
+   * 于是知识类型怎么改摘要都不变。这个错是靠"让构建打印它实际看到的字段"
+   * 才发现的，看代码看不出来。）
+   */
+  readonly wikiKind?: string;
   /** 作者是否显式指定过 slug（用于 lint 提示中文 URL 的代价） */
   readonly explicitSlug: boolean;
   readonly draft: boolean;
+  /**
+   * 本页声明的来源引用。空数组 = 没标，**不是**错误。
+   *
+   * 类型用结构化形状而不是从 sources.ts import——`graph.ts` 是最底层的
+   * 纯逻辑，不该依赖读文件的那一层（那会把它拖进 fs 与路径假设里）。
+   */
+  readonly sources?: readonly {
+    readonly sourceId: string;
+    readonly revision: string;
+    readonly locator?: string;
+  }[];
+  /** 复核记录。`contentDigest` 用**当时**算出的正文摘要，构建期现算比对。 */
+  readonly review?: {
+    readonly status: 'pending' | 'reviewed' | 'stale';
+    readonly checkedAt?: string;
+    readonly contentDigest?: string;
+  };
 }
 
 /** 一条指向某文档的入链。 */

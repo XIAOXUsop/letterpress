@@ -1,0 +1,15 @@
+{
+  "_comment": "LLM Wiki 这个模式的原始出处。注意它是**抽象模式**，不是框架或 npm 包。",
+  "id": "llm-wiki-gist",
+  "title": "Andrej Karpathy: llm-wiki gist",
+  "kind": "web",
+  "url": "https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f",
+  "revisions": [
+    {
+      "id": "gist-2026-04",
+      "capturedAt": "2026-09-23",
+      "locator": "全文",
+      "note": "只用于确认模式定位（原始资料 / 可修订 Wiki / 维护约定三层，模型帮摄取与检查、人负责选材与复核）。**不把评论区的第三方产品宣传当原作者的要求**。未逐字摘录。"
+    }
+  ]
+}

@@ -658,12 +658,14 @@
     border: 0;
     border-block-end: 1px solid currentColor;
     background: transparent;
-    color: var(--color-link);
+    /* 令牌表里没有 --color-link——那是有使用没定义，浏览器会静默回落。
+       链接色用的是 --color-accent。 */
+    color: var(--color-accent);
     font: inherit;
   }
 
   .md-available__copy:hover {
-    color: var(--color-link-hover);
+    color: var(--color-accent-contrast);
   }
 
   .md-available__copy:disabled {

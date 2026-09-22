@@ -14,7 +14,8 @@
  * ── 摘要覆盖什么、不覆盖什么 ────────────────────────────────────────
  *
  * 覆盖（改了就该重新复核）：
- *   - `kind`：同一个标题从 concept 改成 synthesis，是实质变化
+ *   - `wikiKind`：**知识类型**。同一个标题从 concept 改成 synthesis 是实质变化。
+ *     （不是 `kind`——那个是文档类型，恒为 wiki/post，放进摘要毫无意义。）
  *   - `title`、`summary`：对外呈现的结论
  *   - `body`：正文
  *   - `declaredRelations`：声明的关系是内容的一部分
@@ -54,23 +55,32 @@ function toLf(text: string): string {
  * 正是它要防的那件事。要短标识就在展示层截。
  */
 export function contentDigest(doc: Doc): string {
-  /*
-   * 用**带标签的行**而不是 JSON：JSON 的键序、空格、转义规则都可能随
-   * 实现变化，而这个值必须永远算出同一个结果。行格式没有这些自由度，
-   * 而且出问题时 `diff` 一眼能看出是哪个字段变了。
-   *
-   * 分隔符用换行——正文里本来就有换行，所以字段边界靠**标签**区分，
-   * 不靠分隔符唯一。这足够：`title:` 开头的行与 `body:` 开头的行
-   * 不会混淆，因为每个字段的行首标签是固定的。
-   */
-  const canonical = [
-    `kind:${doc.kind}`,
+  return digestOfInput(digestInput(doc));
+}
+
+/**
+ * 摘要的**规范化输入**。
+ *
+ * 单独导出是为了让别处能逐字对齐：口径差一个字符时，
+ * **比对字符串比比对哈希快得多**——而这个项目已经因为口径差异
+ * （`body` 少一个 `trim`、`kind` 取错字段）浪费过两轮排查。
+ *
+ * 用**带标签的行**而不是 JSON：JSON 的键序、空格、转义规则都可能随
+ * 实现变化，而这个值必须永远算出同一个结果。行格式没有这些自由度，
+ * 而且出问题时 `diff` 一眼能看出是哪个字段变了。
+ */
+export function digestInput(doc: Doc): string {
+  return [
+    `kind:${doc.wikiKind ?? ''}`,
     `title:${toLf(doc.title).normalize('NFC')}`,
     `summary:${toLf(doc.summary).normalize('NFC')}`,
     `body:${toLf(doc.body).normalize('NFC')}`,
     // 排序去重：关系的**集合**才是语义，写的顺序不是
     `related:${[...new Set(doc.declaredRelations ?? [])].sort().join(',')}`,
   ].join('\n');
+}
 
-  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+/** 对规范化输入取 sha256。 */
+export function digestOfInput(input: string): string {
+  return createHash('sha256').update(input, 'utf8').digest('hex');
 }

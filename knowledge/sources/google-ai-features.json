@@ -1,0 +1,16 @@
+{
+  "_comment": "替代那条核不掉的 Ahrefs 引用。它能点开，而且措辞更准。",
+  "id": "google-ai-features",
+  "title": "Google Search Central: AI features and your website",
+  "kind": "web",
+  "url": "https://developers.google.com/search/docs/appearance/ai-features",
+  "revisions": [
+    {
+      "id": "online-2026-09-23",
+      "capturedAt": "2026-09-23",
+      "locator": "\"You don't need to create new machine readable files\"",
+      "evidence": "You don't need to create new machine readable files, AI text files, or markup to appear in these features.",
+      "note": "原文说的是「**不需要**」而不是「不支持」——不做也不会因此缺席，但 Google 也没说它有害。这个在线文档没有版本号，`online-` 前缀如实标明这一点。"
+    }
+  ]
+}

@@ -4,6 +4,21 @@ summary: 行高、字重、行宽、中西文间距——四个参数直接套�
 kind: concept
 updated: 2026-09-22
 related: [cjk-web-typography, design-tokens]
+# 本页两条核心论断各自对应一个规范章节。
+# `ch` 那条用来纠正「一个汉字约两个 ch，所以 66ch 排 130 字」的旧算式；
+# 字重那条用来纠正「写 600 会伪合成」的旧归因。
+sources:
+  - sourceId: css-values-4
+    revision: WD-20240312
+    locator: §5.1.1 长度单位 · ch
+  - sourceId: css-fonts-4
+    revision: WD-20260913
+    locator: §2.2.2 Missing weights
+# 摘要对不上就是 stale——构建会报错，不会静默沿用旧状态。
+review:
+  status: reviewed
+  checkedAt: 2026-09-23
+  contentDigest: 960effdd5513cbd3426452b085ad016c64ad4863413db64d7c4fa0745f87cde0
 ---
 
 中文网页排版最常见的病因：**参数沿用了西文的值。**

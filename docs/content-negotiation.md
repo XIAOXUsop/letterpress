@@ -64,7 +64,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 > |---|---:|---:|---:|
 > | /markdown-for-agents/ | 6,214 / 6,902（−10.0%） | 2,390 / 2,413（−1.0%） | 61.5% / **65.0%** |
 > | /cjk-web-typography/ | 7,614 / 8,876（−14.2%） | 2,962 / 3,201（−7.5%） | 61.1% / **63.9%** |
-> | /wiki/content-negotiation/ | 3,681 / 3,963（−7.1%） | 1,106 / 1,103（+0.3%） | 70.0% / **72.2%** |
+> | /wiki/content-negotiation/ | 3,958 / 4,240（−6.7%） | 1,106 / 1,103（+0.3%） | 72.1% / **73.9%** |
 >
 > **偏差两边都有，且不固定**：HTML 侧稳定低估 7–14%，markdown 侧从 −7.5% 到 +0.3%。
 > 所以估算值只能当量级，不能当用量。
@@ -78,7 +78,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 页面                         HTML token   MD token       节省
 /markdown-for-agents/            6214       2390    61.5%
 /cjk-web-typography/             7614       2962    61.1%
-/wiki/content-negotiation/       3681       1106    70.0%
+/wiki/content-negotiation/       3958       1106    72.1%
 ```
 
 > **2026-09-22 前两页的数字涨了、节省率掉了**（原为 5386/68.6% 与 6102/69.7%）。

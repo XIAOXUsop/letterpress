@@ -1,0 +1,16 @@
+{
+  "_comment": "内容协商那篇的标准归因依据。用来纠正「并列时按书写顺序」那个说法。",
+  "id": "rfc9110-accept",
+  "title": "RFC 9110: HTTP Semantics, §12.5.1 Accept",
+  "kind": "web",
+  "url": "https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.1",
+  "revisions": [
+    {
+      "id": "rfc9110",
+      "capturedAt": "2026-09-23",
+      "locator": "§12.5.1 Accept",
+      "evidence": "Media ranges can be overridden by more specific media ranges or specific media types. If more than one media range applies to a given type, the most specific reference has precedence.",
+      "note": "规范按**具体程度**排优先级；对 q 值相同的两个类型只说它们是 equally preferred，**没有规定按书写顺序**。「并列靠前优先」是本项目的选择。"
+    }
+  ]
+}

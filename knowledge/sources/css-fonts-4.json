@@ -1,0 +1,16 @@
+{
+  "_comment": "字重匹配与伪合成的依据。文章里「写 500 会掉到 400」那段就来自它。",
+  "id": "css-fonts-4",
+  "title": "CSS Fonts Module Level 4",
+  "kind": "web",
+  "url": "https://www.w3.org/TR/2026/WD-css-fonts-4-20260913/",
+  "revisions": [
+    {
+      "id": "WD-20260913",
+      "capturedAt": "2026-09-23",
+      "locator": "§2.2.2 Missing weights",
+      "evidence": "When a weight is specified for which no face exists, a face with a nearby weight is used.",
+      "note": "规范说的是「去找最接近的真实字重」，**不是伪造一个**。伪合成的开关是另一个属性 font-synthesis-weight。"
+    }
+  ]
+}

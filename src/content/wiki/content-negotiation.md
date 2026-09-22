@@ -3,6 +3,16 @@ title: 内容协商
 summary: 用 HTTP 的 Accept 头决定返回 HTML 还是 markdown。算法只有四十行，难的是静态托管不解析请求头。
 kind: concept
 related: [markdown-for-agents, llm-wiki]
+# 标准归因的依据：规范按**具体程度**排优先级，对并列的只说 equally preferred。
+# 「并列靠前优先」是本站的实现选择，不是规范要求。
+sources:
+  - sourceId: rfc9110-accept
+    revision: rfc9110
+    locator: §12.5.1 Accept
+review:
+  status: reviewed
+  checkedAt: 2026-09-23
+  contentDigest: 704890dea66501c34dc71813cdc4be93929c5b59864cb8f81b2ad46fe3020752
 ---
 
 同一个 URL，对人和对 agent 返回不同格式的同一份内容。

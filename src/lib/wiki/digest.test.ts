@@ -17,6 +17,7 @@ import type { Doc } from './graph.js';
 function doc(over: Partial<Doc> = {}): Doc {
   return {
     kind: 'wiki',
+    wikiKind: 'concept',
     slug: 'demo',
     title: '示例',
     summary: '一句话摘要',
@@ -38,7 +39,7 @@ describe('contentDigest：稳定性', () => {
     // 摘要公式改了（换了字段、换了分隔、换了归一化方式），
     // 所有已复核内容会一次性全部失效。那是需要人判断的事，不该悄悄发生。
     expect(contentDigest(doc())).toBe(
-      'e549c7f5d5ac3df88dba34213499456f7d52affa6a7af9673c8fb9661411d7b5',
+      '1505a58ea37da297fae65fecf7c70e8e10aeb66d203eb8e1106b25c620d7d1cc',
     );
   });
 });
@@ -62,8 +63,16 @@ describe('contentDigest：该变的必须变', () => {
     expect(contentDigest(doc({ body: '正文第一行\n正文第二行。' }))).not.toBe(base);
   });
 
-  it('改 kind（concept → synthesis 是实质变化）', () => {
-    expect(contentDigest(doc({ kind: 'post' }))).not.toBe(base);
+  it('改**知识类型**（concept → synthesis 是实质变化）', () => {
+    // 注意用的是 wikiKind。第一版这里写的是 kind，也就是**文档类型**——
+    // 它在知识页上恒为 'wiki'，于是这条断言测的是一个永远不变的东西，
+    // 而真正的知识类型改了摘要纹丝不动。**是让构建打印它实际看到的字段
+    // 才发现的**，看代码看不出来。
+    expect(contentDigest(doc({ wikiKind: 'synthesis' }))).not.toBe(base);
+  });
+
+  it('改文档类型不改变摘要（它是恒定的，放进摘要毫无意义）', () => {
+    expect(contentDigest(doc({ kind: 'post' }))).toBe(base);
   });
 
   it('增删 related', () => {

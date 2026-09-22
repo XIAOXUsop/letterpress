@@ -103,6 +103,41 @@ const wiki = defineCollection({
     kind: z.enum(['concept', 'entity', 'synthesis']).default('concept'),
     /** 相关条目。等价于在正文里写 [[...]]，但更显式，且不要求正文出现 */
     related: z.array(z.string()).default([]),
+    /**
+     * 本页用到的来源。
+     *
+     * **可选**——老页面没有它照样构建。但一旦声明，就必须能解析到
+     * `knowledge/sources/` 里登记过的来源与版本，否则构建失败。
+     *
+     * 只在**值得单独治理的结论**上标，不是每句话都标。标注的成本高于
+     * 修订收益时，这条就退化成没人维护的装饰——那比不标更坏。
+     */
+    sources: z
+      .array(
+        z.object({
+          sourceId: z.string().min(1),
+          revision: z.string().min(1),
+          locator: z.string().optional(),
+        }),
+      )
+      .default([]),
+    /**
+     * 复核记录。
+     *
+     * `contentDigest` 是要点：它是**当时**的正文摘要，构建时现算一个比对，
+     * 对不上就是 stale。没有它的话，「已复核」会变成一个永久绿色标记——
+     * 作者改了正文，页面上仍写着「已复核于 X」，而没有任何东西会提醒。
+     *
+     * 声明 `reviewed` 时 `checkedAt` 与 `contentDigest` 都必填；
+     * **日期不自动刷新**——自动刷新等于把"改过就要重新复核"这件事抹掉。
+     */
+    review: z
+      .object({
+        status: z.enum(['pending', 'reviewed', 'stale']).default('pending'),
+        checkedAt: z.coerce.date().optional(),
+        contentDigest: z.string().optional(),
+      })
+      .optional(),
     updated: z.coerce.date().optional(),
     slug: z.string().optional(),
     draft: z.boolean().default(false),

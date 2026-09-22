@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "`ch` 的定义来源。文章与知识层里「一个汉字约等于两个 ch」那句话的依据就是它。",
+    "",
+    "**用固定版本 URL 而不是 /TR/css-values-4/**：后者是「最新版」，",
+    "会随规范修订移动——半年后回看不知道当时引的是哪一版。",
+    "W3C 自己推荐的引用方式就是带日期的固定 URL。"
+  ],
+  "id": "css-values-4",
+  "title": "CSS Values and Units Module Level 4",
+  "kind": "web",
+  "url": "https://www.w3.org/TR/2024/WD-css-values-4-20240312/",
+  "revisions": [
+    {
+      "id": "WD-20240312",
+      "capturedAt": "2026-09-23",
+      "locator": "§5.1.1 长度单位 · ch",
+      "evidence": "Represents the typical advance measure of European alphanumeric characters, and measured as the used advance measure of the “0” (ZERO, U+0030) glyph in the font used to render it.",
+      "note": "原文两个要点：它是**欧洲字符**的度量，且**取决于渲染所用的字体**——所以换算不出一个跨字体稳定的汉字数。"
+    }
+  ]
+}

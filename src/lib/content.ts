@@ -7,9 +7,12 @@
  */
 
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { join } from 'node:path';
 import { site } from '../config.js';
 import { buildGraph, type Doc, type LinkGraph } from './wiki/graph.js';
 import { hasErrors, lint, type Issue } from './wiki/lint.js';
+import { loadSources, validateSourceRefs } from './wiki/sources.js';
+import { contentDigest } from './wiki/digest.js';
 import { buildMarkdownTwin } from './wiki/llms.js';
 import { resolveSlug } from './wiki/slug.js';
 /**
@@ -53,6 +56,16 @@ function toDoc(
    */
   const related = kind === 'wiki' ? ((data as { related?: string[] }).related ?? []) : [];
 
+  /*
+   * 来源与复核只在知识层条目上用。
+   *
+   * 文章是**时间流**：它记录的是"我当时这么想"，改的是错字与补充，
+   * 不是"依据某版规范得出的结论"。给它套复核状态会把博客变成台账。
+   * 知识层不一样——那里的每一条都是**关于世界的断言**，会过期。
+   */
+  const sources = kind === 'wiki' ? ((data as { sources?: Doc['sources'] }).sources ?? []) : [];
+  const review = kind === 'wiki' ? (data as { review?: Doc['review'] }).review : undefined;
+
   return {
     kind,
     // entry.id 是相对内容根的文件路径（不含扩展名），正是 slug 的默认来源。
@@ -62,6 +75,9 @@ function toDoc(
     summary: data.summary,
     body: entry.body ?? '',
     declaredRelations: related,
+    wikiKind: kind === 'wiki' ? ((data as { kind?: string }).kind ?? 'concept') : undefined,
+    sources,
+    review,
     explicitSlug: explicit,
     // posts 与 wiki 的 schema 现在都声明了 draft（wiki 一直有，posts 是补上的——
     // 缺它时 Zod 静默剥离，过滤逻辑拿到的永远是 false，见 content.config.ts 的注释）
@@ -100,6 +116,69 @@ export async function loadContent(): Promise<SiteContent> {
     checkWikilinks: site.wiki.enabled,
     checkOrphans: site.wiki.enabled,
   });
+
+  /*
+   * ── 来源与复核的校验 ──────────────────────────────────────────────
+   *
+   * 只在**启用知识层**时做：关掉知识层就没有知识页，也就没有来源可谈。
+   *
+   * 这三条都是**机械可判定**的，语义级的（"这段话真的支持这个结论吗"）
+   * 留给人工——把前者说成后者是这整套东西最容易制造出来的错觉。
+   */
+  if (site.wiki.enabled) {
+    const sources = loadSources(join(process.cwd(), 'knowledge', 'sources'));
+
+    for (const doc of docs) {
+      const refs = doc.sources ?? [];
+
+      for (const problem of validateSourceRefs(doc.title, refs, sources)) {
+        issues.push({ rule: 'unknown-source', level: 'error', slug: doc.slug, message: problem });
+      }
+
+      const review = doc.review;
+      if (!review) continue;
+
+      if (review.status === 'reviewed') {
+        if (!review.checkedAt) {
+          issues.push({
+            rule: 'review-missing-date',
+            level: 'error',
+            slug: doc.slug,
+            message:
+              `「${doc.title}」标了 reviewed 但没有 checkedAt。` +
+              `复核日期不是装饰——它让读者知道这个结论是什么时候被确认的。`,
+          });
+        }
+        if (!review.contentDigest) {
+          issues.push({
+            rule: 'review-missing-digest',
+            level: 'error',
+            slug: doc.slug,
+            message:
+              `「${doc.title}」标了 reviewed 但没有 contentDigest。` +
+              `缺了它就**没有办法发现正文后来被改过**——"已复核"会变成一个永久绿色标记。` +
+              `跑 \`npm run wiki:review -- --slug ${doc.slug}\` 取值。`,
+          });
+        } else {
+          // 现算一次，与当时存下的比。**这是整个机制的关键一步。**
+          const actual = contentDigest(doc);
+          if (actual !== review.contentDigest) {
+            issues.push({
+              rule: 'review-stale',
+              level: 'error',
+              slug: doc.slug,
+              message:
+                `「${doc.title}」标记为已复核，但**正文在那之后改过**：\n` +
+                `      存下的摘要：${review.contentDigest.slice(0, 16)}…\n` +
+                `      现在的摘要：${actual.slice(0, 16)}…\n` +
+                `      要么重新复核（接受现状），要么把 status 改回 pending。\n` +
+                `      重新复核：\`npm run wiki:review -- --slug ${doc.slug}\`。`,
+            });
+          }
+        }
+      }
+    }
+  }
 
   const entries = new Map<string, CollectionEntry<'posts'> | CollectionEntry<'wiki'>>();
   for (const entry of postEntries) entries.set(toDoc(entry, 'post').slug, entry);

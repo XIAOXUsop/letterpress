@@ -12,6 +12,7 @@ import { formatContentDate } from '../../lib/date.js';
 import { path } from '../../lib/url.js';
 import Backlinks from '../../components/Backlinks.astro';
 import MarkdownActions from '../../components/MarkdownActions.astro';
+import Provenance from '../../components/Provenance.astro';
 import {
   updatedOfDoc,
   kindOf,
@@ -122,6 +123,8 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
         </section>
       )
     }
+
+    <Provenance doc={doc} />
 
     <div data-pagefind-ignore>
       <Backlinks slug={doc.slug} graph={content.graph} />
