@@ -14,6 +14,8 @@
 | `npm run verify:reproducible` | 扫描生产源码的构建时钟读取，并在 UTC / America/Los_Angeles 做完整构建、逐文件比较 SHA-256；覆盖 Astro 产物与 Pagefind 索引 |
 | `npm run verify:online` | **线上烟测**：只打线上地址，验内容协商、NDJSON 全量导出与增量清单真的生效。需要 `SITE_ORIGIN`，没配就直接失败（不退回本地） |
 | `npm run verify:testcount` | 单元测试**条数**对账：`npm test` 写出的 JSON 报告 vs README 与 `docs/` 里抄的四个数。读不到报告就失败（读不动 ≠ 通过） |
+| `npm run wiki:review -- --slug <名字>` | 取一条知识页的**当前**正文摘要，并打印可粘进 frontmatter 的复核片段。**不自动写回**——"我复核过了"是一个承诺，不该由一次回车作出。`--list` 列出全部条目与状态 |
+| `npm run wiki:impact -- --source <id>` | 来源变更的影响分析，输出**三组且互不重叠**：直接引用者（必然要复查）、可能受影响者（一跳邻居，**只是候选**）、仓库辅助载体（docs 与代码注释，不在发布集合里所以最容易漏）。**不联网**——只读已登记的事实，不判断远端有没有出新版 |
 | `npm run verify:all` | 九道依次跑一遍（`check` + `test` + `verify` + `verify:testcount` + `verify:search` + `verify:anchors` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |

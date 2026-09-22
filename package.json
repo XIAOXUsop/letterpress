@@ -21,6 +21,8 @@
     "verify:only": "node scripts/bundle-and-verify.mjs",
     "verify:testcount": "node scripts/check-test-count.mjs",
     "verify:anchors": "node scripts/check-anchors.mjs",
+    "wiki:review": "node scripts/wiki-review.mjs",
+    "wiki:impact": "node scripts/wiki-impact.mjs",
     "verify:base": "node scripts/check-base.mjs",
     "verify:all": "npm run check && npm test && npm run verify && npm run verify:testcount && npm run verify:search && npm run verify:anchors && npm run verify:reproducible && npm run verify:base && npm run verify:formats",
     "verify:formats": "node scripts/check-formats.mjs",
