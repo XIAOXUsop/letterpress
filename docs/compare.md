@@ -74,7 +74,8 @@
 
 - `text-autospace: normal` —— 中西文之间自动插约 1/4 空格
 - `text-spacing-trim: trim-start` —— 中文标点字距调整
-- 行宽 `34em` 而不是 `66ch`（中文按 `ch` 算会排出约 130 字一行）
+- 行宽 `34em` 而不是 `66ch`（`ch` 等于渲染字体「0」字形的宽度、**随字体浮动**；
+  `em` 等于字号，跨字体可预测）
 - `em, i { font-style: normal }` —— 中文没有斜体字形，强制倾斜即笔画变形
 - `font-synthesis-weight: none` —— 关掉伪合成字重
 

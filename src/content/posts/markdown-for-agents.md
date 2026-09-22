@@ -41,8 +41,15 @@ HTTP 从 1.1 起就有解决这个问题的机制：内容协商。客户端在 
 Claude Code 那一行值得单独说。
 
 它发的是 `text/markdown, text/html, */*`——**没有 q 值**。在 HTTP 里，
-缺省 q 值等于 1.0，于是 markdown 和 html 并列。这时按 RFC 的规定，
-服务端应当认为**靠前的那个优先**。
+缺省 q 值等于 1.0，于是 markdown 和 html 两个媒体范围并列。
+
+**这里要说清楚：RFC 并没有规定并列时怎么打破平局。**
+[RFC 9110 §12.5.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.1)
+规定的是「媒体范围可以被更具体的范围覆盖，**更具体的优先**」——
+它按*具体程度*排序（`text/plain;format=flowed` → `text/plain` → `text/*` → `*/*`），
+而对 q 值相同的两个类型，规范只说它们是 *equally preferred*，没有给顺序。
+
+所以「靠前的优先」是**本项目的实现选择**，不是规范要求。
 
 但如果实现里写的是严格的 `>` 比较：
 
@@ -54,7 +61,7 @@ return 'html';
 那么 `1.0 > 1.0` 为假，判定落到 HTML 上。**Claude Code 永远拿不到 markdown，
 而服务端不报错、不警告、日志里什么都没有。** 你只会觉得「这功能好像没用」。
 
-正确写法是平局时比顺序：
+本项目的做法是**并列时比顺序**（如上所述，这是选择而非规范要求）：
 
 ```js
 if (markdown.q !== html.q) return markdown.q > html.q;
@@ -118,6 +125,17 @@ markdown——它们本来接受 HTML，你硬给别的格式，属于自找麻�
 
 ## 参考文献
 
-- RFC 9110 §12.5.1（Accept 头）、RFC 7763（`text/markdown` 媒体类型）
-- Cloudflare, *Markdown for Agents*（含 80% token 节省的实测与「七个 agent 要什么」的原始统计）
+- [RFC 9110 §12.5.1（Accept 头）](https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.1)、
+  [RFC 7763（`text/markdown` 媒体类型）](https://www.rfc-editor.org/rfc/rfc7763.html)
+- [Cloudflare, *Markdown for Agents*](https://blog.cloudflare.com/markdown-for-agents/)
+  —— 正文里「16,180 → 3,150 token、省 80%」那组数字出自这里。
+  **测量条件是 Cloudflare 拿自己的文档做的，本项目没有复现它**；
+  它说明的是「干净 HTML 转 markdown 能省多少」，不是本站的节省率
+  （本站自己的实测在 [[内容协商]] 末尾，由 `npm run verify` 复算）
 - Ahrefs, *We Analyzed 137K Sites: 97% of llms.txt Files Never Get Read*, 2026-05
+  —— ⚠️ **这一条的原始链接没有核实到**：我按几种常见路径试过 ahrefs.com/blog，
+  都返回 404。**正文里那 97% 的引用暂时不可点开核对**，请当作待核验数据，
+  不要转引。找到确切地址后再补链接。
+
+> **勘误（2026-09-22）**：上面三条原先都是纯文本，点不开。已核实的补了链接；
+> 没核实到的那条**如实标注**，而不是补一个看起来像那么回事的 URL。

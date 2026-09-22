@@ -10,8 +10,8 @@ related: [cjk-web-typography, design-tokens]
 | 参数 | 西文常用 | 中文应用 | 为什么 |
 |---|---|---|---|
 | 行高 | 1.4–1.5 | **1.6–1.8** | 方块字笔画铺满字面，没有升降部带来的天然空隙 |
-| 标题字重 | 600–700 | **500** | 多数中文字体只有 400/700，写 600 会触发伪合成 |
-| 行宽 | 66ch | **34em** | `ch` 按西文「0」宽算，一个汉字约等于两个 `ch` |
+| 标题字重 | 600–700 | **600** | 伪合成的开关是 `font-synthesis-weight`，不是字重数值；关掉后由字体挑最近的真实字重 |
+| 行宽 | 66ch | **34em** | `ch` 按渲染字体的「0」字形算、随字体浮动；`em` 等于字号，跨字体可预测 |
 | 中西文间距 | 手动加 | **`text-autospace`** | 2025 起浏览器原生支持，pangu.js 时代结束 |
 | 强调 | 斜体 | **加粗** | 中文无斜体字形，强制倾斜即笔画变形 |
 
@@ -22,7 +22,16 @@ related: [cjk-web-typography, design-tokens]
 - 一个汉字 ≈ 1em 宽 → 34em 排约 **34 个汉字**（理想 30–40）
 - 一个西文字母平均 ≈ 0.5em 宽 → 34em 排约 **68 个字符**（理想 45–75）
 
-用 `ch` 做不到这一点：`66ch` 排中文会变成约 130 字一行。
+用 `ch` 做不到这一点：它按**渲染字体的「0」字形**计算
+（[CSS Values 4](https://www.w3.org/TR/css-values-4/#ch) 原文是
+"the used advance measure of the "0" (ZERO, U+0030) glyph in the font used to render it"），
+所以「66ch 排几个汉字」**随字体变**。粗估一个汉字约 2 `ch`，66ch ≈ 33 字——
+其实也不差，但它是粗估，`em` 不是估算。
+
+> **勘误（2026-09-22）**：这里原先写「`66ch` 排中文会变成约 **130 字**一行」。
+> 按它自己的前提（1 汉字 ≈ 2 `ch`）应当除以 2 得 33，而不是乘以 2。
+> 而且 33 落在舒适的 30–40 里——原句想说的「太宽」并不成立。
+> 顺带：66ch ≈ 33em，与本站的 34em **宽度几乎相同**，这个改动换的是可预测性而非行宽。
 
 ## 2026 年的两个原生属性
 
@@ -42,8 +51,12 @@ Safari / Firefox 尚不支持，属渐进增强，不支持时版式不坏。
 
 ## 字重伪合成的识别
 
-在浏览器 DevTools 里如果看到 `Rendered Fonts` 显示的字重与你写的不一致，
-就是在合成。表现是笔画边缘发虚、与相邻字号比粗细不自然。
+**先看 `font-synthesis-weight` 是不是 `none`。** 是 `none` 的话浏览器不会合成，
+写 600 而字体没有 600 时它会去挑最近的真实字重（规范 §2.2.2：*a face with a
+nearby weight is used*）——本站就是这一档。
+
+若合成开着，表现才是笔画边缘发虚、与相邻字号比粗细不自然；
+在 DevTools 的 `Rendered Fonts` 里能看到实际用到的字体与字重。
 
 ## 字体栈顺序
 
@@ -61,3 +74,8 @@ webfont 下载——**这不是回退，是分工。**
 
 - 完整论述与实测：[[cjk-web-typography]]
 - 本站的具体取值：[[设计令牌]]
+
+## 参考
+
+- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/css-values-4/#ch)
+- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/css-fonts-4/#font-style-matching)

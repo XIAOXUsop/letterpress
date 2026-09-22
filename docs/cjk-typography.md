@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 行高 | 1.4–1.5 | **1.75** | 方块字笔画铺满字面，没有升降部带来的天然空隙 |
 | 标题字重 | 600–700 | **600**（配 `font-synthesis-weight: none`） | 关掉伪合成后由字体自己挑真实字重：拉丁拿到真 600，中文落到 700 |
-| 行宽 | 66ch | **34em** | `ch` 按西文「0」宽算；一个汉字约等于两个 `ch` |
+| 行宽 | 66ch | **34em** | `ch` 按渲染字体的「0」字形算、**随字体浮动**；`em` 等于字号，跨字体可预测 |
 | 强调 | 斜体 | **加粗** | 中文无斜体字形，强制倾斜即笔画变形 |
 
 ### `34em` 是怎么来的
@@ -17,8 +17,16 @@
 一个汉字约 1em 宽、一个西文字母平均约 0.5em 宽，于是 34em
 **同时满足**中文的 30–40 字与西文的 45–75 字符两个理想区间。
 
-用 `ch` 会怎样：一个汉字约等于两个 `ch`，按经典的 66ch 排中文，
-每行会排出约 **130 个汉字**——远超中文舒适的 30–40 字。
+用 `ch` 会怎样：按规范它等于**渲染所用字体**里「0」字形的 advance measure
+（[CSS Values 4 §ch](https://www.w3.org/TR/css-values-4/#ch)），
+所以「66ch 是几个汉字」**取决于字体**，换字体就变。
+粗估一个汉字约 2 `ch`，66ch ≈ **33 字**——其实也在舒适区间里，但它是估算。
+`em` 等于字号、与字体无关，所以能写成上面那种确定的换算式。
+
+> **勘误（2026-09-22）**：这一段原先写「每行会排出约 **130 个汉字**——远超中文舒适的
+> 30–40 字」。**算反了**：按它自己的前提（1 汉字 ≈ 2 `ch`）应当除以 2 得 33，
+> 而不是乘以 2；而 33 本就在舒适区间内，「远超」不成立。
+> 另注：66ch ≈ 33em，与本站的 34em 宽度几乎相同——这个改动换的是**可预测性**，不是行宽。
 
 取值定义在 `src/styles/tokens.css` 的 `--measure`。
 
@@ -77,3 +85,9 @@ font-family: 'Archivo', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-se
 - `src/lib/contrast.test.ts` 解析 `tokens.css`，逐对验算亮暗双模式的对比度
 - 站点自身有一篇更完整的中文说明：在线 Demo 的
   [`/cjk-web-typography/`](https://xiaoxusop.github.io/letterpress/cjk-web-typography/)
+
+## 依据
+
+- [CSS Values and Units Level 4 §ch](https://www.w3.org/TR/css-values-4/#ch) —— `ch` 的定义
+- [CSS Fonts Level 4 §2.2.2 Missing weights](https://www.w3.org/TR/css-fonts-4/#font-style-matching) —— 字重匹配
+- [CSS Fonts Level 4 §font-synthesis-weight](https://www.w3.org/TR/css-fonts-4/#font-synthesis-weight) —— 伪合成的开关

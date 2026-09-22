@@ -57,10 +57,17 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 
 ```
 页面                         HTML token   MD token       节省
-/markdown-for-agents/            5386       1693    68.6%
-/cjk-web-typography/             6102       1847    69.7%
+/markdown-for-agents/            5857       2110    64.0%
+/cjk-web-typography/             7482       2842    62.0%
 /wiki/content-negotiation/       3681       1106    70.0%
 ```
+
+> **2026-09-22 前两页的数字涨了、节省率掉了**（原为 5386/68.6% 与 6102/69.7%）。
+> 原因是这两篇在 M0 修订里补了勘误说明、规范引文与参考链接，
+> 而**这些新增文字在 HTML 与 markdown 里都有**——分母分子同时变大，
+> 节省率因此下降。这一页的第三个页面没动，数字未变。
+> 这不是回退：内容协商省的是**结构与样式**（导航、页脚、`<div>` 嵌套），
+> 正文本身在两种表示里都在。
 
 > **为什么低于 Cloudflare 的 80% 和 Vercel 的 99.6%？**
 > 因为**这个站的 HTML 本来就很干净**——几乎不含 JS（内联合计 2.5 KB、无外链，
