@@ -165,7 +165,7 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 | 构建 | 32 页；`astro build` 自报 **1.21 / 1.21 / 1.23 秒**（三次），整条 `npm run build` **2.94 / 2.98 / 2.96 秒**；Pagefind 自己报 0.136 秒、单独跑 `npx pagefind` 共 0.66 秒。**差值约 1.5 秒是 npm 起 node、连跑两条 npm script 的开销**（本机 Windows 实测；原表写的 1.1 / 2.6 秒偏低，且把差值的成因写成"npm 启动开销 + Pagefind 0.14 秒"，量级对、口径没有出处） |
 | 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
 | 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind，实测 17 个文件、**146 KB / gzip** |
-| CSS | 单文件 **23.7 KB / gzip 5.1 KB** |
+| CSS | 单文件 **24.1 KB / gzip 5.1 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
 

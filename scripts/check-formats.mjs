@@ -126,6 +126,47 @@ try {
     }
 
     /*
+     * ── README 里的实测数字，必须等于产物里的实测值 ────────────────────
+     *
+     * 2026-09-24 实测抓到的漂移：README 写「CSS 单文件 23.7 KB / gzip 5.1 KB」，
+     * 而**内容改动之后实际是 24.1 KB / 5.1 KB**——
+     * gzip 那个还准，原始体积漂了，**而没有任何门禁发现**。
+     *
+     * 已被门禁守着的只有三类（测试条数、契约条数、token 节省率）。
+     * 体积、页数这些**同样会随内容漂**，只是没人比对。
+     *
+     * 口径写在这里是为了让下一个人不必重新推：
+     * - 体积按 **KB = bytes / 1024**，一位小数；
+     * - CSS 取 `dist/_astro/*.css` 的**第一个**（本项目只有一个）；
+     * - gzip 用 `zlib.gzipSync(buf, { level: 9 })`——
+     *   **不是** `gzip -c`（默认级别 6，数字会差几个字节）。
+     */
+    const { gzipSync } = await import('node:zlib');
+    const cssDir = join(dist, '_astro');
+    const cssFiles = (await readdir(cssDir)).filter((f) => f.endsWith('.css')).sort();
+    if (cssFiles.length > 0) {
+      const cssBytes = (await readFile(join(cssDir, cssFiles[0]))).length;
+      const cssGzip = gzipSync(await readFile(join(cssDir, cssFiles[0])), { level: 9 }).length;
+      const readme = await readFile(join(process.cwd(), 'README.md'), 'utf8');
+      const claimedRaw = /CSS \| 单文件 \*\*([\d.]+) KB/.exec(readme)?.[1];
+      const claimedGzip = /gzip ([\d.]+) KB/.exec(readme)?.[1];
+      const actualRaw = (cssBytes / 1024).toFixed(1);
+      const actualGzip = (cssGzip / 1024).toFixed(1);
+      if (claimedRaw !== actualRaw) {
+        problems.push(
+          `README 写 CSS 单文件 ${claimedRaw} KB，实际 ${actualRaw} KB` +
+            `（${cssBytes} bytes）。**内容改动会让它漂，而漂了没人提醒。**`,
+        );
+      }
+      if (claimedGzip !== actualGzip) {
+        problems.push(`README 写 CSS gzip ${claimedGzip} KB，实际 ${actualGzip} KB`);
+      }
+      if (claimedRaw === actualRaw && claimedGzip === actualGzip) {
+        console.log(`  ✓ README 里的 CSS 体积与产物一致（${actualRaw} KB / gzip ${actualGzip} KB）`);
+      }
+    }
+
+    /*
      * 来源与复核状态必须真的在产物里。
      *
      * 2026-09-24 加的字段，单测已经覆盖了 `buildContentManifest`——
