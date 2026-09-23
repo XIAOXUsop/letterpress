@@ -175,6 +175,20 @@ try {
     const cssDir = join(dist, '_astro');
     const cssFiles = (await readdir(cssDir)).filter((f) => f.endsWith('.css')).sort();
     if (cssFiles.length > 0) {
+      /*
+       * ⚠️ **`_astro` 里只该有本站的 CSS。**
+       * Pagefind 也会产 CSS（`pagefind-ui.css` 等），但它们在 `dist/pagefind/`。
+       * 一旦哪天它把 CSS 也写进 `_astro`，`sort()[0]` 可能取到 Pagefind 的
+       * 那份——**而门禁照样会绿**（只要两个数字碰巧接近）。
+       * 所以这里断言「只有一份」，把那个前提钉住，而不是靠它成立。
+       */
+      if (cssFiles.length > 1) {
+        problems.push(
+          `dist/_astro/ 里有 ${cssFiles.length} 个 CSS：${cssFiles.join('、')}。` +
+            `本检查只认**本站那一份**——若 Pagefind 的 CSS 也进了这个目录，` +
+            `按文件名排序取第一个会取错，而门禁仍可能绿。`,
+        );
+      }
       const cssBytes = (await readFile(join(cssDir, cssFiles[0]))).length;
       const cssGzip = gzipSync(await readFile(join(cssDir, cssFiles[0])), { level: 9 }).length;
       const readme = await readFile(join(process.cwd(), 'README.md'), 'utf8');
