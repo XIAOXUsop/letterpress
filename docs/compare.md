@@ -53,9 +53,21 @@
 > 这个数**量错两次**，两次都是"看着挺对"：
 > ① 只数 `dist/pagefind/` 顶层 → 漏掉 `index/` 与 `fragment/` 两个子目录，**整个索引没算**；
 > ② 改成按顶层全算 → 又把三套本站根本不用的 Pagefind UI 包算进了访问者的下载量
-> （`pagefind-ui.js` 120 KB、`pagefind-component-ui.js` 175 KB、`pagefind-modular-ui.js` 14 KB
-> ——确凿：`pagefind.js` 正文里只出现 `pagefind-entry.json` 与 `pagefind-worker.js`，
-> 三个 UI 包名一个都没有）。多算的那部分是 410 KB，它与访问者无关，只影响产物体积。
+> （`pagefind-ui.js` 117 KB、`pagefind-component-ui.js` 171 KB、`pagefind-modular-ui.js` 14 KB
+> ——确凿：`pagefind.js` 正文里出现的文件名只有
+> `pagefind-entry.json`、`pagefind-worker.js` 与索引分片用的 `response.json`，
+> **三个 UI 包名一个都没有**）。多算的那部分是 302 KB，它与访问者无关，只影响产物体积。
+>
+> ⚠️ 2026-09-24 复测改了两处（pagefind 版本仍是 1.5.2，lockfile 之后没变）：
+> - 单个包的数字从 120/175/14 变成 **117/171/14**——差 3–4 KB，是口径差（舍入/单位）。
+> - **合计从「410 KB」变成 302 KB**——差 108 KB，**那不是舍入能解释的**，
+>   所以「410」很可能当时就量错了。**不知道当时是怎么量的，也不去猜。**
+> - 「只出现这两个」也不准确：还有 `response.json`（索引分片数据，不是 UI 包）。
+>   **结论不变**（三个 UI 包确实一个都没出现），变的是那句话的措辞。
+>
+> 这与本项目反复记的那件事同源：**一个「实测」数字写下来之后会过期**，
+> 而它看起来比推算可靠。**且实测数字之间也会互相矛盾**——
+> 三个单值接近 410 而合计对不上，说明写下它们时至少有一步是错的。
 >
 > 这也说明**数 `<script src>` 的检查永远给不出这个数**：Pagefind 由内联 loader +
 > 动态 `import()` 拉取，全站 HTML 的 `src=` 计数恒为 0。
