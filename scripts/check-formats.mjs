@@ -124,6 +124,38 @@ try {
     } else {
       console.log('  ✓ 草稿没有进入内容清单');
     }
+
+    /*
+     * 来源与复核状态必须真的在产物里。
+     *
+     * 2026-09-24 加的字段，单测已经覆盖了 `buildContentManifest`——
+     * 但**单测过不等于产物里有**：中间还有一层「manifest 怎么被生成、
+     * 怎么被序列化」。这一条量的是**最终那个 JSON 文件**。
+     *
+     * 为什么值得单独断言：`stale` 内容不得在机器接口里被当成新鲜内容，
+     * 而 manifest 正是订阅者判断「这篇能不能信」的唯一依据。
+     * 字段一旦从产物里消失，订阅者不会报错——它只会安静地少一个判断依据。
+     */
+    const withProvenance = manifest.documents.filter((doc) => doc.provenance);
+    const reviewedOnes = withProvenance.filter((doc) => doc.provenance.review?.status === 'reviewed');
+    const sourcedOnes = withProvenance.filter((doc) => (doc.provenance.sources ?? []).length > 0);
+    if (withProvenance.length > 0 && reviewedOnes.length === 0) {
+      problems.push('内容清单里有 provenance，却没有任何一条带 review 状态——字段多半是空的');
+    }
+    if (withProvenance.length > 0 && sourcedOnes.length === 0) {
+      problems.push('内容清单里有 provenance，却没有任何一条带 sources——同上');
+    }
+    if (withProvenance.length > 0) {
+      console.log(
+        `  ✓ 来源与复核状态进入了内容清单（${withProvenance.length} 篇有 provenance，` +
+          `${sourcedOnes.length} 篇带来源，${reviewedOnes.length} 篇带复核状态）`,
+      );
+    } else {
+      problems.push(
+        '内容清单里一篇 provenance 都没有——本站有登记来源的页面，' +
+          '这说明 provenance 没有进入产物（单测过不代表产物里有）',
+      );
+    }
   } catch (error) {
     problems.push(
       `内容清单不存在或无法解析：${error instanceof Error ? error.message : String(error)}`,

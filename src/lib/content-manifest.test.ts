@@ -218,3 +218,75 @@ describe('文档身份不随 URL 漂移', () => {
     expect(manifestId(doc({ kind: 'wiki', slug: 'kept' }))).toBe('wiki:kept');
   });
 });
+
+// ── 来源与复核状态必须进机器出口 ──────────────────────────────────────
+/**
+ * 路线图阶段 2 的工作项 5：「在 HTML、Markdown twin、manifest 与 NDJSON
+ * 中输出**同一套**来源和复核字段」。
+ *
+ * 2026-09-24 实测的缺口：HTML 页面有（Provenance 组件），
+ * 而 **manifest 与 NDJSON 都没有**。于是订阅者按 manifest 同步时
+ * **无从知道哪篇已过期**——而 `stale` 内容在机器接口里
+ * 不该被当成新鲜内容，正是这条路会漏。
+ *
+ * 下面这几条量的是「出口之间不许有差别」。
+ */
+describe('manifest 暴露来源与复核状态', () => {
+  const reviewed = doc({
+    kind: 'wiki',
+    slug: 'with-review',
+    sources: [{ sourceId: 'src-a', revision: 'v1', locator: '§1' }],
+    review: { status: 'reviewed', checkedAt: '2026-09-24', contentDigest: 'abc' },
+  });
+
+  it('文档带出来源引用', () => {
+    const manifest = buildContentManifest(
+      [{ ...source(reviewed) }],
+      buildGraph([reviewed]),
+      OPTIONS,
+    );
+    expect(manifest.documents[0].provenance?.sources).toEqual([
+      { sourceId: 'src-a', revision: 'v1', locator: '§1' },
+    ]);
+  });
+
+  it('文档带出复核状态', () => {
+    const manifest = buildContentManifest(
+      [{ ...source(reviewed) }],
+      buildGraph([reviewed]),
+      OPTIONS,
+    );
+    expect(manifest.documents[0].provenance?.review?.status).toBe('reviewed');
+  });
+
+  it('没标来源的页面不带 sources 字段，而不是给一个空数组', () => {
+    // 空数组与「没标」在下游是两种意思：前者像「已检查过，没有来源」，
+    // 后者是「没看」。混成一样就会让「没量过」看起来像「量过且为空」。
+    const plain = doc({ kind: 'wiki', slug: 'plain' });
+    const manifest = buildContentManifest([source(plain)], buildGraph([plain]), OPTIONS);
+    expect(manifest.documents[0].provenance?.sources).toBeUndefined();
+  });
+
+  it('pending 与 stale 都要能出现在出口里', () => {
+    // stale 是最要紧的那个：它必须能被下游看见，而不是消失。
+    for (const status of ['pending', 'stale'] as const) {
+      const d = doc({
+        kind: 'wiki',
+        slug: `s-${status}`,
+        review: { status, checkedAt: '2026-09-24', contentDigest: 'x' },
+      });
+      const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+      expect(manifest.documents[0].provenance?.review?.status).toBe(status);
+    }
+  });
+
+  it('产物字节稳定——加字段不能引入构建时钟', () => {
+    const a = serializeContentManifest(
+      buildContentManifest([source(reviewed)], buildGraph([reviewed]), OPTIONS),
+    );
+    const b = serializeContentManifest(
+      buildContentManifest([source(reviewed)], buildGraph([reviewed]), OPTIONS),
+    );
+    expect(a).toBe(b);
+  });
+});

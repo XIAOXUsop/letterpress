@@ -64,6 +64,30 @@ export interface ContentManifestDocument {
     readonly bytes: number;
     readonly sha256: string;
   };
+  /**
+   * 来源与复核状态。**没标就不给这个键**，而不是给空数组或空对象。
+   *
+   * <p>为什么要进机器出口：2026-09-24 实测发现 HTML 页面有（Provenance 组件），
+   * 而 manifest 与 NDJSON 都没有。于是**订阅者按 manifest 同步时无从知道
+   * 哪篇已经过期**——而「stale 内容不得在机器接口里被当成新鲜内容」
+   * 恰好就是这条路径要防的事。页面看得见、机器看不见，是最坏的一种不一致。
+   *
+   * <p>`stale` 尤其重要：它必须能被下游看见，而不是悄悄消失。
+   * 消失会让订阅者以为「这篇没变」，而实际是「它变得不可信了」。
+   */
+  readonly provenance?: {
+    readonly sources?: readonly {
+      readonly sourceId: string;
+      readonly revision: string;
+      readonly locator?: string;
+    }[];
+    readonly review?: {
+      readonly status: 'pending' | 'reviewed' | 'stale';
+      readonly checkedAt?: string;
+      /** 复核当时的正文摘要。下游可据此判断自己手上的版本是否还是被复核过的那一版 */
+      readonly contentDigest?: string;
+    };
+  };
 }
 
 export interface ContentManifest {
@@ -164,6 +188,34 @@ export function buildContentManifest(
         ...(updatedAt ? { updatedAt: updatedAt.toISOString() } : {}),
         tags: [...tags],
         relations: { outgoing, backlinks },
+        // 两个子键各自独立：只标了来源就没 review，只标了复核就没 sources。
+        // **整个 provenance 键在两者都没有时缺席**——空对象读起来像「查过了，没有」。
+        ...(doc.sources?.length || doc.review
+          ? {
+              provenance: {
+                ...(doc.sources?.length
+                  ? {
+                      sources: doc.sources.map((ref) => ({
+                        sourceId: ref.sourceId,
+                        revision: ref.revision,
+                        ...(ref.locator ? { locator: ref.locator } : {}),
+                      })),
+                    }
+                  : {}),
+                ...(doc.review
+                  ? {
+                      review: {
+                        status: doc.review.status,
+                        ...(doc.review.checkedAt ? { checkedAt: doc.review.checkedAt } : {}),
+                        ...(doc.review.contentDigest
+                          ? { contentDigest: doc.review.contentDigest }
+                          : {}),
+                      },
+                    }
+                  : {}),
+              },
+            }
+          : {}),
         markdown: {
           mediaType: 'text/markdown',
           bytes: new TextEncoder().encode(markdown).byteLength,
