@@ -48,6 +48,7 @@ const EXPECTED = [
   ['npm run verify:reproducible', '跨时区可复现构建'],
   ['npm run verify:base', '子路径部署'],
   ['npm run verify:formats', '内容发布探针 + 产物级断言'],
+  ['npm run check:refs', '**文档里提到的路径都存在**（放最后：verify:formats 会清 dist，本检查要 dist 才判产物）'],
 ];
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
