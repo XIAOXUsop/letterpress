@@ -1,0 +1,16 @@
+{
+  "_comment": "llms.txt 实际请求量的第三方研究。2026-09-24 找回并逐字核对——此前一轮曾因找不到地址而把整组数字从文章里删掉，那次删除是**对的推理、错的结论**：原文一直存在，只是没试中路径。",
+  "id": "ahrefs-llmstxt-study",
+  "title": "Ahrefs: We Analyzed 137K Sites - 97% of llms.txt Files Never Get Read",
+  "kind": "web",
+  "url": "https://ahrefs.com/blog/llmstxt-study/",
+  "revisions": [
+    {
+      "id": "online-2026-06-15",
+      "capturedAt": "2026-09-24",
+      "locator": "Methodology / Top findings",
+      "evidence": "Our study focuses on all 137,210 domains in Ahrefs Web Analytics that received traffic in May 2026.",
+      "note": "**发布日期与数据窗口是两件事**：原文发布于 2026-06-15，统计窗口是 2026 年 5 月。同文另有 `97% of those files received zero traffic in May 2026` 与「有请求的 3% 里 96% 来自 bots」。观测的是**根文件有没有被 HTTP 请求**，不是「AI 有没有读到内容」——被请求的 3% 里 77% 的 bots 并非 AI 工具。样本是 Ahrefs 自己有流量的域名，有选择偏差。"
+    }
+  ]
+}

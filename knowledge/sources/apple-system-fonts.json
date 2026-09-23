@@ -1,0 +1,16 @@
+{
+  "_comment": "Apple 官方系统字体清单。**它只能证明「存在某个字重」，不能证明浏览器会怎么选它**——字重匹配是 CSS Fonts §5 的规则，与字体清单是两回事。这条边界此前被越过：base.css 曾据这份清单的反面（不含 Bold）写成「苹方只有 400/700」。",
+  "id": "apple-system-fonts",
+  "title": "Apple System Fonts",
+  "kind": "web",
+  "url": "https://developer.apple.com/fonts/system-fonts/",
+  "revisions": [
+    {
+      "id": "online-2026-09-24",
+      "capturedAt": "2026-09-24",
+      "locator": "System Fonts 表格 · PingFang SC 条目",
+      "evidence": "PingFang SC Semibold",
+      "note": "2026-09-24 逐字核对官方清单：PingFang SC 下列有 Thin / Ultralight / Light / Regular / Medium / Semibold。**据此可以说「苹方有 Semibold」，不可以说「苹方只有 400/700」，也不可以说「请求 600 必定落到 700」**——后者由 CSS Fonts §5 的匹配算法决定：有真 600 就直接命中。这个页面没有版本号，`online-` 前缀如实标明这一点。"
+    }
+  ]
+}

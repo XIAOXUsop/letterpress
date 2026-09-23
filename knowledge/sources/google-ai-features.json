@@ -1,5 +1,5 @@
 {
-  "_comment": "替代那条核不掉的 Ahrefs 引用。它能点开，而且措辞更准。",
+  "_comment": "Google 对 AI 功能所需材料的官方表态。它的 `_comment` 原先写着「替代那条核不掉的 Ahrefs 引用」——2026-09-24 找到 Ahrefs 原文后，那句话已过期，**两者不是替代关系**：Google 这条说「不需要额外文件」，Ahrefs 那条说「llms.txt 实际很少被请求」，**问的不是同一个问题**。",
   "id": "google-ai-features",
   "title": "Google Search Central: AI features and your website",
   "kind": "web",

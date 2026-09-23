@@ -28,9 +28,11 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Estimated saving: **61.5% / 61.1%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
+  Estimated saving: **57.7% / 55.8%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
-  (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
+  (≈34 Chinese chars ≈ 68 Latin — **approximate**; what's guaranteed is that the
+  column tracks font-size, not how many characters fit), native `text-autospace`,
+  no synthetic italics.
   → [details](docs/cjk-typography.md)
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
@@ -80,7 +82,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **61.5% / 61.1%** 的 token——**这是估算不是真实分词器**（用真实词表 `o200k_base` 复算是 65.0% / 63.9%）。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **57.7% / 55.8%** 的 token——**这是估算不是真实分词器**（用真实词表 `o200k_base` 在同一批文本上复算是 60.6% / 58.6%）。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -125,10 +127,15 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 | 强调 | 斜体 | **加粗**（中文没有斜体字形） |
 | 中西文间距 | 手动加 / pangu.js | **`text-autospace`**（原生） |
 
-`34em` 是关键：一个汉字约 1em 宽、一个西文字母平均约 0.5em 宽，于是它
-**同时满足**中文的 30–40 字与西文的 45–75 字符两个理想区间。`ch` 做不到这一点——
-它等于**渲染所用字体**里「0」字形的宽度，换个字体这个数就变
-（粗估一个汉字约 2 `ch`，66ch ≈ 33 字，是估算不是换算）。
+`34em` 是关键：它让内容栏宽度**稳定地跟随字号**（`em` 等于计算后的 font-size，
+这一点规范保证且与字体无关），因而能**大致覆盖**中文的 30–40 字
+与西文的 45–75 字符两个理想区间。`ch` 连容器宽度都不稳——
+它等于**渲染所用字体**里「0」字形的宽度，换个字体这个数就变。
+
+⚠️ 两处都是**近似**，别当成换算式：「34em ≈ 34 字」依赖「汉字约 1em 宽」，
+而这**不是规范保证**（规范为此专门定义了 `ic` 来表示全角字形的典型 advance）；
+「66ch ≈ 33 字」则额外依赖「0 字形约 0.5em」这个未实测的假设。
+**被保证的是容器宽度，不是每行字数。**
 
 → [取值理由、字体栈顺序、怎么验证](docs/cjk-typography.md)
 
