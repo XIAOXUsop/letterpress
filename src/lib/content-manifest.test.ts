@@ -290,3 +290,55 @@ describe('manifest 暴露来源与复核状态', () => {
     expect(a).toBe(b);
   });
 });
+
+// ── 可选字段缺失时不能崩 ──────────────────────────────────────────────
+/**
+ * 与 `impact.test.ts` 里那组同源，来源是迭代 N 的实测：
+ * 拿第二份内容集跑核心流程时，`computeImpact` 在 `refs` 缺失时崩溃
+ * （`undefined.some`）——因为 `ImpactPage.refs` 标成必填，
+ * 而真实的 `Doc.sources?` 是可选的。
+ *
+ * > 站内一直没暴露，是因为所有调用方**都老实填了空数组**。
+ * > **默认值救了它——而那正是最危险的状态。**
+ *
+ * 这一组量的是同一件事在 manifest 侧的对应位置。
+ * `doc.sources?.length || doc.review` 那层短路**逻辑上已经安全**，
+ * 但内层写的是 `doc.sources.map`——**靠外层条件保护的内层访问**
+ * 在改代码时极易被挪掉。这里直接断言「字段整个缺失」也不崩。
+ */
+describe('可选字段缺失时不崩', () => {
+  it('sources 整个为 undefined 时不崩，且 provenance 缺席', () => {
+    const d = doc({ kind: 'wiki', slug: 'no-sources' }) as Doc;
+    expect(() => buildContentManifest([source(d)], buildGraph([d]), OPTIONS)).not.toThrow();
+    const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+    expect(manifest.documents[0].provenance).toBeUndefined();
+  });
+
+  it('review 为 undefined 而 sources 有值时，只出 sources', () => {
+    const d = doc({
+      kind: 'wiki',
+      slug: 'src-only',
+      sources: [{ sourceId: 's', revision: 'v1' }],
+    }) as Doc;
+    const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+    expect(manifest.documents[0].provenance?.sources).toHaveLength(1);
+    expect(manifest.documents[0].provenance?.review).toBeUndefined();
+  });
+
+  it('sources 为 undefined 而 review 有值时，只出 review', () => {
+    const d = doc({
+      kind: 'wiki',
+      slug: 'review-only',
+      review: { status: 'pending' },
+    }) as Doc;
+    const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+    expect(manifest.documents[0].provenance?.review?.status).toBe('pending');
+    expect(manifest.documents[0].provenance?.sources).toBeUndefined();
+  });
+
+  it('review 只有 status、缺 checkedAt 与 contentDigest 时不崩', () => {
+    const d = doc({ kind: 'wiki', slug: 'partial', review: { status: 'reviewed' } }) as Doc;
+    const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+    expect(manifest.documents[0].provenance?.review).toEqual({ status: 'reviewed' });
+  });
+});

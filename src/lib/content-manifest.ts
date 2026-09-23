@@ -203,12 +203,18 @@ export function buildContentManifest(
         relations: { outgoing, backlinks },
         // 两个子键各自独立：只标了来源就没 review，只标了复核就没 sources。
         // **整个 provenance 键在两者都没有时缺席**——空对象读起来像「查过了，没有」。
+        //
+        // ⚠️ 下面全部用 `?.` 而不是靠外层 `doc.sources?.length` 短路：
+        // 迭代 N 实测到 `computeImpact` 就是**类型标必填、实际可为 undefined**
+        // 而崩掉的（`undefined.some`）。这里虽然逻辑上安全，
+        // 但「靠外层条件保护的内层访问」在改代码时极易被挪掉——
+        // **能写成不依赖别人保护的样子，就写成那样。**
         ...(doc.sources?.length || doc.review
           ? {
               provenance: {
                 ...(doc.sources?.length
                   ? {
-                      sources: doc.sources.map((ref) => ({
+                      sources: (doc.sources ?? []).map((ref) => ({
                         sourceId: ref.sourceId,
                         revision: ref.revision,
                         ...(ref.locator ? { locator: ref.locator } : {}),

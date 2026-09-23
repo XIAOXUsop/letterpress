@@ -114,8 +114,13 @@ function relationTo(slug) {
   if (slug === primary) return '主命中';
   const a = bySlug.get(primary);
   const b = bySlug.get(slug);
-  if (a?.related.includes(slug)) return `← ${primary} 声明`;
-  if (b?.related.includes(primary)) return `→ 声明了 ${primary}`;
+  // ⚠️ `a?.related` **只保护了 a 为空，没保护 related 为 undefined**
+  // ——后者会抛 `undefined.includes`。迭代 N 实测过同型崩溃
+  // （`computeImpact` 的 `undefined.some`），根因一模一样：
+  // 类型标必填、实际可为 undefined、而调用方都填了默认值把它掩盖住。
+  // 这里写 `a?.related?.includes(...)` 才是不依赖别人保护的样子。
+  if (a?.related?.includes(slug)) return `← ${primary} 声明`;
+  if (b?.related?.includes(primary)) return `→ 声明了 ${primary}`;
   // 正文互链（`[[…]]`）也算一条真实的关系
   const linkRe = new RegExp(`\\[\\[\\s*${slug}\\s*\\]\\]`, 'i');
   if (a && linkRe.test(a.body)) return `← ${primary} 正文`;
