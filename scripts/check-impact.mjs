@@ -189,6 +189,50 @@ for (const c of cases) {
  * 修法就是把它写成断言：来源登记表与金标**一一对应**。
  * 新登记一个来源却忘了写用例，门禁会立刻红。
  */
+/*
+ * ── 页面引用的 locator，必须被该版本的登记覆盖 ──────────────────────
+ *
+ * 2026-09-24 抓到的缺口：`css-fonts-4` 只登记了 §2.2.2
+ * （「a face with a nearby weight is used」），而文章与 wiki 页同时引用了
+ * **§5 的字重匹配算法**——**§5 才是「请求 600 会不会落 700」的答案**
+ * （>500 时先向上找），§2.2.2 只说「用附近的」而没给方向。
+ *
+ * **结论不同的两条依据，只登记了弱的那条。**
+ * 而门禁只查「revision 能不能解析」，**查不到「登记覆盖了页面引用的那一节吗」**。
+ *
+ * 判据用**章节号**（`§5.1.1` 这种）而不是整段文字比：
+ * 页面写简写、登记写完整描述，逐字比会误报。
+ */
+{
+  const regLocator = new Map();
+  for (const [id, src] of registry) {
+    for (const r of src.revisions) {
+      regLocator.set(`${id}@${r.id}`, r.locator ?? '');
+    }
+  }
+  const uncovered = [];
+  for (const page of pages) {
+    for (const ref of page.refs) {
+      if (!ref.locator) continue;
+      const reg = regLocator.get(`${ref.sourceId}@${ref.revision}`) ?? '';
+      const section = /^§[\d.]+/.exec(ref.locator)?.[0];
+      // 章节号对不上才算缺口；登记里没有章节号时**不报**——
+      // 那说明登记用的是自由文本，机械比对没有判据（宁可漏报也不误报）。
+      if (section && !reg.includes(section)) {
+        uncovered.push(`${page.slug} 引用 ${ref.sourceId}@${ref.revision} 的 ${section}，但登记未覆盖`);
+      }
+    }
+  }
+  if (uncovered.length > 0) {
+    for (const u of uncovered) problems.push(`locator 未被登记覆盖：${u}`);
+  } else {
+    console.log(
+      `  ✓ 页面引用的章节号都被来源登记覆盖` +
+        `（扫了 ${pages.reduce((n, p) => n + p.refs.filter((r) => r.locator).length, 0)} 条带 locator 的引用）`,
+    );
+  }
+}
+
 const covered = new Set(cases.map((c) => c.sourceId));
 const uncovered = [...registry.keys()].filter((id) => !covered.has(id)).sort();
 if (uncovered.length > 0) {

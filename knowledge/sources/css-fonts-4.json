@@ -1,5 +1,5 @@
 {
-  "_comment": "字重匹配与伪合成的依据。文章里「写 500 会掉到 400」那段就来自它。",
+  "_comment": "字重相关有三处定位都在这一个版本里：§2.2.2（用附近的字重）、§5（给方向：>500 先向上）、§2.8.1（伪合成的开关）。**§5 是 2026-09-24 推翻「600 必落 700」的依据**，别把它漏掉。",
   "id": "css-fonts-4",
   "title": "CSS Fonts Module Level 4",
   "kind": "web",
@@ -8,9 +8,9 @@
     {
       "id": "WD-20260913",
       "capturedAt": "2026-09-23",
-      "locator": "§2.2.2 Missing weights",
-      "evidence": "When a weight is specified for which no face exists, a face with a nearby weight is used.",
-      "note": "规范说的是「去找最接近的真实字重」，**不是伪造一个**。伪合成的开关是另一个属性 font-synthesis-weight。"
+      "locator": "§2.2.2 Missing weights；§5 Font Matching Algorithm（字重匹配）；§2.8.1 Controlling synthesized bold",
+      "evidence": "When a weight is specified for which no face exists, a face with a nearby weight is used. §5 给出方向：If the desired weight is greater than 500, weights greater than or equal to the desired weight are checked in ascending order followed by weights below the desired weight",
+      "note": "规范说明缺字重时用「附近的」字重，**但没给方向**；§5 才给：**大于 500 时先按升序检查不小于目标的字重**（600→700→800→900），找不到才向下。所以有真 600 的字体直接命中 600，只有 400/700 的才落到 700。**§5 才是「600 会不会落 700」这个问题的答案。**另外：这个版本**不要拆成两条 revision**——`revisionId` 是规范版本号，同一版本的两个章节不是两个版本（路线图 §5.2）。"
     }
   ]
 }
