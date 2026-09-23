@@ -18,8 +18,12 @@
  * 会一次性摧毁这三样：不同时间跑出不同结果、需要网络与凭据、
  * 而且失败时是**静默的**（召回掉了但没有任何东西会红）。
  *
- * 词法检索在 6 页的规模上完全够用，而且它的失败是**看得见的**——
+ * 词法检索在 11 页（wiki + posts）的规模上完全够用，而且它的失败是**看得见的**——
  * 这正是 `knowledge/questions.md` 那套金标要量的事。
+ *
+ * 它的失败**确实是可见的**，这一点被反复验证过：2026-09-24 语料从 6 页扩到 11 页时，
+ * 金标立刻翻红两条，挖出「单字母有权重」与「问句壳自己凑覆盖」两个真缺陷
+ * （见下面 `termWeight` 与 `coverageWeights` 的注释）。
  *
  * ── 分词：中文按二元组，西文按词 ────────────────────────────────────
  *
@@ -233,6 +237,24 @@ export function termWeight(
   medianKnownIdf: number,
   junctions: ReadonlySet<string> = new Set(),
 ): number {
+  /*
+   * ── 单个 ASCII 字母一律 0 权重 ──────────────────────────────────────
+   *
+   * 实测出来的缺陷（2026-09-24）：问「怎么做 A/B 测试」时，
+   * `A/B` 被切成 `a`、`b` 两个单字母，而它们在**任何含英文的文本里都必然出现**——
+   * 于是「几乎必然命中」变成了「贡献虚高覆盖」。
+   * 实测 `reproducible-builds` 靠 `['b','a']` 拿到 44% 覆盖被判「有依据」，
+   * 而真正相关的「测试」一词压根没进命中词。
+   *
+   * **判据是长度而不是字符集**：两个字母的缩写（`CI`、`MVP`）是真术语，
+   * 砍掉它们会误伤。中文单字也不受影响——`行` 是有语义的字，不是「单字母」。
+   *
+   * ⚠️ 两条路径都要拦：语料里**出现过**的（走第一行 `seen`）与
+   * **没出现过**的（走下面的 ASCII 分支）。只改一处的话，
+   * 语料里恰好没有那个字母时它照样有权重。
+   */
+  if (isAsciiTerm(term) && term.length < 2) return 0;
+
   const seen = df.get(term);
   if (seen !== undefined) return idf(df, docCount, term);
   if (isAsciiTerm(term)) return Math.log(1 + docCount / 1);
@@ -286,6 +308,32 @@ export function queryWeights(
   );
 }
 
+/**
+ * **覆盖度专用**的权重表：剔除「问句壳」词。
+ *
+ * ── 为什么要另算一份，而不是直接用 `queryWeights` ────────────────────
+ *
+ * 问句壳（`么做`、`怎么`、`什么`）在语料里出现得并不少，
+ * 按 IDF 能拿到正常权重，于是**自己给自己凑覆盖**。
+ * 实测：问「怎么做 A/B 测试」，`llm-wiki` 只命中 `么做`、`怎么` 两个词
+ * 就拿到 65% 覆盖、被判「有依据」，而那一页与 A/B 测试毫无关系。
+ *
+ * `junctionsOf` 拦不住它们：它的判据是「该词在语料里没出现过」，
+ * 而 `怎么` 在语料里出现过 7 次。**要判的不是「接缝」，是「整组都是虚词字」**——
+ * `isSubjectTerm` 已经在做这件事，只是原先只用于闸二、没用于覆盖度。
+ *
+ * ⚠️ **分子与分母必须用同一份**：`rank` 里的 `coverage` 与 `docCoverage`
+ * 都取自这里，否则两处覆盖率会互相矛盾（甚至 >1）。
+ * ⚠️ **排序仍用完整权重**：问句壳词确实携带一点「话题相近」的信号，
+ * 扔掉会让相关段落进不了候选池——那比覆盖率虚高更难查。
+ */
+export function coverageWeights(
+  queryTerms: readonly string[],
+  full: ReadonlyMap<string, number>,
+): Map<string, number> {
+  return new Map(queryTerms.filter(isSubjectTerm).map((t) => [t, full.get(t) ?? 0] as const));
+}
+
 export interface RankOptions {
   /** 返回多少段。默认 6。 */
   readonly limit?: number;
@@ -316,13 +364,18 @@ export function rank(
   // 两处各算一遍的话，会出现「排序觉得它重要、门槛觉得它不重要」这种自相矛盾，
   // 而那种 bug 的表征是「排序看着挺对，但系统总说没有依据」，极难反推。
   const weight = queryWeights(queryTerms, df, docCount);
-  const totalWeight = [...weight.values()].reduce((a, b) => a + b, 0);
+  // 排序用完整权重，覆盖度用剔除问句壳的那份——**两者刻意不同**。
+  // 门槛判定读的是 `coverage`（见 assess 里 `best.coverage < MIN_COVERAGE`），
+  // 所以这份必须与 `docCoverage` 同源，否则两处覆盖率会互相矛盾。
+  const coverWeight = coverageWeights(queryTerms, weight);
+  const coverTotal = [...coverWeight.values()].reduce((a, b) => a + b, 0);
 
   const scored = passages.map((p) => {
     const tokens = new Set(tokenize(`${p.heading}\n${p.text}`));
     const matched = queryTerms.filter((t) => tokens.has(t));
     const score = matched.reduce((a, t) => a + (weight.get(t) ?? 0), 0);
-    const coverage = totalWeight > 0 ? score / totalWeight : 0;
+    const covered = matched.reduce((a, t) => a + (coverWeight.get(t) ?? 0), 0);
+    const coverage = coverTotal > 0 ? covered / coverTotal : 0;
     return {
       ...p,
       score,
@@ -433,8 +486,29 @@ export function assess(
   const queryTerms = [...new Set(tokenize(query))];
   const subjects = queryTerms.filter(isSubjectTerm);
   const weight = queryWeights(queryTerms, df, docCount);
-  const totalWeight = [...weight.values()].reduce((a, b) => a + b, 0);
-  const docs = docCoverage(ranked, weight, totalWeight);
+
+  /*
+   * ── 覆盖度用**另一份权重**：剔除「问句壳」 ──────────────────────────
+   *
+   * 实测出来的缺陷（2026-09-24）：问「怎么做 A/B 测试」时，
+   * `llm-wiki` 拿到 65% 覆盖，**命中的只有 `么做` 与 `怎么`**——
+   * 两个都是「怎么做」这个疑问词的碎片，不承载任何检索意图。
+   *
+   * 它们之所以有分��，是因为 `怎么` 在语料里出现 7 次、`么做` 出现 2 次，
+   * 于是按 IDF 拿到正常权重。而这正是 `junctionsOf` 拦不住的原因：
+   * **那套判据要求「该词本身在语料里没出现过」**，而它们出现过。
+   *
+   * 所以要判的不是「接缝」，而是「**这个词组里全是虚词字**」——
+   * `isSubjectTerm` 已经在做这件事（`怎`/`么` 都在虚词表里），
+   * 只是它原先只用于闸二、没用于覆盖度。
+   *
+   * ⚠️ **分子与分母必须用同一份权重**，否则覆盖率会 >1。
+   * ⚠️ **排序仍用完整权重**：问句壳词确实携带一点「话题相近」的信号，
+   * 扔掉会让相关段落进不了候选池——那比覆盖率虚高更难查。
+   */
+  const coverageWeight = coverageWeights(queryTerms, weight);
+  const totalWeight = [...coverageWeight.values()].reduce((a, b) => a + b, 0);
+  const docs = docCoverage(ranked, coverageWeight, totalWeight);
 
   // 闸二先跑，**在「一个词都没命中」之前**。
   //

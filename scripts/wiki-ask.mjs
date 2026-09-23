@@ -34,6 +34,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { splitPassages, assess, MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
+import { readContentPage } from '../src/lib/wiki/read-page.ts';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
@@ -45,9 +46,9 @@ if (question === '') {
   process.exit(2);
 }
 
-const WIKI = join(process.cwd(), 'src', 'content', 'wiki');
+const ROOT = process.cwd();
 
-// ── 读知识层 ────────────────────────────────────────────────────────
+// ── 读内容 ──────────────────────────────────────────────────────────
 
 function bodyOf(source) {
   const end = source.indexOf('\n---', 3);
@@ -55,70 +56,45 @@ function bodyOf(source) {
   return source.slice(source.indexOf('\n', end + 1) + 1).trim();
 }
 
-function parseList(raw) {
-  return (raw ?? '')
-    .replace(/^\[|\]$/g, '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+/*
+ * 语料 = wiki **与 posts**。
+ *
+ * 2026-09-24 实测的缺口：这里只扫 wiki，于是问「七个 agent 里哪几个主动要
+ * markdown」得到「无依据」——而答案明明白白写在 markdown-for-agents.md 里
+ * （「七个里三个主动要」）。**报「无依据」比答错更坏**：它让调用方以为
+ * 知识库里没有这件事，而实际上有一整页在讲它。
+ *
+ * 这与迭代 I 修掉的 wiki:impact 缺口**完全同构**：只读 wiki，
+ * 于是 articles 层的证据在两个工具里都「不存在」。
+ *
+ * 解析一律走 `src/lib/wiki/read-page.ts`——原先这里自己抄了一份
+ * `parseRefs` / `parseReview` / `parseList`，而 check-impact 与 wiki-impact
+ * 各自还有一份。**四份拷贝里任何一份漏改，症状都是「工具之间答案不一致」，
+ * 而每个都跑、都绿。**
+ */
+const WIKI_DIR = join(ROOT, 'src', 'content', 'wiki');
+const POSTS_DIR = join(ROOT, 'src', 'content', 'posts');
 
-function parseRefs(block) {
-  const refs = [];
-  let cur = null;
-  for (const line of block.split('\n')) {
-    const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
-    if (sid) {
-      if (cur) refs.push(cur);
-      cur = { sourceId: sid[1], revision: '', locator: '' };
-      continue;
+function loadCorpus() {
+  const pages = [];
+  for (const dir of [WIKI_DIR, POSTS_DIR]) {
+    let files;
+    try {
+      files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f)).sort();
+    } catch {
+      console.error(`读不到 ${dir}——请在仓库根目录运行。`);
+      process.exit(1);
     }
-    if (!cur) continue;
-    const rev = /^\s*revision:\s*(.+?)\s*$/.exec(line);
-    if (rev) cur.revision = rev[1];
-    const loc = /^\s*locator:\s*(.+?)\s*$/.exec(line);
-    if (loc) cur.locator = loc[1];
+    if (files.length === 0) {
+      console.error(`${dir} 里一个条目都没有——这个命令只能检索一半的内容。`);
+      process.exit(1);
+    }
+    for (const file of files) pages.push(readContentPage(dir, file));
   }
-  if (cur) refs.push(cur);
-  return refs;
+  return pages;
 }
 
-function parseReview(block) {
-  const m = /^review:\s*$([\s\S]*?)(?=\n\S|\s*$)/m.exec(block);
-  if (!m) return undefined;
-  const get = (k) => new RegExp(`^\\s+${k}:\\s*(.+?)\\s*$`, 'm').exec(m[1])?.[1];
-  const status = get('status');
-  if (!status) return undefined;
-  return { status, checkedAt: get('checkedAt') };
-}
-
-let files;
-try {
-  files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f)).sort();
-} catch {
-  console.error(`读不到 ${WIKI}——请在仓库根目录运行。`);
-  process.exit(1);
-}
-if (files.length === 0) {
-  console.error(`${WIKI} 里一个条目都没有——这个命令什么都没检索。`);
-  process.exit(1);
-}
-
-const docs = files.map((file) => {
-  const source = readFileSync(join(WIKI, file), 'utf8');
-  const end = source.indexOf('\n---', 3);
-  const block = source.slice(3, end);
-  return {
-    slug: file.replace(/\.mdx?$/, ''),
-    title: frontmatterField(source, 'title') ?? file,
-    kind: frontmatterField(source, 'kind') ?? '',
-    updated: frontmatterField(source, 'updated') ?? '',
-    related: parseList(frontmatterField(source, 'related')),
-    sources: parseRefs(block),
-    review: parseReview(block),
-    body: bodyOf(source),
-  };
-});
+const docs = loadCorpus();
 
 const bySlug = new Map(docs.map((d) => [d.slug, d]));
 

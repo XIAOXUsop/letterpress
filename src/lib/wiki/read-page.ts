@@ -30,16 +30,28 @@ export interface PageSourceRef {
   readonly locator: string;
 }
 
-/** 读一页内容，取出影响分析需要的四样东西。 */
+/** 页面上的复核记录。 */
+export interface PageReview {
+  readonly status: string;
+  readonly checkedAt?: string;
+}
+
+/** 读一页内容，取出检索与影响分析共需要的字段。 */
 export function readContentPage(dir: string, file: string): {
   readonly slug: string;
   readonly title: string;
+  readonly kind: string;
+  readonly updated: string;
   readonly refs: readonly PageSourceRef[];
+  readonly review?: PageReview;
   readonly related: readonly string[];
+  /** frontmatter 之后的正文（不含 frontmatter）。 */
+  readonly body: string;
 } {
   const source = readFileSync(join(dir, file), 'utf8');
   const end = source.indexOf('\n---', 3);
   const block = source.slice(3, end === -1 ? undefined : end);
+  const body = end === -1 ? source : source.slice(source.indexOf('\n', end + 1) + 1);
 
   // sources 是块状数组，逐条抓 sourceId / revision / locator
   const refs: PageSourceRef[] = [];
@@ -59,10 +71,18 @@ export function readContentPage(dir: string, file: string): {
   }
   if (current) refs.push(current);
 
+  // review 是一个块（`review:` 下面缩进跟着 status / checkedAt），
+  // 与 sources 一样只能逐行扫，取顶层字段会取错。
+  const review = parseReview(block);
+
   return {
     slug: file.replace(/\.mdx?$/, ''),
     title: frontmatterField(source, 'title') ?? file,
+    // post 没有 kind 字段，wiki 才有——**别与 Doc.kind 搞混**（那个是 post/wiki）
+    kind: frontmatterField(source, 'kind') ?? '',
+    updated: frontmatterField(source, 'updated') ?? '',
     refs,
+    ...(review ? { review } : {}),
     // ⚠️ 必须先剥方括号：`frontmatterField` 返回**原始字符串**，
     // `related: [a, b]` 拿到的是 `"[a, b]"`。不剥的话第一项变成 `"[a"`，
     // **所有关系都解析不出来**——症状是「候选页全空」而不是报错。
@@ -72,7 +92,18 @@ export function readContentPage(dir: string, file: string): {
       .split(/[、,，]/)
       .map((s) => s.trim())
       .filter(Boolean),
+    body,
   };
+}
+
+function parseReview(block: string): PageReview | undefined {
+  const m = /^review:\s*$([\s\S]*?)(?=\n\S|\s*$)/m.exec(block);
+  if (!m) return undefined;
+  const get = (k: string) => new RegExp(`^\\s+${k}:\\s*(.+?)\\s*$`, 'm').exec(m[1] ?? '')?.[1];
+  const status = get('status');
+  if (!status) return undefined;
+  const checkedAt = get('checkedAt');
+  return checkedAt ? { status, checkedAt } : { status };
 }
 
 /**

@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-412%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-416%20项-2C5E2E)
 
 </div>
 
@@ -38,7 +38,7 @@
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 412 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 416 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -157,10 +157,10 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **412 项**，全部离线，无网络依赖 |
+| 单元测试 | **416 项**，全部离线，无网络依赖 |
 | 端到端契约 | **196 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
-| 检索金标 | **19 条**问题（精确事实 / 跨文档组合 / 冲突 / 过期 / **无答案**），跑 `npm run verify:questions`。其中 1 条**显式登记为已知局限**、不计为失败 |
+| 检索金标 | **22 条**问题（精确事实 / 跨文档组合 / 冲突 / 过期 / **无答案**），跑 `npm run verify:questions`。其中 **2 条显式登记为已知局限**、不计为失败——它们的局限被打印出来，而不是被一条绿线盖过去。五道闸每道都有一条**专属**用例，关掉它只有那条会红（见 `docs/retrieval.md`） |
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **107 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **1.21 / 1.21 / 1.23 秒**（三次），整条 `npm run build` **2.94 / 2.98 / 2.96 秒**；Pagefind 自己报 0.136 秒、单独跑 `npx pagefind` 共 0.66 秒。**差值约 1.5 秒是 npm 起 node、连跑两条 npm script 的开销**（本机 Windows 实测；原表写的 1.1 / 2.6 秒偏低，且把差值的成因写成"npm 启动开销 + Pagefind 0.14 秒"，量级对、口径没有出处） |
 | 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
@@ -227,10 +227,19 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
   在结构上完全一样。这一条**写进了金标并显式登记**，跑检查时会打印出来，
   而不是被一条绿线盖过去。详见 `docs/retrieval.md`。
 
-  > 同一份金标里还有一处**自我登记**：把覆盖度门槛调成 0，19 条问题
-  > **一条都不变红**——实词闸先一步拦住了那些查询。也就是说**门槛当前没有被
-  > 任何一条金标量到**，它只由单元测试单独覆盖。这件事写在金标文件里，
-  > 因为**一个没被量过的闸，和没有这个闸是一回事**。
+  > 同一份金标里还有一处**自我登记**，而它**被推翻过两次**：
+  >
+  > 1. 最初写「把覆盖度门槛调成 0，19 条一条都不变红——门槛没被任何金标量到」；
+  > 2. 2026-09-24 语料从 6 页扩到 11 页后，调成 0 会红 2 条，**第一条被推翻**；
+  > 3. 同一天再测，发现**即便会红，那也是被别的闸「代劳」的**——
+  >    把实词闸关掉，两条仍报「无依据」，因为另一道闸先一步拦下了。
+  >    **一道闸被另一道闸遮住时，关掉它金标不会红。**
+  >    补了专属用例（`OG 图片为什么不含文字？`）之后，五道闸才真正各有一条
+  >    「关掉它只有这条会红」的用例。
+  >
+  > 留这一笔是因为它是个典型：**写在文档里的实测数字也是断言**，
+  > 而且是最容易被当成客观事实的那一种——
+  > 它当时是真的，两次之后就不是了，而它一直躺在文档里没人怀疑。
 - **`llms.txt` 的实际效果被高估。** Ahrefs 实测 13.7 万个域名里 97% 从未被
   请求过。本项目生成它是因为零成本，**但不把它当卖点**。
 - **`text-autospace` 与 `text-spacing-trim` 在 Safari / Firefox 上不支持**
