@@ -45,7 +45,7 @@ Netlify 与 Vercel 的仓库配置都显式声明了这个 MIME，不依赖托�
 ```json
 {
   "format": "letterpress-content-record",
-  "version": 1,
+  "version": 1,   // 这是 NDJSON 记录的版本；清单的版本见 content-manifest.json
   "site": {
     "name": "示例站",
     "language": "zh-CN",

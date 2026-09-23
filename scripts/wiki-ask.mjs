@@ -30,9 +30,8 @@
  *   node scripts/wiki-ask.mjs --all "…"      # 不截断，打全段
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { splitPassages, assess, MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 
@@ -49,12 +48,6 @@ if (question === '') {
 const ROOT = process.cwd();
 
 // ── 读内容 ──────────────────────────────────────────────────────────
-
-function bodyOf(source) {
-  const end = source.indexOf('\n---', 3);
-  if (end === -1) return '';
-  return source.slice(source.indexOf('\n', end + 1) + 1).trim();
-}
 
 /*
  * 语料 = wiki **与 posts**。

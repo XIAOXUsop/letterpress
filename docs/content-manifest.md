@@ -20,7 +20,7 @@ JSON，就能只下载发生变化的 `.md` 文件。
 ```json
 {
   "format": "letterpress-content-manifest",
-  "version": 1,
+  "version": 2,
   "site": {
     "name": "此间札记",
     "language": "zh-CN",

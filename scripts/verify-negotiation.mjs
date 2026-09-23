@@ -20,6 +20,10 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
+import {
+  CONTENT_MANIFEST_VERSION,
+} from '../src/lib/content-manifest.ts';
+import { CONTENT_EXPORT_VERSION } from '../src/lib/content-export.ts';
 import { negotiate } from '../src/lib/negotiate/edge.ts';
 import { estimateTokens } from '../src/lib/negotiate/accept.ts';
 import { RESERVED_POST_SLUGS } from '../src/lib/wiki/lint.ts';
@@ -381,7 +385,10 @@ console.log('\n[1e] Agent 增量同步清单');
   }
 
   check(manifest.format === 'letterpress-content-manifest', '格式名明确且不伪装成外部标准');
-  check(manifest.version === 1, '清单版本为 1');
+  check(
+    manifest.version === CONTENT_MANIFEST_VERSION,
+    `清单版本为 ${CONTENT_MANIFEST_VERSION}`,
+  );
 
   const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
   check(manifest.documentCount === documents.length, 'documentCount 与条目数一致');
@@ -455,7 +462,8 @@ console.log('\n[1f] Agent / RAG 全量内容导出');
   check(
     records.every(
       (record) =>
-        record.format === 'letterpress-content-record' && record.version === 1,
+        record.format === 'letterpress-content-record' &&
+          record.version === CONTENT_EXPORT_VERSION,
     ),
     '每条记录都声明明确的格式名与版本',
   );

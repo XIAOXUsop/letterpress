@@ -19,6 +19,10 @@
 import { createHash } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
+import {
+  CONTENT_MANIFEST_VERSION,
+} from '../src/lib/content-manifest.ts';
+import { CONTENT_EXPORT_VERSION } from '../src/lib/content-export.ts';
 
 const MARKDOWN_PAGE = '/markdown-for-agents/';
 /** 这个页面没有 markdown 孪生文件，用来验证"安全回落到 HTML" */
@@ -166,7 +170,10 @@ try {
 
 if (manifest) {
   record(manifest.format === 'letterpress-content-manifest', '内容清单格式名正确');
-  record(manifest.version === 1, '内容清单版本为 1');
+  record(
+    manifest.version === CONTENT_MANIFEST_VERSION,
+    `内容清单版本为 ${CONTENT_MANIFEST_VERSION}`,
+  );
   const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
   record(documents.length > 0, `内容清单包含文档（实际 ${documents.length} 篇）`);
   record(manifest.documentCount === documents.length, 'documentCount 与真实条目数一致');
@@ -270,7 +277,8 @@ if (manifest && exportRecords.length > 0) {
   );
   record(
     exportRecords.every(
-      (item) => item.format === 'letterpress-content-record' && item.version === 1,
+      (item) =>
+        item.format === 'letterpress-content-record' && item.version === CONTENT_EXPORT_VERSION,
     ),
     '全量导出的格式名与版本正确',
   );

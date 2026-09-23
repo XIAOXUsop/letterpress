@@ -19,7 +19,7 @@
  *   node scripts/check-questions.mjs --verbose
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { splitPassages, assess } from '../src/lib/wiki/retrieve.ts';
 import { readContentDirs } from '../src/lib/wiki/read-page.ts';

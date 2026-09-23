@@ -136,6 +136,49 @@ try {
      * 而 manifest 正是订阅者判断「这篇能不能信」的唯一依据。
      * 字段一旦从产物里消失，订阅者不会报错——它只会安静地少一个判断依据。
      */
+    /*
+     * 清单版本号必须与**文档里声明的期望版本**一致。
+     *
+     * ⚠️ 这里**不能**直接 import `content-manifest.ts` 来比常量：
+     * 那个文件内部用 `.js` 后缀 import（TS 惯例，bundler 能解析），
+     * 而这些脚本是**裸 Node** 跑的，解析不了——实测报
+     * `Cannot find module '.../wiki/graph.js'`。
+     * 仓库里其它脚本能 import 源码，是因为它们 import 的模块内部没有 `.js` 引用。
+     *
+     * 所以期望值写在下面这个常量里。
+     *
+     * **单向检查是不够的**：只查「产物 == 期望值」，那么源码升了、
+     * 期望值忘了改，产物与期望值仍然相等，**契约照样绿**——
+     * 而产物里的版本已经和源码声明的对不上了。
+     * 所以下面**同时**从源码文本里读出常量，两个数一起比。
+     * （读文本而不是 import，正是为了绕开上面那个 `.js` 解析问题。）
+     */
+    const EXPECTED_MANIFEST_VERSION = 2;
+    const declared = await readFile(
+      join(dist, '..', 'src', 'lib', 'content-manifest.ts'),
+      'utf8',
+    ).then((t) => /CONTENT_MANIFEST_VERSION\s*=\s*(\d+)/.exec(t)?.[1]);
+    if (!declared) {
+      problems.push('从 src/lib/content-manifest.ts 里读不出 CONTENT_MANIFEST_VERSION');
+    } else if (Number(declared) !== EXPECTED_MANIFEST_VERSION) {
+      problems.push(
+        `源码里的 CONTENT_MANIFEST_VERSION 是 ${declared}，` +
+          `而本检查期望 ${EXPECTED_MANIFEST_VERSION}。` +
+          `改了字段形状要**同时**改两处：常量与这个期望值。`,
+      );
+    }
+    if (manifest.version !== EXPECTED_MANIFEST_VERSION) {
+      problems.push(
+        `产物里的 manifest version 是 ${manifest.version}，` +
+          `期望 ${EXPECTED_MANIFEST_VERSION}。` +
+          `**改了字段形状就要升版本**——同一份 version 对应两种形状，` +
+          `正是版本号要防的事。（同时确认 src/lib/content-manifest.ts 里的 ` +
+          `CONTENT_MANIFEST_VERSION 也改了）`,
+      );
+    } else {
+      console.log(`  ✓ 清单版本号符合预期（v${manifest.version}）`);
+    }
+
     const withProvenance = manifest.documents.filter((doc) => doc.provenance);
     const reviewedOnes = withProvenance.filter((doc) => doc.provenance.review?.status === 'reviewed');
     const sourcedOnes = withProvenance.filter((doc) => (doc.provenance.sources ?? []).length > 0);
