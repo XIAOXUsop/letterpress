@@ -193,7 +193,14 @@ try {
       const cssGzip = gzipSync(await readFile(join(cssDir, cssFiles[0])), { level: 9 }).length;
       const readme = await readFile(join(process.cwd(), 'README.md'), 'utf8');
       const claimedRaw = /CSS \| 单文件 \*\*([\d.]+) KB/.exec(readme)?.[1];
-      const claimedGzip = /gzip ([\d.]+) KB/.exec(readme)?.[1];
+      // ⚠️ **必须限定在 CSS 那一行。** 原先写 `/gzip ([\d.]+) KB/`（全 README
+      // 第一个匹配），结果 2026-09-24 在别处加了一句「gzip 93 KB」之后，
+      // 它匹到了那句、报「README 写 CSS gzip 93 KB，实际 5.1 KB」。
+      //
+      // **门禁自己也会被 innocuous 的改动绊倒**——而它的报错看起来
+      // 像是 README 写错了，**把人引向错误的改法**。
+      const cssLine = readme.split('\n').find((l) => l.includes('| CSS |')) ?? '';
+      const claimedGzip = /gzip ([\d.]+) KB/.exec(cssLine)?.[1];
       const actualRaw = (cssBytes / 1024).toFixed(1);
       const actualGzip = (cssGzip / 1024).toFixed(1);
       if (claimedRaw !== actualRaw) {
