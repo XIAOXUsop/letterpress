@@ -50,7 +50,15 @@ const LIB = join(ROOT, 'src', 'lib', 'wiki');
  * 设计约束是**零耦合**——不读文件、不碰 Astro、不依赖本站配置。
  * 那条约束的价值全靠本门禁兑现：写在注释里而没有检查，就只是愿望。
  */
-const CORE = ['graph.ts', 'lint.ts', 'retrieve.ts', 'impact.ts', 'slug.ts', 'digest.ts'];
+const CORE = [
+  'graph.ts',
+  'lint.ts',
+  'retrieve.ts',
+  'impact.ts',
+  'slug.ts',
+  'digest.ts',
+  'context-pack.ts',
+];
 
 /** 会被误写成「可选链 + 直接调方法」的字段名。 */
 const OPTIONAL_FIELDS = [
