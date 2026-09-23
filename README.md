@@ -37,6 +37,13 @@
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
+- **Conclusions carry their provenance.** Sources are pinned to a dated spec
+  revision; editing the body without re-reviewing fails the build, so "reviewed"
+  never becomes a stale green checkmark. The same state ships in
+  `content-manifest.json` / `content.ndjson`, so a subscriber can tell which
+  pages are no longer trustworthy — and pages that are *this project's own
+  choices* say so explicitly instead of pretending to cite something.
+  → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
   search page on-demand loads same-origin Pagefind. · 446 unit tests · MIT
 
@@ -150,6 +157,27 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 
 后者不可复现、不可回归、进不了 CI。所以会腐烂的机械问题做成了代码：
 **断链会使构建中止**，出口写在错误信息里，不用查文档。
+
+还有一处改动在别处：结论的**出处**。
+
+```yaml
+sources:
+  - sourceId: css-values-4
+    revision: WD-20240312        # 钉到具体日期的规范版本
+    locator: §5.1.1 长度单位 · ch
+review:
+  status: reviewed
+  contentDigest: 0e700777…        # 复核当时正文的摘要
+```
+
+改了正文而没重新复核，`review-stale` 会**让构建失败**——
+「已复核」不会变成一个没人更新的永久绿标。
+而机器出口（`content-manifest.json` / `content.ndjson`）里带着同一份状态，
+**订阅者能知道哪一篇已经过期**。
+
+不是每条结论都要登记：只标**值得单独治理的那些**。
+而「这一页讲的是本站自己的设计选择、外部没有对应规范」是**单独一种状态**
+（`original`）——否则「没登记来源」就分不清是该补还是正常。
 
 ---
 
