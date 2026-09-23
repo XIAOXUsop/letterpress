@@ -34,7 +34,8 @@
     "verify:impact": "node scripts/check-impact.mjs",
     "verify:portability": "node scripts/check-portability.mjs",
     "verify:second-site": "node scripts/check-second-site.mjs",
-    "list:overclaims": "node scripts/list-overclaims.mjs"
+    "list:overclaims": "node scripts/list-overclaims.mjs",
+    "measure": "node scripts/measure.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",
