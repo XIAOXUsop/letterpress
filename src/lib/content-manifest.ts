@@ -9,6 +9,19 @@ import type { Doc, LinkGraph } from './wiki/graph.js';
 import { urlOf } from './wiki/graph.js';
 
 export const CONTENT_MANIFEST_FORMAT = 'letterpress-content-manifest';
+
+/**
+ * 格式版本。
+ *
+ * **只在「消费方需要改代码」时才升**，不是为了标记内部实现变过。
+ *
+ * 2026-09-24 给 `manifestId` 加了显式 `id` 支持，**这一版没有升**——
+ * 因为那六篇的显式 id 与原 slug 同值，**产物里的 ID 一个字节都没变**，
+ * 消费方不需要改任何东西。升版本会让下游白白重新同步一次。
+ *
+ * 真正该升的是这几种：字段增删或改名、字段语义改变、
+ * 同一份输入在同版本下可能产出不同结果（例如**改变 ID 推导规则**）。
+ */
 export const CONTENT_MANIFEST_VERSION = 1;
 
 export interface ManifestSource {
