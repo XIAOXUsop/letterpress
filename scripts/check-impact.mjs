@@ -190,6 +190,45 @@ for (const c of cases) {
  * 新登记一个来源却忘了写用例，门禁会立刻红。
  */
 /*
+ * ── 被页面引用的版本，必须有逐字 evidence ──────────────────────────
+ *
+ * 2026-09-24 实测：10 个被引用的来源版本里有 **3 个没有 evidence**——
+ * 而其中 Cloudflare 那一条正是文章里「16,180 → 3,150、省 80%」的出处，
+ * **数字在正文里，证据不在登记表里**。那是本项目最该避免的状态：
+ * 数字看起来有据可查，而实际上无法核对。
+ *
+ * 三个都补了（抓原文逐字核实），这一条防它退化。
+ *
+ * ⚠️ **判据是「被页面引用」**，不是「已登记」——
+ * 一个没人引用的来源没有 evidence 是可接受的（备查而已），
+ * **而一个支撑着正文数字的来源没有 evidence 是不可接受的**。
+ */
+{
+  const withoutEvidence = [];
+  const seen = new Set();
+  for (const page of pages) {
+    for (const ref of page.refs) {
+      const key = `${ref.sourceId}@${ref.revision}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const src = registry.get(ref.sourceId);
+      const rev = src?.revisions.find((r) => r.id === ref.revision);
+      if (rev && !rev.evidence) withoutEvidence.push(key);
+    }
+  }
+  if (withoutEvidence.length > 0) {
+    problems.push(
+      `${withoutEvidence.length} 个**被页面引用**的来源版本没有逐字 evidence：` +
+        `${withoutEvidence.join('、')}。` +
+        `其中可能有支撑正文具体数字的出处——**数字在正文、证据不在登记表**，` +
+        `读者无从核对。抓原文补上，或把那条引用降级为不带具体数字的陈述。`,
+    );
+  } else {
+    console.log(`  ✓ 被引用的 ${seen.size} 个来源版本都有逐字 evidence`);
+  }
+}
+
+/*
  * ── 页面引用的 locator，必须被该版本的登记覆盖 ──────────────────────
  *
  * 2026-09-24 抓到的缺口：`css-fonts-4` 只登记了 §2.2.2

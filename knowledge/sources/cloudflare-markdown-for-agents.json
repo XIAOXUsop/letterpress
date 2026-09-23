@@ -9,7 +9,8 @@
       "id": "online-2026-09-24",
       "capturedAt": "2026-09-24",
       "locator": "全文（token 对比一节）",
-      "note": "2026-09-24 抓取原文核实可访问（HTTP 200）。**没有逐字摘录那组数字**——文章里已明确标注「本项目没有复现它」，且它说明的是「干净 HTML 转 markdown 能省多少」，不是本站的节省率（本站数字在 [[内容协商]] 末尾，附真实词表对照）。"
+      "note": "2026-09-24 抓取原文逐字核实（HTTP 200），三组数字全部对得上：16,180 / 3,150 / 80%。**测量条件是 Cloudflare 拿自己这一篇博文做的，本项目从未复现它**；它说明的是「干净 HTML 转 markdown 能省多少」，不是本站的节省率（本站数字在 [[内容协商]] 末尾，附真实词表对照）。",
+      "evidence": "This blog post you're reading takes 16,180 tokens in HTML and 3,150 tokens when converted to markdown. That's a 80% reduction in token usage"
     }
   ]
 }

@@ -9,7 +9,8 @@
       "id": "gist-2026-04",
       "capturedAt": "2026-09-23",
       "locator": "全文",
-      "note": "只用于确认模式定位（原始资料 / 可修订 Wiki / 维护约定三层，模型帮摄取与检查、人负责选材与复核）。**不把评论区的第三方产品宣传当原作者的要求**。未逐字摘录。"
+      "note": "2026-09-24 抓取 raw 原文逐字核实（模式出处：三层结构 raw / wiki / schema，三个操作 Ingest / Query / Lint）。**⚠️ 本站与原文有一处刻意的偏离**：原文说 raw sources 'are immutable'，而 llm-wiki 页写的是「文章可充当素材，但**它们会被修订**」——因为本站的文章确实会被修订（本项目自己的 log.md 就是证据），照抄「不可变」会是一条假陈述。**引用原文，也要标出自己的不同。**",
+      "evidence": "Raw sources — your curated collection of source documents. ... These are immutable — the LLM reads from them but never modifies them. This is your source of truth. ... The schema — a document (e.g. CLAUDE.md for Claude Code or AGENTS.md for Codex) that tells the LLM how the wiki is structured ... **Ingest.** ... **Query.** ... **Lint.** Periodically, ask the LLM to health-check the wiki."
     },
     {
       "id": "gist-2026-04-ingest",
