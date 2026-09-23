@@ -38,6 +38,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { loadSources } from '../src/lib/wiki/sources.ts';
+import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
 
 const args = process.argv.slice(2);
 const getArg = (name) => {
@@ -126,28 +127,12 @@ for (const file of readdirSync(WIKI_DIR).filter((f) => /\.mdx?$/.test(f))) {
   });
 }
 
-const bySlug = new Map(pages.map((p) => [p.slug, p]));
-
-// ── 三组 ────────────────────────────────────────────────────────────
-const direct = pages.filter((p) =>
-  p.refs.some((r) => r.sourceId === sourceId && (!revision || r.revision === revision)),
-);
-
+// 计算交给 `src/lib/wiki/impact.ts`——那里有 14 条测试覆盖它，
+// 包括阶段 3 的「预埋来源变更召回率 100%」。**这份逻辑原先写在本文件顶层，
+// 因此零测试**：verify.test.ts 只把这个文件当作「存不存在」的一个素材。
+// 复制一份到测试里再验一遍，等于验了个副本——所以是抽出去共用，不是不动。
+const { direct, candidates: neighbors } = computeImpact(pages, sourceId, revision);
 const directSlugs = new Set(direct.map((p) => p.slug));
-
-// 一跳邻居：直接引用者声明的关系 ＋ 别人指向它的关系
-const neighbors = new Map();
-for (const p of direct) {
-  for (const target of p.related) {
-    if (!directSlugs.has(target) && bySlug.has(target)) neighbors.set(target, p.slug);
-  }
-}
-for (const p of pages) {
-  if (directSlugs.has(p.slug)) continue;
-  for (const target of p.related) {
-    if (directSlugs.has(target)) neighbors.set(p.slug, target);
-  }
-}
 
 // 仓库辅助载体：docs/ 与代码注释里提到这个来源的地方
 const repoMentions = [];
@@ -163,8 +148,9 @@ function scanRepo(dir, depth = 0) {
       const text = readFileSync(full, 'utf8');
       if (text.includes(sourceId) || text.includes(source.url)) {
         const rel = full.slice(process.cwd().length + 1).replace(/\\/g, '/');
-        // 已经在 ① 里列过的页面不在这里重复——**三组必须互不重叠**。
+        // 已在 ① 里列过的页面不在这里重复——**三组必须互不重叠**。
         // 重叠会让人以为"还有别的地方要改"，而那正是这个工具要消除的困惑。
+        // 下面还有一道 `isDisjoint` 断言兜底：这里是过滤，断言是保证。
         const asSlug = rel
           .replace(/^src\/content\/wiki\//, '')
           .replace(/\.mdx?$/, '');
@@ -176,6 +162,15 @@ function scanRepo(dir, depth = 0) {
 }
 scanRepo(join(process.cwd(), 'docs'));
 scanRepo(join(process.cwd(), 'src'));
+
+// 三组互不重叠是**断言**，不是约定。原先这里是内联的一个 `if (... ) continue`，
+// 靠写代码的人记得加——而重叠的后果是读者以为「还有别的地方要改」，
+// 恰好是这个工具要消除的困惑。改成断言后，重叠会直接中止。
+if (!isDisjoint({ direct, candidates: neighbors }, repoMentions)) {
+  console.error('\n① 与 ③ 出现重叠：同一篇 wiki 页既被算作直接引用者，又出现在仓库辅助载体里。');
+  console.error('这会让读者以为「还有别的地方要改」。请修 scanRepo 的收集范围。');
+  process.exit(1);
+}
 
 // ── 输出 ────────────────────────────────────────────────────────────
 const revLabel = revision ? `@${revision}` : '（全部版本）';
