@@ -17,9 +17,9 @@
  * - `info`  —— 提示，用于「你可能有更好的选择」。
  */
 
-import { containsCjk } from './slug.js';
-import { normalizeTarget } from './wikilink.js';
-import type { Doc, LinkGraph } from './graph.js';
+import { containsCjk } from './slug.ts';
+import { normalizeTarget } from './wikilink.ts';
+import type { Doc, LinkGraph } from './graph.ts';
 
 export type IssueLevel = 'error' | 'warn' | 'info';
 

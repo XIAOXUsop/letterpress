@@ -5,7 +5,7 @@
  * 因此它可以在毫秒级被测试穷举，也可以在 CI 里对真实内容跑。
  */
 
-import { normalizeTarget, parseWikiLinks, type WikiLinkRef } from './wikilink.js';
+import { normalizeTarget, parseWikiLinks, type WikiLinkRef } from './wikilink.ts';
 
 /** 一篇可被链接的文档。文章与 wiki 页在链接图里地位相同。 */
 export interface Doc {

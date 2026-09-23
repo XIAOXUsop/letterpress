@@ -127,3 +127,52 @@ describe('边界', () => {
     expect(() => computeImpact([], S)).not.toThrow();
   });
 });
+
+// ── 输入形状必须容得下真实内容 ────────────────────────────────────────
+/**
+ * 这一组是**被第二份内容集逼出来的**（2026-09-24）。
+ *
+ * 背景：路线图阶段 4 有一条退出条件「一个全新的真实内容集能在
+ * 不复制内部代码的情况下使用核心流程」。于是拿一份刻意与本站不同的
+ * 合成内容集跑了一遍——**当场崩了**：
+ *
+ *     TypeError: Cannot read properties of undefined (reading 'some')
+ *
+ * 根因：`ImpactPage.refs` 与 `related` 在类型上都是**必填**，
+ * 而真实的 `Doc` 里 `sources` 与 `declaredRelations` **都是可选的**
+ * （`Doc.sources?` / `Doc.declaredRelations?`）。
+ *
+ * > 站内一直没暴露，是因为两个调用方（`read-page.ts` 与 `check-impact.mjs`）
+ * > **都老老实实填了空数组**。**默认值救了它**——
+ * > 而「默认值救了它」正是最危险的状态：它掩盖了类型与现实脱节。
+ *
+ * 修法不是「让调用方记得填」，是**类型接受现实**：
+ * 字段改成可选，实现里兜底。
+ */
+describe('输入形状容得下真实内容', () => {
+  it('refs 缺失不崩——真实 Doc.sources 是可选的', () => {
+    const pages = [
+      { slug: 'a', title: '甲' },                                  // 完全没有 refs / related
+      { slug: 'b', title: '乙', refs: [ref(S, 'v1')] },
+    ] as unknown as ImpactPage[];
+    expect(() => computeImpact(pages, S)).not.toThrow();
+    expect(computeImpact(pages, S).direct.map((p) => p.slug)).toEqual(['b']);
+  });
+
+  it('related 缺失不崩——真实 Doc.declaredRelations 是可选的', () => {
+    const pages = [
+      { slug: 'a', title: '甲', refs: [ref(S, 'v1')] },           // 缺 related
+      { slug: 'b', title: '乙', refs: [], related: ['a'] },
+    ] as unknown as ImpactPage[];
+    const { direct, candidates } = computeImpact(pages, S);
+    expect(direct.map((p) => p.slug)).toEqual(['a']);
+    expect(candidates.get('b')).toBe('a');
+  });
+
+  it('两者都缺时直接引用者判定仍正确', () => {
+    const pages = [{ slug: 'x', title: 'X' }] as unknown as ImpactPage[];
+    const result = computeImpact(pages, S);
+    expect(result.direct).toEqual([]);
+    expect(result.candidates.size).toBe(0);
+  });
+});

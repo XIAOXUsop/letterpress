@@ -31,9 +31,24 @@ export interface ImpactRef {
 export interface ImpactPage {
   readonly slug: string;
   readonly title: string;
-  readonly refs: readonly ImpactRef[];
-  /** frontmatter 里 `related` 声明的关系（slug，不含 `/wiki/` 前缀）。 */
-  readonly related: readonly string[];
+  /**
+   * 本页的来源引用。
+   *
+   * ⚠️ **可选**——真实的 `Doc.sources` 是可选的（`Doc.sources?`），
+   * 而这里原先标成必填。类型与现实脱节的后果不是编译失败，
+   * 是**运行时 `undefined.some` 崩溃**。
+   *
+   * 站内一直没暴露，是因为两个调用方都**老实填了空数组**——
+   * **默认值救了它，而那正是最危险的状态**：它掩盖了脱节，
+   * 直到第二份内容集（不带 `refs` 字段）进来才炸。
+   */
+  readonly refs?: readonly ImpactRef[];
+  /**
+   * frontmatter 里 `related` 声明的关系（slug，不含 `/wiki/` 前缀）。
+   *
+   * 同样**可选**，理由与 `refs` 一样：真实的 `Doc.declaredRelations?` 是可选的。
+   */
+  readonly related?: readonly string[];
 }
 
 export interface ImpactResult {
@@ -56,7 +71,7 @@ export function computeImpact(
   revision?: string,
 ): ImpactResult {
   const direct = pages.filter((p) =>
-    p.refs.some((r) => r.sourceId === sourceId && (!revision || r.revision === revision)),
+    (p.refs ?? []).some((r) => r.sourceId === sourceId && (!revision || r.revision === revision)),
   );
   const directSlugs = new Set(direct.map((p) => p.slug));
   const known = new Set(pages.map((p) => p.slug));
@@ -74,13 +89,13 @@ export function computeImpact(
    */
   const candidates = new Map<string, string>();
   for (const p of direct) {
-    for (const target of p.related) {
+    for (const target of p.related ?? []) {
       if (!directSlugs.has(target) && known.has(target)) candidates.set(target, p.slug);
     }
   }
   for (const p of pages) {
     if (directSlugs.has(p.slug)) continue;
-    for (const target of p.related) {
+    for (const target of p.related ?? []) {
       if (directSlugs.has(target)) candidates.set(p.slug, target);
     }
   }
