@@ -239,8 +239,11 @@ for (const c of cases) {
  * **结论不同的两条依据，只登记了弱的那条。**
  * 而门禁只查「revision 能不能解析」，**查不到「登记覆盖了页面引用的那一节吗」**。
  *
- * 判据用**章节号**（`§5.1.1` 这种）而不是整段文字比：
+ * 判据用**「章节 + 符号名」**（`§5.1.1 ic` 这种）而不是整段文字比：
  * 页面写简写、登记写完整描述，逐字比会误报。
+ *
+ * ⚠️ **只比章节号会漏，实测过**：`ch` 与 `ic` 都在 `§5.1.1`，
+ * 登记只写 `ch` 时页面引用 `ic` 照样通过——**而 `ic` 是关键的那条**。
  */
 {
   const regLocator = new Map();
@@ -254,11 +257,27 @@ for (const c of cases) {
     for (const ref of page.refs) {
       if (!ref.locator) continue;
       const reg = regLocator.get(`${ref.sourceId}@${ref.revision}`) ?? '';
+      // ⚠️ **粒度必须到「节 + 符号名」**，只比章节号会漏。
+      //
+      // 实测（2026-09-24）：`ch` 与 `ic` **都在 §5.1.1**，
+      // 而登记只写了 `ch`——页面引用 `ic` 时章节号对得上，检查就放过了。
+      // **而 `ic` 恰恰是推翻「em 保证字数」的核心依据。**
+      //
+      // 所以取「节号 + 紧跟其后的标识符」作为键：`§5.1.1 ch` / `§5.1.1 ic`。
+      // 登记里没有可比的形式时**不报**——宁可漏报也不误报。
+      // 「§5.1.1 长度单位 · ic」这种写法里，符号名在 `·` **之后**。
+      // 第一版正则抓到的是 `·` 前面的词（「长度单位」），
+      // 而它在登记里当然存在——于是检查一路绿灯，**却从没在查符号名**。
+      const m = /^§[\d.]+[^·]*·\s*([^\s,，;；]+)/.exec(ref.locator);
       const section = /^§[\d.]+/.exec(ref.locator)?.[0];
-      // 章节号对不上才算缺口；登记里没有章节号时**不报**——
-      // 那说明登记用的是自由文本，机械比对没有判据（宁可漏报也不误报）。
-      if (section && !reg.includes(section)) {
-        uncovered.push(`${page.slug} 引用 ${ref.sourceId}@${ref.revision} 的 ${section}，但登记未覆盖`);
+      const symbol = m?.[1];
+      if (!section) continue;
+      const covered = reg.includes(section) && (!symbol || reg.includes(symbol));
+      if (!covered) {
+        uncovered.push(
+          `${page.slug} 引用 ${ref.sourceId}@${ref.revision} 的 ` +
+            `${section}${symbol ? ` ${symbol}` : ''}，但登记未覆盖`,
+        );
       }
     }
   }
@@ -266,7 +285,7 @@ for (const c of cases) {
     for (const u of uncovered) problems.push(`locator 未被登记覆盖：${u}`);
   } else {
     console.log(
-      `  ✓ 页面引用的章节号都被来源登记覆盖` +
+      `  ✓ 页面引用的「章节 + 符号名」都被来源登记覆盖` +
         `（扫了 ${pages.reduce((n, p) => n + p.refs.filter((r) => r.locator).length, 0)} 条带 locator 的引用）`,
     );
   }
