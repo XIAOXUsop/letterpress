@@ -42,6 +42,16 @@ const posts = defineCollection({
     /** 显式指定 URL 片段。中文标题留空会自动生成中文 URL（合法，但复制出去很长） */
     slug: z.string().optional(),
     /**
+     * 稳定身份，**不随 slug 变化**。
+     *
+     * 可选。不写就退回 `kind:slug`——那样改一次文件名，下游按 ID 同步的
+     * 订阅者会把它当成一篇新文档（见 `lib/content-manifest.ts` 的 `manifestId`）。
+     * 真要改名时先补这个字段，之后再改 slug 也不影响身份。
+     *
+     * 一旦写下就不该再改：它是对外的承诺，不是给人看的标签。
+     */
+    id: z.string().min(1).optional(),
+    /**
      * 是否草稿。
      *
      * **这个字段必须有，不能靠 `content.ts` 里那个 `?? false` 兜底。**
@@ -103,6 +113,11 @@ const wiki = defineCollection({
     kind: z.enum(['concept', 'entity', 'synthesis']).default('concept'),
     /** 相关条目。等价于在正文里写 [[...]]，但更显式，且不要求正文出现 */
     related: z.array(z.string()).default([]),
+    /**
+     * 稳定身份，**不随 slug 变化**。与 posts 同一个理由，详见那里的注释。
+     * 知识条目被改名/合并的频率比文章高，所以这个字段对 wiki 更值得写。
+     */
+    id: z.string().min(1).optional(),
     /**
      * 本页用到的来源。
      *

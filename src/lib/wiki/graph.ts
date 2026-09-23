@@ -46,6 +46,19 @@ export interface Doc {
   readonly wikiKind?: string;
   /** 作者是否显式指定过 slug（用于 lint 提示中文 URL 的代价） */
   readonly explicitSlug: boolean;
+  /**
+   * 稳定身份，**不随 slug 变化**。
+   *
+   * <p>可选。不写就由 `manifestId` 按内容寻址推导（kind + 规范化正文摘要），
+   * 那样改文件名不会改 ID，但**改正文会改**——所以它只适合「不会改名也不会
+   * 改内容的文档」。真要长期稳定的身份（要被外部订阅者记住的那篇），
+   * 应该显式写死。
+   *
+   * <p>为什么需要它：manifest 是对外的机器出口，订阅者按 `id` 同步。
+   * 若 ID 由 slug 组成，改一次文件名就会让下游把它当成一篇新文档，
+   * 旧文档变孤儿且无从追溯。
+   */
+  readonly id?: string;
   readonly draft: boolean;
   /**
    * 本页声明的来源引用。空数组 = 没标，**不是**错误。

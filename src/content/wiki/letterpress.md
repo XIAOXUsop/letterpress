@@ -2,6 +2,8 @@
 title: letterpress
 summary: 本站所属的开源项目。一个把中文排版做对、同时写给人和 AI 读的静态博客主题。
 kind: entity
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: letterpress
 related: [llm-wiki, content-negotiation, design-tokens]
 ---
 

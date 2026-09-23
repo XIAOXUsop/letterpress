@@ -4,7 +4,7 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **379 项**单元测试，全部离线 |
+| `npm test` | **385 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 196 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |

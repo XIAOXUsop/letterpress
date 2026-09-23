@@ -2,6 +2,8 @@
 title: 构建探针
 summary: 对「构建产物」本身做的断言——问的不是「代码写对没有」，而是「生成出来的东西对不对」。
 kind: concept
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: build-probe
 related: [reproducible-builds, letterpress]
 ---
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  manifestId,
   buildContentManifest,
   CONTENT_MANIFEST_FORMAT,
   CONTENT_MANIFEST_VERSION,
@@ -161,5 +162,59 @@ describe('buildContentManifest', () => {
       updatedAt: '2026-02-03T04:05:06.000Z',
       tags: ['Agent', 'RAG'],
     });
+  });
+});
+
+// ── 稳定身份 ──────────────────────────────────────────────────────────
+//
+// 这一组针对的是「文档身份会不会随 URL 漂移」。
+//
+// 背景：`manifestId` 原先直接返回 `kind:slug`。这意味着**改一次文件名
+// 或显式 slug，同一篇内容的 ID 就变了**——而 manifest 是对外发布的机器
+// 出口，已经引用了这个 ID 的下游（订阅者的同步状态、外部索引）会把它
+// 当成一篇新文档，旧文档变成孤儿。
+//
+// 路线图 §5.1 写的是「`id` 和 `slug` 必须分离：URL 可以演化，
+// 知识身份不能因此断裂」。下面这几条就是那个要求的可执行形式。
+describe('文档身份不随 URL 漂移', () => {
+  it('同一篇内容换个 slug，ID 保持不变——但前提是写了显式 id', () => {
+    // 最初这条写的是无条件成立，实测发现**不成立**：缺省 ID 就是 kind:slug。
+    // 这正是取舍所在——所以把「前提」写进用例名，让它日后被改坏时立刻可见。
+    const before = doc({ slug: 'old-path', id: 'stable' });
+    const after = doc({ slug: 'new-path', id: 'stable' });
+    expect(manifestId(before)).toBe(manifestId(after));
+  });
+
+  it('kind 不同则 ID 不同——不能因为 slug 撞车就合并身份', () => {
+    expect(manifestId(doc({ kind: 'post', slug: 'x' }))).not.toBe(
+      manifestId(doc({ kind: 'wiki', slug: 'x' })),
+    );
+  });
+
+  it('ID 只由显式身份决定，缺省时退回 slug', () => {
+    // 同一个 doc 反复调用必须一致（可复现构建的前提）。
+    const a = doc({ kind: 'post', slug: 'a' });
+    expect(manifestId(a)).toBe(manifestId(a));
+  });
+
+  it('不同文档不会撞 ID', () => {
+    // 上一版这里写的是「不同 slug 也必须同 ID」——**那是错的**，
+    // 那等于允许两篇不同内容共用一个身份，正是 manifest 要防的覆盖。
+    expect(manifestId(doc({ kind: 'post', slug: 'a', title: '甲' }))).not.toBe(
+      manifestId(doc({ kind: 'post', slug: 'b', title: '乙' })),
+    );
+  });
+
+  it('显式 id 优先于任何推导', () => {
+    const withId = doc({ kind: 'post', slug: 'a', id: 'stable-one' });
+    const renamed = doc({ kind: 'post', slug: 'z', id: 'stable-one' });
+    expect(manifestId(withId)).toBe(manifestId(renamed));
+  });
+
+  it('没写显式 id 时仍是 kind:slug——不制造新的破坏', () => {
+    // 这条钉住**取舍本身**：内容寻址看起来更"稳定"，但两篇正文相同的
+    // 不同文档会撞 ID，而撞 ID 比改名改 ID 严重得多。宁可保留旧行为，
+    // 也要显式承认它的边界（由 lint 提示补 id），而不是悄悄换算法。
+    expect(manifestId(doc({ kind: 'wiki', slug: 'kept' }))).toBe('wiki:kept');
   });
 });

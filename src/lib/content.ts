@@ -79,6 +79,9 @@ function toDoc(
     sources,
     review,
     explicitSlug: explicit,
+    // 显式稳定身份。**可选**——不写就退回 kind:slug（见 manifestId 的注释）。
+    // schema 两边都声明了它，否则 Zod 会静默剥离，字段永远读不到。
+    id: (data as { id?: string }).id,
     // posts 与 wiki 的 schema 现在都声明了 draft（wiki 一直有，posts 是补上的——
     // 缺它时 Zod 静默剥离，过滤逻辑拿到的永远是 false，见 content.config.ts 的注释）
     draft: data.draft,

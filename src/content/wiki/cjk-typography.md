@@ -2,6 +2,8 @@
 title: 中文排版
 summary: 行高、字重、行宽、中西文间距——四个参数直接套西文的值，中文读者看到的是「能读但别扭」的页面。
 kind: concept
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: cjk-typography
 updated: 2026-09-24
 related: [cjk-web-typography, design-tokens]
 # 本页三条核心论断各自对应一个已登记来源。

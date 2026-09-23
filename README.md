@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-379%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-385%20项-2C5E2E)
 
 </div>
 
@@ -38,7 +38,7 @@
   backlinks; a broken link stops the build instead of rotting silently.
   → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 379 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 385 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -157,7 +157,7 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **379 项**，全部离线，无网络依赖 |
+| 单元测试 | **385 项**，全部离线，无网络依赖 |
 | 端到端契约 | **196 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
 | 检索金标 | **19 条**问题（精确事实 / 跨文档组合 / 冲突 / 过期 / **无答案**），跑 `npm run verify:questions`。其中 1 条**显式登记为已知局限**、不计为失败 |

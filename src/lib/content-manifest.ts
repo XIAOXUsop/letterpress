@@ -66,9 +66,41 @@ export interface ContentManifest {
   readonly documents: readonly ContentManifestDocument[];
 }
 
-/** 类型与 slug 共同组成稳定 ID，避免未来两类内容出现同名时含义模糊。 */
-export function manifestId(doc: Pick<Doc, 'kind' | 'slug'>): string {
-  return `${doc.kind}:${doc.slug}`;
+/**
+ * 文档的稳定身份。
+ *
+ * ── 为什么不能是 `kind:slug` ────────────────────────────────────────
+ *
+ * 它原先就是。改一次文件名或显式 slug，同一篇内容的 ID 就变了——
+ * 而 manifest 是**对外发布**的机器出口，下游（订阅者的同步状态、外部索引）
+ * 按这个 ID 认文档。ID 一变，旧文档就成了「凭空多出来又消失的一篇」。
+ *
+ * 路线图 §5.1 的要求是「`id` 和 `slug` 必须分离：URL 可以演化，
+ * 知识身份不能因此断裂」。这里是那个要求的可执行形式。
+ *
+ * ── 设计取舍：为什么不按内容寻址 ────────────────────────────────────
+ *
+ * 试过「没有显式 id 时用正文摘要」，**实测撞了**：两篇不同文档只要正文相同
+ * （测试 fixture 里很常见，真实站点里也完全可能），就会得到同一个 ID。
+ * 而 manifest 的 ID 是下游认文档的唯一凭据，**撞 ID 意味着两篇互相覆盖**，
+ * 比「改名会改 ID」严重得多。附带还有第二个问题：内容寻址下**改一个字正文
+ * 就换 ID**，等于每次修订都让全体下游重新同步——比改名频繁得多。
+ *
+ * 所以规则是：
+ *
+ *   1. 有显式 `doc.id` → 用它。**这是唯一真正跨改名稳定的办法**，
+ *      也就是路线图 §5.1 说的「id 和 slug 必须分离」的落地方式；
+ *   2. 否则退回 `kind:slug`——**保持既有行为，不制造新的破坏**。
+ *
+ * 代价要说清楚：**没写显式 id 的文档，改名仍会改 ID。**
+ * 这不是把缺陷藏起来，而是「改名」本来就需要一次显式的身份声明：
+ * 真要改名时补一个 `id` 即可，之后再改 slug 也不影响它。
+ *
+ * ⚠️ 显式 id 一旦写下**就不该再改**——它和 slug 不同，是对下游的承诺。
+ * 改它等于告诉所有订阅者「这是一篇新文档」。
+ */
+export function manifestId(doc: Pick<Doc, 'kind' | 'slug' | 'id'>): string {
+  return doc.id ? `${doc.kind}:${doc.id}` : `${doc.kind}:${doc.slug}`;
 }
 
 function joinSite(siteUrl: string | undefined, pathname: string): string {

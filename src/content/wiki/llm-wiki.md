@@ -2,6 +2,8 @@
 title: LLM 知识库
 summary: Karpathy 2026 年 4 月提出的模式——让 agent 主动读写并维护一层知识库，新素材进来时做的是「重构」而不是「追加」。
 kind: concept
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: llm-wiki
 updated: 2026-09-24
 related: [content-negotiation, letterpress]
 # ── 可证伪声明 ────────────────────────────────────────────────────────

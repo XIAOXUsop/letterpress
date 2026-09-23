@@ -2,6 +2,8 @@
 title: 设计令牌
 summary: 三层 token 结构，命名描述用途而非外观。换配色时只动原始值，换暗色模式时只动语义映射。
 kind: concept
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: design-tokens
 related: [cjk-typography, letterpress]
 ---
 
