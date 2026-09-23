@@ -5,6 +5,30 @@ date: 2026-09-12
 # 修订时间：搜索引擎与 RSS 靠它区分「刚发布」与「发布后大改过」
 updated: 2026-09-24
 tags: [排版, css, 中文]
+
+# 本文四条核心论断（行高/字重/行宽/中西文间距）各自的规范出处。
+# `ch` 与 `ic` 两条刻意分开登记：它们支撑的是**两个不同的论断**——
+# 前者说「ch 随字体浮动」，后者说「em 也不保证汉字宽度」。
+# 合成一条会让人以为它们是同一件事的重复引用。
+sources:
+  - sourceId: css-values-4
+    revision: WD-20240312
+    locator: §5.1.1 长度单位 · ch
+  - sourceId: css-values-4
+    revision: WD-20240312
+    locator: §5.1.1 长度单位 · ic
+  - sourceId: css-fonts-4
+    revision: WD-20260913
+    locator: §2.2.2 Missing weights
+  - sourceId: css-fonts-4
+    revision: WD-20260913
+    locator: §5 Font Matching Algorithm · 字重匹配
+  - sourceId: css-fonts-4
+    revision: WD-20260913
+    locator: §2.8.1 Controlling synthesized bold
+  - sourceId: apple-system-fonts
+    revision: online-2026-09-24
+    locator: System Fonts 表格 · PingFang SC 条目
 ---
 
 中文网页排版有个奇怪的现象：**大家都觉得别扭，但很少有人能指出哪里别扭。**

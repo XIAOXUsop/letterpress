@@ -29,80 +29,42 @@
  *   node scripts/check-impact.mjs --verbose
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { computeImpact } from '../src/lib/wiki/impact.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { loadSources } from '../src/lib/wiki/sources.ts';
 
 const verbose = process.argv.includes('--verbose');
 const ROOT = process.cwd();
 const CASES = join(ROOT, 'knowledge', 'impact-cases.md');
 const WIKI = join(ROOT, 'src', 'content', 'wiki');
+const POSTS = join(ROOT, 'src', 'content', 'posts');
 const SOURCES = join(ROOT, 'knowledge', 'sources');
 
 const problems = [];
 
 // ── 语料 ────────────────────────────────────────────────────────────
 
-const files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f)).sort();
-if (files.length === 0) {
-  console.error(`${WIKI} 里一个条目都没有——这个检查什么都没量。`);
+/*
+ * 语料 = wiki **与 posts**，读取交给 `src/lib/wiki/read-page.ts`——
+ * 与 `scripts/wiki-impact.mjs` **共用同一份**。
+ *
+ * 之前这里是本脚本自己抄的一套 frontmatter 扫描（含 `related` 的方括号处理），
+ * 结果两个命令对同一页给出不同答案：扩展 posts 之后金标说
+ * 「google-ai-features 没人引用」、命令说「markdown-for-agents 引用了它」，
+ * **而两边都是绿的**。这是本仓库「两套解析」的第三例。
+ */
+const { pages, counts } = readContentDirs([WIKI, POSTS]);
+
+// 两边都要非空：少一边，这个检查就只量了一半，而输出看上去一样绿。
+if ([...counts.values()].some((n) => n === 0)) {
+  console.error(
+    `${WIKI} 或 ${POSTS} 里一个条目都没有——这个检查只能量一半。` +
+      `（wiki ${counts.get(WIKI)} 篇、posts ${counts.get(POSTS)} 篇）`,
+  );
   process.exit(1);
 }
-
-/**
- * 解析 frontmatter 里的列表值。
- *
- * ⚠️ **必须先剥方括号**：`frontmatterField` 返回的是**原始字符串**，
- * `related: [a, b]` 拿到的是 `"[a, b]"`。不剥的话第一项会变成
- * `"[a"`，于是**所有关系都解析不出来**。
- *
- * 这不是新写的第三套——`scripts/wiki-impact.mjs` 里有一份 `parseList` 做同样的事。
- * 两份必须在同一处修，否则就会出现「同一个脚本说 2 个候选、
- * 另一个说 0 个」这种**两边都绿、彼此矛盾**的局面（本轮真出现过）。
- */
-function frontmatterList(raw) {
-  return (raw ?? '')
-    .replace(/^\[/, '')
-    .replace(/\]$/, '')
-    .split(/[、,，]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** @type {import('../src/lib/wiki/impact.ts').ImpactPage[]} */
-const pages = files.map((f) => {
-  const source = readFileSync(join(WIKI, f), 'utf8');
-  const slug = f.replace(/\.mdx?$/, '');
-
-  /** @type {{ sourceId: string; revision: string; locator: string }[]} */
-  const refs = [];
-  const block = source.slice(3, source.indexOf('\n---', 3));
-  /** @type {{ sourceId: string; revision: string; locator: string } | null} */
-  let current = null;
-  for (const line of block.split('\n')) {
-    const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
-    if (sid) {
-      if (current) refs.push(current);
-      current = { sourceId: sid[1], revision: '', locator: '' };
-      continue;
-    }
-    if (!current) continue;
-    const rev = /^\s*revision:\s*(.+?)\s*$/.exec(line);
-    if (rev) current.revision = rev[1];
-    const loc = /^\s*locator:\s*(.+?)\s*$/.exec(line);
-    if (loc) current.locator = loc[1];
-  }
-  if (current) refs.push(current);
-
-  return {
-    slug,
-    title: frontmatterField(source, 'title') ?? f,
-    refs,
-    related: frontmatterList(frontmatterField(source, 'related')),
-  };
-});
 
 const registry = loadSources(SOURCES);
 if (registry.size === 0) {
@@ -138,9 +100,9 @@ const rawText = readFileSync(CASES, 'utf8');
 const text = rawText.replace(/^```[\s\S]*?^```$/gm, '');
 /**
  * 解析金标里的期望列表。**不剥方括号**——金标用「、」分隔，不带括号。
- * 与 `frontmatterList` 分开是因为它们是两件事：一个是 frontmatter 的
- * YAML 列表，一个是金标自己的写法。合成一个函数看着省事，实则让
- * 「哪种输入」这件事变得看不出来。
+ * 与 `read-page.ts` 里那个分开：那边处理 frontmatter 的 YAML 列表（要剥方括号），
+ * 这边处理金标自己的写法（不带括号）。合成一个看着省事，
+ * 实则让「哪种输入」这件事变得看不出来。
  */
 function caseList(raw) {
   return raw

@@ -52,6 +52,25 @@ const posts = defineCollection({
      */
     id: z.string().min(1).optional(),
     /**
+     * 本篇用到的来源。结构与 wiki 完全相同，校验也共用同一套
+     * （`lib/wiki/sources.ts` 的 `validateSourceRefs`）。
+     *
+     * 2026-09-24 补上。此前来源治理**只覆盖 wiki**，于是文章里那些
+     * 带版本的规范引用（`WD-css-values-4-20240312` 之类）在
+     * `wiki:impact` 眼里是「没人引用」——**不是漏报，是这一层压根没接线**。
+     *
+     * 同样只在**值得单独治理的结论**上标，不是每个链接都标。
+     */
+    sources: z
+      .array(
+        z.object({
+          sourceId: z.string().min(1),
+          revision: z.string().min(1),
+          locator: z.string().optional(),
+        }),
+      )
+      .default([]),
+    /**
      * 是否草稿。
      *
      * **这个字段必须有，不能靠 `content.ts` 里那个 `?? false` 兜底。**

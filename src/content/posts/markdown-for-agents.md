@@ -6,6 +6,25 @@ updated: 2026-09-24
 tags: [web, agent, http]
 featured: true
 coverAlt: 蓝底白色几何构图
+
+# 三组外部依据各归各的：内容协商的规范、markdown 媒体类型的登记、
+# 以及那组**别人测的** token 数字。三者支撑的是不同论断，不能合并。
+sources:
+  - sourceId: rfc9110-accept
+    revision: rfc9110
+    locator: §12.5.1 Accept
+  - sourceId: rfc7763-markdown
+    revision: rfc7763
+    locator: 全文
+  - sourceId: google-ai-features
+    revision: online-2026-09-23
+    locator: "You don't need to create new machine readable files"
+  - sourceId: ahrefs-llmstxt-study
+    revision: online-2026-06-15
+    locator: Methodology / Top findings
+  - sourceId: cloudflare-markdown-for-agents
+    revision: online-2026-09-24
+    locator: token 对比一节
 ---
 
 一个 AI agent 抓取你的网页时，看到的东西和你看到的不一样。它看到的是两万个

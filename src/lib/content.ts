@@ -57,13 +57,18 @@ function toDoc(
   const related = kind === 'wiki' ? ((data as { related?: string[] }).related ?? []) : [];
 
   /*
-   * 来源与复核只在知识层条目上用。
+   * 来源与复核的适用范围（2026-09-24 改过，原注释说的是「只在知识层」）：
    *
-   * 文章是**时间流**：它记录的是"我当时这么想"，改的是错字与补充，
-   * 不是"依据某版规范得出的结论"。给它套复核状态会把博客变成台账。
-   * 知识层不一样——那里的每一条都是**关于世界的断言**，会过期。
+   * - **`sources`：两个 kind 都读。** 此前只有 wiki 读，于是文章里那些
+   *   带版本的规范引用在 `wiki:impact` 眼里是「没人引用」——
+   *   **不是漏报，是这一层压根没接线**。而文章恰恰是最需要钉版本的地方：
+   *   `WD-css-values-4-20240312` 这种日期化 URL 写出来就是为了不被移动版本顶掉。
+   * - **`review`：仍然只有 wiki。** 文章是**时间流**，记录的是
+   *   「我当时这么想」，改的是错字与补充，不是「依据某版规范得出的结论」。
+   *   给它套复核状态会把博客变成台账。知识层不一样——
+   *   那里的每一条都是**关于世界的断言**，会过期，所以该有 stale。
    */
-  const sources = kind === 'wiki' ? ((data as { sources?: Doc['sources'] }).sources ?? []) : [];
+  const sources = (data as { sources?: Doc['sources'] }).sources ?? [];
   const review = kind === 'wiki' ? (data as { review?: Doc['review'] }).review : undefined;
 
   return {

@@ -36,9 +36,9 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { loadSources } from '../src/lib/wiki/sources.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 
 const args = process.argv.slice(2);
 const getArg = (name) => {
@@ -52,6 +52,7 @@ const revision = getArg('revision');
 const listOnly = args.includes('--list');
 
 const WIKI_DIR = join(process.cwd(), 'src', 'content', 'wiki');
+const POSTS_DIR = join(process.cwd(), 'src', 'content', 'posts');
 const DOCS_DIR = join(process.cwd(), 'knowledge', 'sources');
 const registry = loadSources(DOCS_DIR);
 
@@ -85,47 +86,14 @@ if (revision && !source.revisions.some((r) => r.id === revision)) {
   process.exit(1);
 }
 
-// ── 读全部知识页的引用与关系 ────────────────────────────────────────
-function parseList(raw) {
-  return (raw ?? '')
-    .replace(/^\[|\]$/g, '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-const pages = [];
-for (const file of readdirSync(WIKI_DIR).filter((f) => /\.mdx?$/.test(f))) {
-  const src = readFileSync(join(WIKI_DIR, file), 'utf8');
-  const end = src.indexOf('\n---', 3);
-  const block = src.slice(3, end);
-
-  // sources 是块状数组，逐条抓 sourceId / revision
-  const refs = [];
-  const lines = block.split('\n');
-  let current = null;
-  for (const line of lines) {
-    const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
-    if (sid) {
-      if (current) refs.push(current);
-      current = { sourceId: sid[1], revision: '', locator: '' };
-      continue;
-    }
-    if (!current) continue;
-    const rev = /^\s*revision:\s*(.+?)\s*$/.exec(line);
-    if (rev) current.revision = rev[1];
-    const loc = /^\s*locator:\s*(.+?)\s*$/.exec(line);
-    if (loc) current.locator = loc[1];
-  }
-  if (current) refs.push(current);
-
-  pages.push({
-    slug: file.replace(/\.mdx?$/, ''),
-    title: frontmatterField(src, 'title') ?? file,
-    refs,
-    related: parseList(frontmatterField(src, 'related')),
-  });
-}
+/*
+ * 语料 = wiki **与 posts**，读取交给 `src/lib/wiki/read-page.ts`。
+ *
+ * 此前只扫 wiki，于是「google / ahrefs 没人引用」其实是**这一层没进语料**
+ * ——它们的引用方是 post。这四份来源正是文章里那些日期化规范 URL 的登记对象，
+ * 而日期化 URL 写出来就是为了不被移动版本顶掉，**不登记等于白写**。
+ */
+const { pages } = readContentDirs([WIKI_DIR, POSTS_DIR]);
 
 // 计算交给 `src/lib/wiki/impact.ts`——那里有 14 条测试覆盖它，
 // 包括阶段 3 的「预埋来源变更召回率 100%」。**这份逻辑原先写在本文件顶层，

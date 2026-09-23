@@ -1,0 +1,15 @@
+{
+  "_comment": "文章里「16,180 → 3,150 token、省 80%」那组数字出自这里。**测量条件是 Cloudflare 拿自己的文档做的**，本项目从未复现。",
+  "id": "cloudflare-markdown-for-agents",
+  "title": "Cloudflare: Markdown for Agents",
+  "kind": "web",
+  "url": "https://blog.cloudflare.com/markdown-for-agents/",
+  "revisions": [
+    {
+      "id": "online-2026-09-24",
+      "capturedAt": "2026-09-24",
+      "locator": "全文（token 对比一节）",
+      "note": "2026-09-24 抓取原文核实可访问（HTTP 200）。**没有逐字摘录那组数字**——文章里已明确标注「本项目没有复现它」，且它说明的是「干净 HTML 转 markdown 能省多少」，不是本站的节省率（本站数字在 [[内容协商]] 末尾，附真实词表对照）。"
+    }
+  ]
+}
