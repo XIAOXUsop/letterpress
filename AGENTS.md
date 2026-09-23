@@ -55,6 +55,13 @@ title: 概念名
 summary: 一句话说清它是什么
 kind: concept        # concept | entity | synthesis
 related: [其他条目的-slug]
+# 依据从哪来。**两种写法，二选一**：
+# sources: [{ sourceId: ..., revision: ..., locator: ... }]   # 外部规范/研究
+# original: { reason: 为什么没有外部来源 }                   # 本站自己的实践
+review:
+  status: reviewed    # pending | reviewed | stale
+  checkedAt: 2026-01-15
+  contentDigest: …    # 跑 npm run wiki:review -- --slug <slug> 取值
 ---
 
 正文。
@@ -65,6 +72,29 @@ related: [其他条目的-slug]
 - `concept`——概念、方法、模式。**这是默认值**
 - `entity`——具体的人、工具、项目
 - `synthesis`——跨条目的综合性结论
+
+### 「没有来源」有两种含义，所以要显式区分
+
+一篇知识页**不登记来源**，可能是两件完全不同的事：
+
+| | 例子 | 含义 |
+|---|---|---|
+| **该登记却漏了** | 「规范说 `ch` 等于 0 字形」 | ❗ 缺依据，必须补 `sources` |
+| **本来就没有外部来源** | 「本站的强调色选了 `#002FA7`」 | ✓ 写 `original` 说明理由 |
+
+不写 `original` 的话，两种**在数据里长得一模一样**，
+复核的人无从判断「没有来源」是该补还是正常。
+
+```yaml
+original:
+  reason: 本站的设计选择与内部约定，外部规范没有对应条款
+```
+
+`reason` **必填**——空理由等于没声明。
+
+> `original` 与 `review` 是**两件独立的事**：
+> `original` 说「依据从哪来」，`review` 说「确认过没有」。
+> **本站自己的选择同样需要有人复核过**，否则它只是一句声明。
 
 `related` 是显式的关联声明，会参与链接图。
 **但更推荐在正文里写 `[[链接]]`**，因为读者能看到上下文。

@@ -4,6 +4,17 @@ summary: 本站所属的开源项目。一个把中文排版做对、同时写�
 kind: entity
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: letterpress
+# 原创实践记录：本页讲的是**本站做了什么**（Astro 7 + TypeScript、纯静态、
+# 三个平台的边缘函数实现、MIT 许可）。这些是本项目的事实陈述，
+# **没有外部规范可以引用**——它说的就是「我们是这样做的」。
+original:
+  reason: 本站自身的实现事实，外部无对应来源
+# 已复核：这一页的内容与上面声明的「原创实践」一致，
+# 页面里引用的具体数字（色值、体积、页数）与产物一致。
+review:
+  status: reviewed
+  checkedAt: 2026-09-24
+  contentDigest: ad9e1ec0c299e812761d5949f0f372a81655642f0441106852440aa15c97d5e0
 # related 整行删除：正文四个链接已覆盖全部关系。
 # 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---

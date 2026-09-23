@@ -151,7 +151,7 @@ if (direct.length === 0) {
   console.log('    （没有页面引用它）');
 }
 for (const p of direct) {
-  for (const r of p.refs.filter((x) => x.sourceId === sourceId)) {
+  for (const r of p.sources.filter((x) => x.sourceId === sourceId)) {
     console.log(`    ${p.slug}  ·  ${r.revision}${r.locator ? `  ·  ${r.locator}` : ''}`);
   }
 }

@@ -70,6 +70,8 @@ function toDoc(
    */
   const sources = (data as { sources?: Doc['sources'] }).sources ?? [];
   const review = kind === 'wiki' ? (data as { review?: Doc['review'] }).review : undefined;
+  // 「原创实践记录」也是知识层概念（文章是时间流，不参与这套治理）
+  const original = kind === 'wiki' ? (data as { original?: Doc['original'] }).original : undefined;
 
   return {
     kind,
@@ -82,6 +84,7 @@ function toDoc(
     declaredRelations: related,
     wikiKind: kind === 'wiki' ? ((data as { kind?: string }).kind ?? 'concept') : undefined,
     sources,
+    ...(original ? { original } : {}),
     review,
     explicitSlug: explicit,
     // 显式稳定身份。**可选**——不写就退回 kind:slug（见 manifestId 的注释）。

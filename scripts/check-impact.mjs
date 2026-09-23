@@ -207,7 +207,7 @@ for (const c of cases) {
   const withoutEvidence = [];
   const seen = new Set();
   for (const page of pages) {
-    for (const ref of page.refs) {
+    for (const ref of page.sources) {
       const key = `${ref.sourceId}@${ref.revision}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -254,7 +254,7 @@ for (const c of cases) {
   }
   const uncovered = [];
   for (const page of pages) {
-    for (const ref of page.refs) {
+    for (const ref of page.sources) {
       if (!ref.locator) continue;
       const reg = regLocator.get(`${ref.sourceId}@${ref.revision}`) ?? '';
       // ⚠️ **粒度必须到「节 + 符号名」**，只比章节号会漏。
@@ -286,7 +286,7 @@ for (const c of cases) {
   } else {
     console.log(
       `  ✓ 页面引用的「章节 + 符号名」都被来源登记覆盖` +
-        `（扫了 ${pages.reduce((n, p) => n + p.refs.filter((r) => r.locator).length, 0)} 条带 locator 的引用）`,
+        `（扫了 ${pages.reduce((n, p) => n + p.sources.filter((r) => r.locator).length, 0)} 条带 locator 的引用）`,
     );
   }
 }

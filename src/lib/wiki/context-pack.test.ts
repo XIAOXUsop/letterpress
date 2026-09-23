@@ -136,3 +136,54 @@ describe('context pack · 边界', () => {
     expect(pack.passages.length).toBeLessThanOrEqual(packPassages(CORPUS).length);
   });
 });
+
+// ── 字段名必须与 read-page 实际返回的一致 ──────────────────────────────
+/**
+ * 这一条是 2026-09-24 实测发现的 bug，**由「阶段 3 退出条件 ③」引出**：
+ * 「固定问题集中的每个答案都能定位到证据，或明确返回未知」。
+ *
+ * 抽查三个金标问题，第一个是
+ * 「中文正文的理想行宽是多少，为什么不用 ch？」——答案在
+ * `cjk-typography`（**5 条来源 + reviewed**），而 context pack 里
+ * **`sources: 0`、`review: null`**。
+ *
+ * 根因是字段名对不上：
+ *
+ * | 模块 | 来源字段 | 复核字段 |
+ * |---|---|---|
+ * | `src/lib/wiki/read-page.ts` | **`refs`** | **不返回** |
+ * | `Doc`（graph.ts） | `sources` | `review` |
+ * | `ImpactPage`（impact.ts） | `refs` | — |
+ * | `PackDoc`（context-pack.ts） | `sources` | `review` |
+ *
+ * `wiki-ask` 把 `readContentPage()` 的返回**直接**传给 `buildContextPack()`，
+ * 于是 `doc.sources` 恒为 `undefined`、`doc.review` 恒为 `undefined`，
+ * **`?? []` 与 `?? null` 把它们悄悄变成了「没有证据」**。
+ *
+ * > **为什么类型系统没报出来**：`PackDoc.sources` 与 `review` 都是**可选**的，
+ * > 而 `readContentPage` 的返回类型里根本没有这两个键——
+ * > **「一个字段不存在」与「一个字段是 undefined」在 TS 里是同一件事。**
+ * > 这与迭代 N 那条「类型标必填而实际可为 undefined」是同一族，方向相反。
+ *
+ * 修法不是把 `PackDoc` 改成读 `refs`（那样又与 `Doc` 不一致），
+ * 而是**让 `readContentPage` 返回与 `Doc` 同名的字段**——收敛到一处。
+ */
+describe('与 read-page 的字段名一致', () => {
+  it('readContentPage 返回的字段名是 sources / review，不是 refs', async () => {
+    const { readContentPage } = await import('./read-page.js');
+    const page = readContentPage('src/content/wiki', 'cjk-typography.md');
+    expect('sources' in page).toBe(true);
+    expect('review' in page).toBe(true);
+    // 旧名必须消失——**留着会让下一个人以为两套都能用**
+    expect('refs' in page).toBe(false);
+  });
+
+  it('从 read-page 读到的页面，pack 里带得上来源与复核状态', async () => {
+    const { readContentPage } = await import('./read-page.js');
+    const page = readContentPage('src/content/wiki', 'cjk-typography.md');
+    const pack = buildContextPack([page as PackDoc], '行宽为什么用 34em');
+    const hit = pack.passages[0];
+    expect(hit.sources.length).toBeGreaterThan(0);
+    expect(hit.review?.status).toBe('reviewed');
+  });
+});

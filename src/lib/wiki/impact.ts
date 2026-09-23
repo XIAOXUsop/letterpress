@@ -34,15 +34,19 @@ export interface ImpactPage {
   /**
    * 本页的来源引用。
    *
+   * ⚠️ **字段名与 `Doc.sources` 一致，不叫 `refs`**——与
+   * `read-page.ts` 那次统一是同一件事：一个模块叫 A、另一个叫 B，
+   * TS 不会报错（可选字段读不到就是 undefined），
+   * 而结果是**证据/引用被静默丢掉**。
+   *
    * ⚠️ **可选**——真实的 `Doc.sources` 是可选的（`Doc.sources?`），
    * 而这里原先标成必填。类型与现实脱节的后果不是编译失败，
    * 是**运行时 `undefined.some` 崩溃**。
    *
-   * 站内一直没暴露，是因为两个调用方都**老实填了空数组**——
-   * **默认值救了它，而那正是最危险的状态**：它掩盖了脱节，
-   * 直到第二份内容集（不带 `refs` 字段）进来才炸。
+   * 站内一直没暴露，是因为调用方都**老实填了空数组**——
+   * **默认值救了它，而那正是最危险的状态**。
    */
-  readonly refs?: readonly ImpactRef[];
+  readonly sources?: readonly ImpactRef[];
   /**
    * frontmatter 里 `related` 声明的关系（slug，不含 `/wiki/` 前缀）。
    *
@@ -71,7 +75,7 @@ export function computeImpact(
   revision?: string,
 ): ImpactResult {
   const direct = pages.filter((p) =>
-    (p.refs ?? []).some((r) => r.sourceId === sourceId && (!revision || r.revision === revision)),
+    (p.sources ?? []).some((r) => r.sourceId === sourceId && (!revision || r.revision === revision)),
   );
   const directSlugs = new Set(direct.map((p) => p.slug));
   const known = new Set(pages.map((p) => p.slug));

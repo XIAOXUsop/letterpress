@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeImpact, isDisjoint, type ImpactPage } from './impact.js';
 
 function page(slug: string, over: Partial<ImpactPage> = {}): ImpactPage {
-  return { slug, title: slug, refs: [], related: [], ...over };
+  return { slug, title: slug, sources: [], related: [], ...over };
 }
 
 function ref(sourceId: string, revision: string, locator = '') {
@@ -14,21 +14,21 @@ const S = 'src-a';
 describe('computeImpact · 直接引用者', () => {
   it('找出明确引用了该来源的页面', () => {
     const pages = [
-      page('a', { refs: [ref(S, 'v1')] }),
-      page('b', { refs: [ref(S, 'v1')] }),
-      page('c', { refs: [ref('other', 'v1')] }),
+      page('a', { sources: [ref(S, 'v1')] }),
+      page('b', { sources: [ref(S, 'v1')] }),
+      page('c', { sources: [ref('other', 'v1')] }),
     ];
     expect(computeImpact(pages, S).direct.map((p) => p.slug)).toEqual(['a', 'b']);
   });
 
   it('指定版本时，只认引用那一版的页面', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')] }), page('b', { refs: [ref(S, 'v2')] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')] }), page('b', { sources: [ref(S, 'v2')] })];
     expect(computeImpact(pages, S, 'v1').direct.map((p) => p.slug)).toEqual(['a']);
     expect(computeImpact(pages, S, 'v2').direct.map((p) => p.slug)).toEqual(['b']);
   });
 
   it('不指定版本时，该来源的所有版本都算', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')] }), page('b', { refs: [ref(S, 'v2')] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')] }), page('b', { sources: [ref(S, 'v2')] })];
     expect(computeImpact(pages, S).direct.map((p) => p.slug)).toEqual(['a', 'b']);
   });
 
@@ -43,11 +43,11 @@ describe('computeImpact · 直接引用者', () => {
    */
   it('预埋的来源变更：召回率 100%，且无误召回', () => {
     const pages = [
-      page('a', { refs: [ref(S, 'v1')] }),
-      page('b', { refs: [ref(S, 'v1'), ref(S, 'v1', '§2')] }),
-      page('c', { refs: [ref(S, 'v1', '§3')] }),
-      page('d', { refs: [ref(S, 'v1')] }),
-      page('unrelated', { refs: [ref('other-source', 'v9')] }),
+      page('a', { sources: [ref(S, 'v1')] }),
+      page('b', { sources: [ref(S, 'v1'), ref(S, 'v1', '§2')] }),
+      page('c', { sources: [ref(S, 'v1', '§3')] }),
+      page('d', { sources: [ref(S, 'v1')] }),
+      page('unrelated', { sources: [ref('other-source', 'v9')] }),
       page('no-refs'),
     ];
     const expected = ['a', 'b', 'c', 'd'];
@@ -62,7 +62,7 @@ describe('computeImpact · 直接引用者', () => {
 
 describe('computeImpact · 一跳邻居只是候选', () => {
   it('包含直接引用者声明指向的页面', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')], related: ['b'] }), page('b')];
+    const pages = [page('a', { sources: [ref(S, 'v1')], related: ['b'] }), page('b')];
     const { candidates } = computeImpact(pages, S);
     expect(candidates.get('b')).toBe('a');
   });
@@ -70,24 +70,24 @@ describe('computeImpact · 一跳邻居只是候选', () => {
   it('包含声明指向直接引用者的页面——反向也要算', () => {
     // 「A 引了来源，B 引了 A」里的 B 是最可能需要一起复查的一篇。
     // 只算正向就会漏掉它，而漏掉它不会有任何报错。
-    const pages = [page('a', { refs: [ref(S, 'v1')] }), page('b', { related: ['a'] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')] }), page('b', { related: ['a'] })];
     const { candidates } = computeImpact(pages, S);
     expect(candidates.get('b')).toBe('a');
   });
 
   it('直接引用者自己不算候选', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')], related: ['a'] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')], related: ['a'] })];
     expect(computeImpact(pages, S).candidates.size).toBe(0);
   });
 
   it('不存在的 slug 不进候选——断链是 lint 的职责，不该混成噪声', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')], related: ['ghost'] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')], related: ['ghost'] })];
     expect(computeImpact(pages, S).candidates.size).toBe(0);
   });
 
   it('两个方向都命中同一页时只列一次', () => {
     const pages = [
-      page('a', { refs: [ref(S, 'v1')], related: ['b'] }),
+      page('a', { sources: [ref(S, 'v1')], related: ['b'] }),
       page('b', { related: ['a'] }),
     ];
     const { candidates } = computeImpact(pages, S);
@@ -97,20 +97,20 @@ describe('computeImpact · 一跳邻居只是候选', () => {
 
 describe('三组互不重叠', () => {
   it('已在①里列过的页面不出现在③', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')] })];
     const result = computeImpact(pages, S);
     // ③ 扫仓库时命中了同一篇 wiki 页——重叠会让人以为"还有别处要改"
     expect(isDisjoint(result, ['src/content/wiki/a.md'])).toBe(false);
   });
 
   it('真正不同的辅助载体不算重叠', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')] })];
     const result = computeImpact(pages, S);
     expect(isDisjoint(result, ['docs/cjk-typography.md', 'src/styles/tokens.css'])).toBe(true);
   });
 
   it('非 wiki 路径即使同名也不算重叠', () => {
-    const pages = [page('a', { refs: [ref(S, 'v1')] })];
+    const pages = [page('a', { sources: [ref(S, 'v1')] })];
     const result = computeImpact(pages, S);
     expect(isDisjoint(result, ['docs/a.md'])).toBe(true);
   });
@@ -153,7 +153,7 @@ describe('输入形状容得下真实内容', () => {
   it('refs 缺失不崩——真实 Doc.sources 是可选的', () => {
     const pages = [
       { slug: 'a', title: '甲' },                                  // 完全没有 refs / related
-      { slug: 'b', title: '乙', refs: [ref(S, 'v1')] },
+      { slug: 'b', title: '乙', sources: [ref(S, 'v1')] },
     ] as unknown as ImpactPage[];
     expect(() => computeImpact(pages, S)).not.toThrow();
     expect(computeImpact(pages, S).direct.map((p) => p.slug)).toEqual(['b']);
@@ -161,7 +161,7 @@ describe('输入形状容得下真实内容', () => {
 
   it('related 缺失不崩——真实 Doc.declaredRelations 是可选的', () => {
     const pages = [
-      { slug: 'a', title: '甲', refs: [ref(S, 'v1')] },           // 缺 related
+      { slug: 'a', title: '甲', sources: [ref(S, 'v1')] },           // 缺 related
       { slug: 'b', title: '乙', refs: [], related: ['a'] },
     ] as unknown as ImpactPage[];
     const { direct, candidates } = computeImpact(pages, S);

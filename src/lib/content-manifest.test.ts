@@ -342,3 +342,46 @@ describe('可选字段缺失时不崩', () => {
     expect(manifest.documents[0].provenance?.review).toEqual({ status: 'reviewed' });
   });
 });
+
+// ── 「无来源」的两种含义必须可区分 ──────────────────────────────────────
+/**
+ * 路线图阶段 2 的退出条件原文：「100% 的 reviewed Wiki 页面至少能解析到
+ * **一个有效来源版本或明确的「原创实践记录」**」。
+ *
+ * 而当前 schema **没有「原创实践记录」这个概念**——
+ * 一页「没登记来源」既可能是「该登记却漏了」，也可能是
+ * 「它讲的是本站自己的设计选择，本来就没有外部来源」。
+ * **两种含义在数据里长得一模一样。**
+ *
+ * 举例（都是本站真实存在的页面）：
+ * - `cjk-typography` 讲「规范说 ch 等于 0 字形」→ **必须有外部来源**；
+ * - `design-tokens` 讲「本站的强调色选了 #002FA7」→ **原创实践记录**，
+ *   外部找不到「本站为什么选这个色」的规范。
+ *
+ * 缺了这个区分，「已复核」这个状态对后者就毫无意义——
+ * 因为 reviewer 无从知道「没有来源」是该补还是正常。
+ */
+describe('原创实践记录', () => {
+  it('页面可以声明自己是原创实践记录——哪怕没有 sources', () => {
+    const d = doc({
+      kind: 'wiki',
+      slug: 'own-choice',
+      review: { status: 'reviewed', checkedAt: '2026-09-24', contentDigest: 'x' },
+      original: { reason: '本站的设计选择，外部没有对应规范' },
+    }) as Doc;
+    const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+    expect(manifest.documents[0].provenance?.original?.reason).toBe(
+      '本站的设计选择，外部没有对应规范',
+    );
+  });
+
+  it('「没有来源也没有原创声明」是一个可被检出的状态——不是静默', () => {
+    // 这条不是要求构建失败（很多页面本来就不需要来源），
+    // 而是要求**它能被检出**——否则 lint 无从提醒「这一页该补来源还是该声明原创」。
+    const d = doc({ kind: 'wiki', slug: 'silent' }) as Doc;
+    const manifest = buildContentManifest([source(d)], buildGraph([d]), OPTIONS);
+    // 既没有 sources 也没有 original → provenance 缺席，
+    // 而「为什么缺席」必须能被区分（见 content.ts 的 reportMissingProvenance）
+    expect(manifest.documents[0].provenance).toBeUndefined();
+  });
+});

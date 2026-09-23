@@ -42,7 +42,20 @@ export function readContentPage(dir: string, file: string): {
   readonly title: string;
   readonly kind: string;
   readonly updated: string;
-  readonly refs: readonly PageSourceRef[];
+  /**
+   * 本页的来源引用。
+   *
+   * ⚠️ **字段名与 `Doc.sources` 一致，不叫 `refs`。**
+   * 它原先叫 `refs`（对齐 `ImpactPage`），而 `context-pack.ts` 读的是
+   * `sources`——于是 `wiki-ask` 把本页传进去之后，证据**全部静默丢失**
+   * （`doc.sources` 恒为 undefined，被 `?? []` 变成「没有来源」）。
+   * 2026-09-24 由阶段 3 退出条件「答案能定位到证据」抽查时发现。
+   *
+   * 两种命名都「说得通」，而**说得通恰恰是危险的地方**——
+   * 一个模块用 A、一个用 B，TS 不会报错（可选字段读不到就是 undefined）。
+   * **统一到 `Doc` 的叫法。**
+   */
+  readonly sources: readonly PageSourceRef[];
   readonly review?: PageReview;
   readonly related: readonly string[];
   /** frontmatter 之后的正文（不含 frontmatter）。 */
@@ -81,7 +94,7 @@ export function readContentPage(dir: string, file: string): {
     // post 没有 kind 字段，wiki 才有——**别与 Doc.kind 搞混**（那个是 post/wiki）
     kind: frontmatterField(source, 'kind') ?? '',
     updated: frontmatterField(source, 'updated') ?? '',
-    refs,
+    sources: refs,
     ...(review ? { review } : {}),
     // ⚠️ 必须先剥方括号：`frontmatterField` 返回**原始字符串**，
     // `related: [a, b]` 拿到的是 `"[a, b]"`。不剥的话第一项变成 `"[a"`，
@@ -96,10 +109,28 @@ export function readContentPage(dir: string, file: string): {
   };
 }
 
+/**
+ * 解析 frontmatter 里的 `review:` 块。
+ *
+ * ⚠️ **这里的正则原先有个静默 bug**（2026-09-24 发现）：
+ * 它用 `(?=\n\S|\s*$)` 表示「直到下一个顶层字段或块尾」，
+ * 而在**多行模式**下 `\s*` 能匹配**零个字符**，`$` 又立刻成立——
+ * 于是它在 `review:` 后面当场截断，**捕获组恒为空字符串**，
+ * `get('status')` 永远取不到值，**函数恒返回 `undefined`**。
+ *
+ * 症状是「复核状态读不到」，而**没有任何报错**。
+ * 之所以藏了这么久：`check-questions.mjs` 只需要 `body`，
+ * 从不读 review；而 `context-pack.ts` 那时还没接上（迭代 L）。
+ * **两个缺陷各自都成立，合起来才暴露。**
+ *
+ * 修法：明确用 `(?=\n[^\s])`（下一个**顶层**字段）或 `(?=\n?$)`（块尾），
+ * **不用 `\s*$`**——那个组合在多行模式下恒真。
+ */
 function parseReview(block: string): PageReview | undefined {
-  const m = /^review:\s*$([\s\S]*?)(?=\n\S|\s*$)/m.exec(block);
+  const m = /^review:[ \t]*\r?\n([\s\S]*?)(?=\n[^\s]|\r?\n?$)/m.exec(block);
   if (!m) return undefined;
-  const get = (k: string) => new RegExp(`^\\s+${k}:\\s*(.+?)\\s*$`, 'm').exec(m[1] ?? '')?.[1];
+  const get = (k: string) =>
+    new RegExp(`^[ \\t]+${k}:[ \\t]*(.+?)[ \\t]*$`, 'm').exec(m[1] ?? '')?.[1];
   const status = get('status');
   if (!status) return undefined;
   const checkedAt = get('checkedAt');

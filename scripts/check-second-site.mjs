@@ -52,13 +52,20 @@ const docs = [
 
 const graph = buildGraph(docs);
 const issues = lint(docs, graph, { checkWikilinks: true, checkOrphans: true });
-// ⚠️ 字段名要对：真实 Doc 是 `sources` / `declaredRelations`，
-// 而 ImpactPage 要的是 `refs` / `related`。第一版直接传 docs，
+// ⚠️ 字段名要对：`Doc` 是 `sources` / `declaredRelations`，
+// 而 `ImpactPage` 要的是 `sources` / `related`。第一版直接传 docs，
 // 于是「直接引用者 0」——**是我的探针错了，不是实现错了**。
+//
+// 2026-09-24：`ImpactPage` 的字段原先叫 `refs`，本轮已统一成 `sources`
+// （与 `Doc`、`read-page` 一致）。**这个探针当轮就抓到了一处漏改**——
+// 它是唯一一个还按旧名映射的消费方。
+//
+// **改完一个共享字段名，必须每个消费方都跑一遍**：
+// 那一次我只改了 `impact.ts` 与 `check-impact.mjs`，漏了 `wiki-impact` 与本探针。
 const impactPages = docs.map((d) => ({
   slug: d.slug,
   title: d.title,
-  refs: d.sources ?? [],
+  sources: d.sources ?? [],
   related: d.declaredRelations ?? [],
 }));
 const impact = computeImpact(impactPages, 'ext');

@@ -89,6 +89,14 @@ export interface ContentManifestDocument {
    * 消失会让订阅者以为「这篇没变」，而实际是「它变得不可信了」。
    */
   readonly provenance?: {
+    /**
+     * 「这一页讲的是本站自己的实践，没有外部来源」及其理由。
+     *
+     * 存在它是为了让「没有来源」有两种**可区分**的含义：
+     * 「该登记却漏了」与「它本来就是原创实践记录」。
+     * **原本两者在数据里长得一模一样**，于是 reviewer 无从判断该补还是正常。
+     */
+    readonly original?: { readonly reason: string };
     readonly sources?: readonly {
       readonly sourceId: string;
       readonly revision: string;
@@ -209,9 +217,10 @@ export function buildContentManifest(
         // 而崩掉的（`undefined.some`）。这里虽然逻辑上安全，
         // 但「靠外层条件保护的内层访问」在改代码时极易被挪掉——
         // **能写成不依赖别人保护的样子，就写成那样。**
-        ...(doc.sources?.length || doc.review
+        ...(doc.sources?.length || doc.review || doc.original
           ? {
               provenance: {
+                ...(doc.original ? { original: doc.original } : {}),
                 ...(doc.sources?.length
                   ? {
                       sources: (doc.sources ?? []).map((ref) => ({

@@ -71,6 +71,27 @@ export interface Doc {
     readonly revision: string;
     readonly locator?: string;
   }[];
+  /**
+   * 「这一页讲的是本站自己的实践，没有外部来源」。
+   *
+   * <p>**它解决的是「无来源有两种含义」这个问题**：
+   * 一页没登记来源，可能是「该登记却漏了」，也可能是
+   * 「它讲的是本站自己的设计选择，外部根本找不到对应规范」。
+   * **两种在数据里原本长得一模一样**，于是 reviewer 无从判断
+   * 「没有来源」是该补还是正常。
+   *
+   * <p>路线图阶段 2 的退出条件原文：「100% 的 reviewed Wiki 页面至少能解析到
+   * **一个有效来源版本或明确的『原创实践记录』**」——
+   * 而这个概念此前在仓库里**根本不存在**，只是一句路线图上的话。
+   *
+   * <p>例：`design-tokens` 讲「本站的强调色选了 #002FA7」——
+   * 外部找不到「本站为什么选这个色」的规范，它就是原创实践记录；
+   * 而 `cjk-typography` 讲「规范说 ch 等于 0 字形」，缺来源就是漏了。
+   */
+  readonly original?: {
+    /** 为什么没有外部来源。**必填**——空理由等于没声明。 */
+    readonly reason: string;
+  };
   /** 复核记录。`contentDigest` 用**当时**算出的正文摘要，构建期现算比对。 */
   readonly review?: {
     readonly status: 'pending' | 'reviewed' | 'stale';

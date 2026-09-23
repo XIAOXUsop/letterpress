@@ -4,6 +4,16 @@ summary: 对「构建产物」本身做的断言——问的不是「代码写�
 kind: concept
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: build-probe
+# 原创实践记录：本页讲的是**一种方法**（构建探针）以及本项目的实践，
+# 不是某条外部规范的条款。方法论没有「出处」可引。
+original:
+  reason: 方法论与本站实践，没有可引用的外部条款
+# 已复核：这一页的内容与上面声明的「原创实践」一致，
+# 页面里引用的具体数字（色值、体积、页数）与产物一致。
+review:
+  status: reviewed
+  checkedAt: 2026-09-24
+  contentDigest: bc9455b89a7368a6ac1f194a4bf589124586ba026f68fec093f891f53662d992
 # related 整行删除：正文「相关条目」一行已经链接了它。
 # 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---

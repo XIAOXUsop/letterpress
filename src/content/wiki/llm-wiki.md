@@ -37,6 +37,12 @@ verify:
     stated: 面向 agent 的检索与问题金标
     path: knowledge/questions.md
     expect: exists
+# 本页的模式出处与「10–15 页」那句的逐字定位。
+# 摘要对不上就是 stale——构建会报错，不会静默沿用旧状态。
+review:
+  status: reviewed
+  checkedAt: 2026-09-24
+  contentDigest: a21303104278ccf858e4c1194d080a20a4c4cb897d5d9ef0f5a04f4adad4d336
 # 本页的模式出处与「10–15 页」那句的原文定位。
 # 注意 `google-ai-features` **不**在这里——它支撑的是 markdown-for-agents
 # 那篇 post 的论断，不支撑本页；来源登记按「哪一页用」记，不按「同一个话题」记。
