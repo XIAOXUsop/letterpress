@@ -126,6 +126,36 @@ try {
     }
 
     /*
+     * ── 字体体积 ──────────────────────────────────────────────────────
+     *
+     * ⚠️ **口径陷阱**：`du -sk` 按 4 KB 块算，得出 104；
+     * 而实际字节是 102164 = **99.8 KB**（README 写 100 KB 是对的）。
+     * **两个数都是「实测」，但只有一个对。** 所以这里一律用字节数。
+     *
+     * 字体是**不需要 gzip 预压缩**的资源（已经是 woff2），
+     * 所以直接加总字节即可。
+     */
+    const astroDir = join(dist, '_astro');
+    const fontFiles = (await readdir(astroDir)).filter((f) => f.endsWith('.woff2'));
+    if (fontFiles.length > 0) {
+      let fontBytes = 0;
+      for (const f of fontFiles) fontBytes += (await readFile(join(astroDir, f))).length;
+      const readmeText = await readFile(join(process.cwd(), 'README.md'), 'utf8');
+      const claimed = /字体 \| \*\*([\d.]+) KB/.exec(readmeText)?.[1];
+      const actual = Math.round(fontBytes / 1024);
+      if (claimed !== String(actual)) {
+        problems.push(
+          `README 写字体 ${claimed} KB，实际 ${actual} KB（${fontBytes} bytes）。` +
+            `⚠️ 口径：一律用字节数。\`du -sk\` 按 4 KB 块对齐，` +
+            `对同一批文件可能给出不同的 KB 数（有时凑巧相同、有时差几 KB）——` +
+            `两个数都是「实测」，但只有一个对。`,
+        );
+      } else {
+        console.log(`  ✓ README 里的字体体积与产物一致（${actual} KB / ${fontFiles.length} 个文件）`);
+      }
+    }
+
+    /*
      * ── README 里的实测数字，必须等于产物里的实测值 ────────────────────
      *
      * 2026-09-24 实测抓到的漂移：README 写「CSS 单文件 23.7 KB / gzip 5.1 KB」，
