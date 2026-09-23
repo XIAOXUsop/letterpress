@@ -54,15 +54,15 @@ expectCandidates: <slug、slug>
 
 source: css-values-4
 expectDirect: cjk-typography、cjk-web-typography
-expectCandidates: design-tokens
+expectCandidates:
 
 source: css-fonts-4
 expectDirect: cjk-typography、cjk-web-typography
-expectCandidates: design-tokens
+expectCandidates:
 
 source: apple-system-fonts
 expectDirect: cjk-typography、cjk-web-typography
-expectCandidates: design-tokens
+expectCandidates:
 
 > 三个的 ① 都是**两页**——知识页 [[中文排版]] 与文章《中文网页排版》。
 > 同一个论断在两处出现，两处都该被登记：只登记一处的话，
@@ -76,7 +76,7 @@ expectCandidates: design-tokens
 
 source: rfc9110-accept
 expectDirect: content-negotiation、markdown-for-agents
-expectCandidates: letterpress、llm-wiki
+expectCandidates: llm-wiki
 
 > ① 两页：[[内容协商]] 与《你的博客该不该给 AI 一份 markdown》。
 > ② 的 `letterpress` 是**反向**命中的——它的 `related` 里有 `content-negotiation`。
@@ -125,6 +125,15 @@ expectCandidates: content-negotiation、letterpress
 > **页面引用了来源却没登记**——金标的第一版期望值就是照着「没人引用」写的。
 
 ---
+
+> **2026-09-24 更新**：前三条的 `expectCandidates` 从 `design-tokens`
+> 变成**空**，`rfc9110-accept` 从两个候选变成只剩 `llm-wiki`。
+> 原因是迭代 J 删掉了 `design-tokens` 与 `letterpress` 的 `related` 整行——
+> 那两处的 `related` 与正文链接**完全重复**（lint 的 `redundant-relation`）。
+> 关系本身没丢，**由正文链接继续维持**（已确认没有页面因此变成孤儿页）。
+>
+> **这正是金标存在的意义**：关系真的变了，金标立刻红，
+> 逼着人判断「是实现错了，还是事实变了」。这里显然是后者。
 
 ## 登记了但还没有页面引用的来源
 

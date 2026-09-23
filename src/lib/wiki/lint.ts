@@ -117,6 +117,7 @@ export function lint(docs: readonly Doc[], graph: LinkGraph, options: LintOption
   // 断链与孤儿页都依赖知识层存在才有意义，关掉时不检查
   if (opts.checkWikilinks) issues.push(...checkBrokenLinks(graph));
   if (opts.checkWikilinks) issues.push(...checkAmbiguousTitles(graph));
+  if (opts.checkWikilinks) issues.push(...checkRedundantRelations(graph));
   if (opts.checkOrphans) issues.push(...checkOrphans(graph));
   issues.push(...checkSummaries(docs, opts.maxSummaryLength));
   issues.push(...checkEmptyBodies(docs));
@@ -129,6 +130,33 @@ export function lint(docs: readonly Doc[], graph: LinkGraph, options: LintOption
     if (a.rule !== b.rule) return a.rule < b.rule ? -1 : 1;
     return (a.slug ?? '') < (b.slug ?? '') ? -1 : (a.slug ?? '') > (b.slug ?? '') ? 1 : 0;
   });
+}
+
+/**
+ * 同一目标被正文 `[[wikilink]]` 与 frontmatter `related` 各写了一次。
+ *
+ * **这不是错误**：图用 `Set` 去重，边不会重复、计数不会错。代价是
+ * **多一处要同步的地方**——而实测里这个代价出现过：2026-09-24 改名实验时，
+ * 改完正文才发现 `related` 也有同一个目标，构建被 `broken-wikilink` 拦下。
+ *
+ * <p>所以是 **warn 而非 error**：两处都写没有坏处，提醒只是让成本可见。
+ * 真要消除它得让 `related` 由正文链接派生，那会改内容模型，不是一条 lint 的事。
+ */
+function checkRedundantRelations(graph: LinkGraph): Issue[] {
+  const issues: Issue[] = [];
+  for (const [slug, targets] of [...graph.redundantRelations].sort()) {
+    issues.push({
+      rule: 'redundant-relation',
+      level: 'warn',
+      slug,
+      message:
+        `「${slug}」在正文里链接了 ${targets.join('、')}，` +
+        `frontmatter 的 \`related\` 里又声明了一次。` +
+        `两处都写不影响构建（图会去重），但**改名时要改两处**——` +
+        `漏掉一处就会断链。要么删掉 related 里的这一项，要么把正文里的链接去掉。`,
+    });
+  }
+  return issues;
 }
 
 /** 文章 slug 与静态系统路由冲突。知识库位于 `/wiki/<slug>/`，不受此限制。 */

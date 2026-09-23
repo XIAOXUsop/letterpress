@@ -5,7 +5,8 @@ kind: concept
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: cjk-typography
 updated: 2026-09-24
-related: [cjk-web-typography, design-tokens]
+# related 整行删除：正文「完整论述与实测」一行已经链接了它。
+# 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 # 本页三条核心论断各自对应一个已登记来源。
 # `ch` 那条用来纠正「一个汉字约两个 ch，所以 66ch 排 130 字」的旧算式；
 # `ic` 那条用来纠正「em 等于字号所以字数确定」这个更大的越界；
@@ -30,7 +31,7 @@ sources:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: 02d5a0a303099e0f4dbb6f68a437a7a7209b24a8167c77c66c7c36067ef824c1
+  contentDigest: 0e700777d5d288eed466b1cc52904c0d806ef7c4309e35a57d61020923a0fcb0
 ---
 
 中文网页排版最常见的病因：**参数沿用了西文的值。**

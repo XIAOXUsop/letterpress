@@ -4,7 +4,8 @@ summary: 三层 token 结构，命名描述用途而非外观。换配色时只�
 kind: concept
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: design-tokens
-related: [cjk-typography, letterpress]
+# related 整行删除：正文里的 [[中文排版]] 与 [[letterpress]] 已覆盖全部关系。
+# 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---
 
 `src/styles/tokens.css`。三层结构：

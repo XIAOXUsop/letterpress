@@ -120,6 +120,20 @@ export interface LinkGraph {
   readonly backlinks: ReadonlyMap<string, readonly Backlink[]>;
   /** slug → 它指向的 slug 集合 */
   readonly outbound: ReadonlyMap<string, ReadonlySet<string>>;
+  /**
+   * **同一目标被声明了两次**的页面：`slug → 重复的目标 slug 列表`。
+   *
+   * 正文里写了 `[[x]]`，frontmatter 的 `related` 里又写了 `x`——两条通道
+   * 表达同一件事。图用 `Set` 去重，所以**它不会算错**；但维护上要改两处。
+   *
+   * <p>代价在实测里出现过：2026-09-24 做改名实验（`design-tokens` 改名）时，
+   * 改了正文 `[[...]]` 才发现 `related` 也是一条引用通道，
+   * 于是构建被 `broken-wikilink` 拦下——**只搜一种写法就会漏**。
+   *
+   * <p>这**不是错误**，是提示：两处都写没有坏处，只是多了一处要同步的地方。
+   * 所以 lint 的默认级别是警告。
+   */
+  readonly redundantRelations: ReadonlyMap<string, readonly string[]>;
   /** 所有解析失败的链接 */
   readonly broken: readonly BrokenLink[];
   /**
@@ -218,6 +232,7 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
   const outbound = new Map<string, Set<string>>();
   const broken: BrokenLink[] = [];
   const ambiguous: AmbiguousLink[] = [];
+  const redundantRelations = new Map<string, string[]>();
   const inboundCount = new Map<string, number>();
 
   for (const doc of published) {
@@ -233,9 +248,33 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     //
     // `offset`/`end` 对声明来的引用没有意义（它不在原文里），给 -1：
     // 图只用 `target` 与 `label`，而替换/报错定位只走 `parseWikiLinks` 的结果。
-    const refs: WikiLinkRef[] = [...parseWikiLinks(doc.body)];
+    //
+    // 两条通道在这里合并成**同一个数组**——所以解析、校验、计数只有一套逻辑。
+    // 但**来源要分开记**：只有这样才能知道某个目标是不是被声明了两次
+    // （见 `redundantRelations`）。
+    const bodyRefs = [...parseWikiLinks(doc.body)];
+    const refs: WikiLinkRef[] = [...bodyRefs];
     for (const target of doc.declaredRelations ?? []) {
       refs.push({ target, anchor: null, label: target, offset: -1, end: -1 });
+    }
+
+    // 同一目标被两条通道各写一次 = 多一处要同步的地方。改名时最容易漏。
+    // ⚠️ **按解析后的 slug 比，不按原始字符串比**——`related: [中文排版]`
+    // 与正文 `[[cjk-typography]]` 指的是同一页，也算重复。
+    const viaBody = new Set<string>();
+    for (const ref of bodyRefs) {
+      const resolved = lookup.get(normalizeTarget(ref.target));
+      if (resolved !== undefined) viaBody.add(resolved);
+    }
+    const duplicated: string[] = [];
+    for (const target of doc.declaredRelations ?? []) {
+      const resolved = lookup.get(normalizeTarget(target));
+      if (resolved !== undefined && viaBody.has(resolved) && !duplicated.includes(resolved)) {
+        duplicated.push(resolved);
+      }
+    }
+    if (duplicated.length > 0) {
+      redundantRelations.set(doc.slug, duplicated.sort());
     }
 
     for (const ref of refs) {
@@ -286,7 +325,17 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     .map((d) => d.slug)
     .sort();
 
-  return { bySlug, lookup, backlinks, outbound, broken, ambiguousTitles, ambiguous, orphans };
+  return {
+    bySlug,
+    lookup,
+    backlinks,
+    outbound,
+    broken,
+    ambiguousTitles,
+    ambiguous,
+    redundantRelations,
+    orphans,
+  };
 }
 
 /** 解析一个 wiki 链接目标，返回其 URL；无法解析时返回 null。 */

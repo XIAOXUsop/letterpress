@@ -599,3 +599,77 @@ describe('同名标题：不能按遍历顺序任选一个', () => {
     expect(graph.lookup.get('topic')).toBe('topic');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// 两条引用通道的重叠
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * 正文 `[[wikilink]]` 与 frontmatter `related` 是**两条并行的引用通道**。
+ *
+ * 代价在实测里出现过：2026-09-24 做改名实验时，改完正文 `[[...]]`
+ * 才发现 `related` 里也有同一个目标，于是构建被 `broken-wikilink` 拦下。
+ * **只搜一种写法就会漏**，而漏了不会报错，只会在改名那天突然构建失败。
+ *
+ * 图用 `Set` 去重，所以它**不算错**——重复声明是无害的。
+ * 这里量的是「有几处需要同步」，好让维护成本可见，而不是出错时才被发现。
+ */
+describe('redundantRelations', () => {
+  it('同一目标被正文与 related 各写一次 → 记下来', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['b'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.get('a')).toEqual(['b']);
+  });
+
+  it('只用 related 声明不算重复——那是它的正常用法', () => {
+    const a = doc({ slug: 'a', body: '', declaredRelations: ['b'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.size).toBe(0);
+  });
+
+  it('只在正文里链接也不算重复', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]' });
+    const b = doc({ slug: 'b' });
+    expect(buildGraph([a, b]).redundantRelations.size).toBe(0);
+  });
+
+  it('按解析后的目标比，不按字面比', () => {
+    // related 写标题、正文写 slug——指向同一页，也算重复。
+    // 只比字符串的话这两种写法看起来不同，重复就漏了。
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['标题B'] });
+    const b = doc({ slug: 'b', title: '标题B' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.get('a')).toEqual(['b']);
+  });
+
+  it('related 写了两遍同一个目标只记一次', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['b', 'b'] });
+    const b = doc({ slug: 'b' });
+    expect(buildGraph([a, b]).redundantRelations.get('a')).toEqual(['b']);
+  });
+
+  it('多个重复目标按字典序排好，保证输出可复现', () => {
+    const a = doc({ slug: 'a', body: '[[c]] [[b]]', declaredRelations: ['c', 'b'] });
+    const graph = buildGraph([a, doc({ slug: 'b' }), doc({ slug: 'c' })]);
+    expect(graph.redundantRelations.get('a')).toEqual(['b', 'c']);
+  });
+
+  it('解析不了的 related 不算重复——那是断链，由另一条规则报', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['不存在'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.size).toBe(0);
+    expect(graph.broken.map((x) => x.target)).toContain('不存在');
+  });
+
+  it('重复声明不产生重复的边——图不会因此算错', () => {
+    // 这条钉住「重复是无害的」：它是维护成本，不是正确性问题。
+    const a = doc({ slug: 'a', body: '[[b]] [[b]] [[b]]', declaredRelations: ['b', 'b', 'b'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect([...graph.outbound.get('a')!]).toEqual(['b']);
+    expect(graph.backlinks.get('b')?.length).toBe(1);
+  });
+});

@@ -4,7 +4,8 @@ summary: 本站所属的开源项目。一个把中文排版做对、同时写�
 kind: entity
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: letterpress
-related: [llm-wiki, content-negotiation, design-tokens]
+# related 整行删除：正文四个链接已覆盖全部关系。
+# 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---
 
 一个开源个人博客主题。Astro 7 + TypeScript，纯静态，零后端，MIT。

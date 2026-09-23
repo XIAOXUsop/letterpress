@@ -4,7 +4,8 @@ summary: 对「构建产物」本身做的断言——问的不是「代码写�
 kind: concept
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: build-probe
-related: [reproducible-builds, letterpress]
+# related 整行删除：正文「相关条目」一行已经链接了它。
+# 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---
 
 一类检查：不看源码，只看**构建出来的产物**。

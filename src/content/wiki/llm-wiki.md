@@ -5,7 +5,7 @@ kind: concept
 # 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
 id: llm-wiki
 updated: 2026-09-24
-related: [content-negotiation, letterpress]
+related: [letterpress]
 # ── 可证伪声明 ────────────────────────────────────────────────────────
 # 下面这张表里每一行「已实现」都对应一个文件。检查会问两件事：
 #   ① 表里那句话**还在不在页面上**（改正文忘改声明 → 报错）
