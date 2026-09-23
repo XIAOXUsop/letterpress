@@ -48,6 +48,8 @@
 | `verify:reproducible` | 在生产源码里读构建时钟 | ✅ 红 | 2026-09-23（此前记录） |
 | `verify:only`（契约） | 篡改产物里的 markdown 字节数 / hash | ✅ 红 | 2026-09-23（此前记录） |
 | **`verify:online`** | **未验** | 它对线上 Demo 跑，Pages 上 7 项协商必然红——**那是 README 写明的限制，不是缺陷** | — |
+| `verify:answers` | 把 `read-page` 的字段名改回 `refs` | ✅ 红（4 条主命中没有依据） | 2026-09-24 |
+| `verify:answers` | 让「无依据」类返回段落 | ✅ 红 | 2026-09-24 |
 | `verify:gates`（编排检查） | 从 `verify:all` 里删掉 `verify:questions` | ✅ 红（13 步 vs 期望 14 步，并指出第 7 步错位） | 2026-09-24 |
 
 ## 剩下的一条「未验」

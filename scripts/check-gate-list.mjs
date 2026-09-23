@@ -41,6 +41,7 @@ const EXPECTED = [
   ['npm run verify:search', '搜索可用性前提'],
   ['npm run verify:questions', '检索金标（22 条）'],
   ['npm run verify:impact', '影响分析金标（9 条）'],
+  ['npm run verify:answers', '**答案能定位到证据**（阶段 3 退出条件 ③）'],
   ['npm run verify:portability', '核心模块可加载性 + 可选链形状'],
   ['npm run verify:second-site', '第二份异构内容集'],
   ['npm run verify:anchors', '锚点契约'],
