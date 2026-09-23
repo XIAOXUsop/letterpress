@@ -65,9 +65,13 @@ html {
 pre, code, kbd, samp { text-autospace: no-autospace; }
 ```
 
-浏览器支持：`text-autospace` 2025 年进入 Baseline；`text-spacing-trim`
-全球覆盖约 72%。Safari 与 Firefox 目前都不支持这两者——属**渐进增强**，
-不支持时版式不坏。
+浏览器支持：`text-autospace` 2025 年进入 Baseline；按 MDN 浏览器兼容数据
+（2026-09-24 查）`text-spacing-trim` 自 **Chrome 123** 起支持，
+**Safari 与 Firefox 均不支持**。属**渐进增强**，不支持时版式不坏。
+
+> 本文档此前写「`text-spacing-trim` 全球覆盖约 72%」——**已删除**。
+> 那个数字**没有来源**（`caniuse` 上还没有这个特性，抓不到全球覆盖），
+> 而它出现在一个满是实测数字的段落里，**读者会以为它是量出来的**。
 
 ## 字体栈的顺序不能反
 

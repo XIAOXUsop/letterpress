@@ -271,7 +271,8 @@ review:
 - **`llms.txt` 的实际效果被高估。** Ahrefs 实测 13.7 万个域名里 97% 从未被
   请求过。本项目生成它是因为零成本，**但不把它当卖点**。
 - **`text-autospace` 与 `text-spacing-trim` 在 Safari / Firefox 上不支持**
-  （后者全球覆盖约 72%）。属渐进增强，不支持时版式不坏。
+  （MDN 兼容数据：Chrome 123+ 支持，Safari 与 Firefox 均不支持）。属渐进增强，
+  不支持时版式不坏。
 - **搜索的加载器要求 CSP 允许 `unsafe-eval`**，原因见
   [命令行](docs/cli.md#搜索的加载器为什么要求-csp-允许-unsafe-eval)。
 - **没有数学公式、流程图、多语言、图片灯箱、评论。** 见[竞品对照](docs/compare.md)。

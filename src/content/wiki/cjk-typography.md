@@ -31,7 +31,7 @@ sources:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: 0e700777d5d288eed466b1cc52904c0d806ef7c4309e35a57d61020923a0fcb0
+  contentDigest: 09f622894e176ff22a9d65a51480e5c2155d5a165b46c397e5be97d0932bb3f8
 ---
 
 中文网页排版最常见的病因：**参数沿用了西文的值。**
@@ -82,7 +82,8 @@ pre, code, kbd, samp { text-autospace: no-autospace; }
 
 - `text-autospace`：中西文之间自动插入约 1/4 空格。2025 进入 Baseline。
 - `text-spacing-trim`：中文标点字距调整，行首标点不再占满一格。
-  Chrome / Edge 123+ 默认开启，全球覆盖约 72%。
+  按 MDN 浏览器兼容数据（2026-09-24 查）自 **Chrome 123** 起支持，
+  **Safari 与 Firefox 均不支持**。
 
 **前提是 `<html lang>` 正确。** 语言标签不对，浏览器不应用对应语言的断行
 与标点规则。代码块里必须关掉——代码里的空格是有意义的。
