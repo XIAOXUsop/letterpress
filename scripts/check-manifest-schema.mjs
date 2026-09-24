@@ -41,6 +41,7 @@ const SCHEMA = join(ROOT, 'public', 'content-manifest.schema.json');
 const MANIFEST = join(ROOT, 'dist', 'content-manifest.json');
 const SOURCE = join(ROOT, 'src', 'lib', 'content-manifest.ts');
 const DOC = join(ROOT, 'docs', 'content-manifest.md');
+const README = join(ROOT, 'README.md');
 
 const problems = [];
 const ok = (msg) => console.log(`  ✓ ${msg}`);
@@ -203,6 +204,72 @@ if (existsSync(DOC)) {
   }
 }
 
+/*
+ * ── 站内 JS 的三个数：README 写的是不是产物里的 ──────────────────────
+ *
+ * ⚠️ **2026-09-24 才补上，而它们的漂移已经造成过一次实际损失**：
+ * `docs/design-notes.md` 写「实测 gzip 146 KB」，
+ * 而 README 写「那个数在当前环境已无法复现」——
+ * **同一份仓库里一个声称实测、一个声称作废**。
+ *
+ * 根因是 `check-formats.mjs` **刻意不查站内 JS**（它只跑 `astro build`、
+ * 不跑 pagefind，所以量到 0）——理由成立，**但结论是「那三个数只能手抄」**。
+ *
+ * > 而**手抄的数一定会漂**。这不是「可能」，是已经发生过的事实。
+ *
+ * 本检查**自己跑 `npm run build`**（含 pagefind），所以能核。
+ * 口径与 `npm run measure` 完全一致：`Math.round(bytes / 1024)`、
+ * `gzipSync(bytes, { level: 9 })`。
+ *
+ * ⚠️ **只核「全部 js 文件」那个口径**（6 个 / 未压缩 / gzip 上界）。
+ * README 另有一个更窄的数（「访问者真正会加载 5 个、gzip 93 KB」）——
+ * **那要浏览器网络面板才能确认**，Node 里量不出来
+ * （`pagefind.js` 内部按需加载哪些 UI 组件取决于页面配置）。
+ * **所以那个数不核**，并在 README 里写明它与这里的上界不是一回事。
+ */
+const PAGEFIND_DIR = join(ROOT, 'dist', 'pagefind');
+if (existsSync(PAGEFIND_DIR)) {
+  const { readdirSync: rd } = await import('node:fs');
+  const { gzipSync: gz } = await import('node:zlib');
+  const jsFiles = rd(PAGEFIND_DIR).filter((f) => f.endsWith('.js'));
+  let raw = 0;
+  let gzipped = 0;
+  for (const f of jsFiles) {
+    const bytes = readFileSync(join(PAGEFIND_DIR, f));
+    raw += bytes.length;
+    gzipped += gz(bytes, { level: 9 }).length;
+  }
+  const kbRaw = Math.round(raw / 1024);
+  const kbGz = Math.round(gzipped / 1024);
+
+  if (existsSync(README)) {
+    const readme = readFileSync(README, 'utf8');
+    // README 的站内 JS 行里，「6 个 js」与「431 KB」必须与产物一致
+    const saysCount = new RegExp(`\\*\\*${jsFiles.length}\\s*个\\s*js\\*\\*`).test(readme);
+    if (!saysCount) {
+      bad(
+        `产物里有 ${jsFiles.length} 个站内 js，而 README 的「站内 JS」一行没写这个数。
+` +
+          `    **它是手抄的**——而手抄的数已经漂过一次（146 KB）。`,
+      );
+    } else {
+      ok(`README 的「${jsFiles.length} 个 js」与产物一致`);
+    }
+    if (readme.includes(`${kbRaw} KB`)) {
+      ok(`README 的「${kbRaw} KB」（未压缩合计）与产物一致`);
+    } else {
+      bad(
+        `README 的「站内 JS」一行没有 ${kbRaw} KB 这个数（产物实测 ${raw} bytes）。
+` +
+          `    用 \`npm run measure\` 核对——**它的口径就是门禁的口径**。`,
+      );
+    }
+  }
+  console.log(`  ℹ 站内 JS：${jsFiles.length} 个 / 未压缩 ${kbRaw} KB / gzip ${kbGz} KB（可复现上界）`);
+} else {
+  bad('dist/pagefind 不存在——本检查的 build 应当已跑过 pagefind');
+}
+
 const stale = manifest.documents.filter((d) => d.provenance?.review?.status === 'stale');
 console.log('');
 console.log(`  ℹ 产物里有 ${stale.length} 条 stale——那是「已不可信但仍在出口里」的文档。`);
@@ -243,4 +310,4 @@ if (problems.length > 0) {
   console.log(`\n${problems.length} 处问题。\n`);
   process.exit(1);
 }
-console.log('\n产物符合 schema；源码 / 产物 / schema 三处 version 一致；文档指路，且转述的 provenance 覆盖数与产物一致。\n');
+console.log('\n产物符合 schema；源码 / 产物 / schema 三处 version 一致；文档指路；provenance 覆盖数与站内 JS 的数都与产物一致。\n');
