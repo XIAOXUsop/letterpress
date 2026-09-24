@@ -234,7 +234,25 @@ if (knownLimits.length > 0) {
 }
 
 if (problems.length === 0) {
-  console.log('\n  检索金标全过。\n');
+  /*
+   * ⚠️ **结论行必须带上已知局限的条数**（2026-09-24 补）。
+   *
+   * 上面已经把 3 条局限逐条列出来了，可**最后一行是「检索金标全过」**——
+   * 读到最后一行的人看到的是「全过」，而实际有 3 条没被计入判定。
+   *
+   * > **一个数字不出现在结论行，就等于不存在**——读者不会往回翻。
+   *
+   * 局限本身不是缺陷（金标里写了理由、它们不计为失败），
+   * **问题只是它不在结论里**。
+   */
+  console.log(
+    '\n  检索金标全过' +
+      (knownLimits.length > 0
+        ? `（${questions.length - knownLimits.length}/${questions.length} 条参与判定，` +
+          `另有 ${knownLimits.length} 条登记为已知局限、不计为失败——见上）`
+        : `（${questions.length}/${questions.length}）`) +
+      '\n',
+  );
 } else {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
