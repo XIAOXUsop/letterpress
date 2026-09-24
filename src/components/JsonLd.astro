@@ -121,6 +121,47 @@ if (type === 'article' && publishedTime) {
     ...(websiteId ? { isPartOf: { '@id': websiteId } } : {}),
   });
 }
+
+/*
+ * 知识库条目。
+ *
+ * ⚠️ **2026-09-24 补的**——此前 `type` 枚举里就有 `'note'`，
+ * 但**实现里只处理了 `'article'`**，于是 wiki 路由传 `note` 进来
+ * 什么也不输出：**声明了能力而没接线**，症状是那一类页面完全没有 JSON-LD。
+ * 而 wiki 路由（`src/pages/wiki/[slug].astro`）**根本没引入本组件**——
+ * 所以那不只是「分支没写」，是**整条路没通**。
+ *
+ * ── 为什么是 `Article` 而不是 `TechArticle` ─────────────────────────
+ *
+ * `TechArticle` 语义上更贴（它就是「技术文章」），但 2026-09-24 实测
+ * **schema.org 在本机网络下取不到**（页面超时、机器可读端点 404），
+ * **无法核实它的父类型与当前定义**。
+ *
+ * > **查不到就不写。** 写一个自己没核实过的 `@type`，
+ * > 比用一个确定存在的上位类更糟——`Article` 一定有效，
+ * > 而错误的类型名会让搜索引擎**静默忽略这一整块**。
+ *
+ * `Article` 是 `BlogPosting` 的父类，语义上「一篇解释性页面」正合适；
+ * 若将来能联网核实 `TechArticle` 仍然有效，改这一处即可。
+ */
+if (type === 'note') {
+  const noteId = base ? `${absolute(url)}#article` : undefined;
+  graph.push({
+    '@type': 'Article',
+    ...(noteId ? { '@id': noteId } : {}),
+    headline: title,
+    description,
+    ...(base ? { url: absolute(url), mainEntityOfPage: { '@id': noteId } } : { mainEntityOfPage: url }),
+    // 知识页没有「发布时间」——它是持续修订的。
+    // 只给 dateModified：**给一个假的 datePublished 反而会误导**。
+    ...(modifiedTime ? { dateModified: modifiedTime.toISOString() } : {}),
+    ...(personId ? { author: { '@id': personId }, publisher: { '@id': personId } } : {}),
+    inLanguage: site.lang,
+    ...(image && base ? { image: absolute(image) } : {}),
+    ...(tags.length > 0 ? { keywords: tags.join(', ') } : {}),
+    ...(websiteId ? { isPartOf: { '@id': websiteId } } : {}),
+  });
+}
 ---
 
 <script type="application/ld+json" is:inline set:html={JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })} />

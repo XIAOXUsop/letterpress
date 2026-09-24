@@ -667,6 +667,29 @@ console.log('\n[4b] SEO / 分享 / 无障碍契约');
   check(article !== null && article.includes('"BlogPosting"'), 'JSON-LD 含 BlogPosting');
   check(article !== null && article.includes('"dateModified"'), 'JSON-LD 含 dateModified');
 
+  /*
+   * 知识库条目也必须有 JSON-LD。
+   *
+   * 2026-09-24 实测：wiki 路由（`src/pages/wiki/[slug].astro`）**根本没引入
+   * `JsonLd`**，于是这一类页面完全没有结构化数据——而文章页有。
+   * 搜索引擎与 agent 因此拿不到知识页的结构。
+   *
+   * 类型用 `Article` 而不是 `TechArticle`：后者的定义**在 2026-09-24 无法核实**
+   * （schema.org 页面超时、机器可读端点 404），
+   * **写一个没核实过的 `@type` 比用一个确定存在的上位类更糟**——
+   * 错误的名字会让搜索引擎静默忽略整块。理由写在组件里。
+   */
+  const wikiPage = await read('wiki/cjk-typography/index.html');
+  check(wikiPage !== null && wikiPage.includes('application/ld+json'), '知识页含 JSON-LD');
+  check(wikiPage !== null && wikiPage.includes('"Article"'), '知识页 JSON-LD 含 Article');
+  check(wikiPage !== null && wikiPage.includes('"dateModified"'), '知识页 JSON-LD 含 dateModified');
+  // 知识页**没有发布时间**（它是持续修订的）——给一个假的 datePublished
+  // 会误导「这一篇写了多久」。所以这里反过来断言它**不该有**。
+  check(
+    wikiPage !== null && !wikiPage.includes('"datePublished"'),
+    '知识页 JSON-LD 不含编造的 datePublished',
+  );
+
   /**
    * **绝不能让 localhost 进产物。**
    *
