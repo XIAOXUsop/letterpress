@@ -7,7 +7,7 @@
 |---|---|---|---|
 | 1 | 一个**全新的真实内容集**能在不复制内部代码的情况下使用核心流程 | **部分达成** | `verify:second-site-real` 读 `knowledge/fixtures/second-site/` 的 6 篇异构内容，18 条断言全过（中文 slug / `§1` 章节 / `audience:` 字段 / 同名标题 / 孤儿页）。<br>⚠️ **但「不复制内部代码」只做到一半**：适配层（映射 + slug 规则 + 关系字段翻译）本次写了约 20 行，**它仍是接新站点时要写的东西**。 |
 | 2 | v1 数据可确定性迁移到 v2，**失败时有精确诊断** | **✅ 达成** | `migrate-manifest.mjs` + `verify:migrate`（5 种坏法）。<br>**确定性**：跨时区（UTC / America/Los_Angeles）跑三次 `cmp` 逐字节一致。<br>**诊断**：5 种坏法全部报出**能定位到具体条目**的诊断。<br>输入是**真实线上 v1**（`knowledge/fixtures/manifest-v1.json`）。 |
-| 3 | schema、CLI 和输出契约都有**兼容性测试** | **部分达成** | CLI 错误码：`check:exit-codes` + 3 种变异。<br>输出契约：`check-json-output` + 3 类变异。<br>schema 版本：`check:single-source`（版本号只有一处真值 + 文档转述一致）。<br>⚠️ **「兼容性测试」这个词偏重**：现在测的是「**当前形状被守住**」，不是「**旧形状仍被接受**」。后者要有真实的旧消费方才能测。 |
+| 3 | schema、CLI 和输出契约都有**兼容性测试** | **部分达成** | CLI 错误码：`check:exit-codes` + 3 种变异。<br>输出契约：`check-json-output` + 3 类变异。<br>**schema**：`public/content-manifest.schema.json`（JSON Schema 2020-12，与产物同源发布）+ `check:manifest-schema`（**双向**核对 + **源码/产物/schema 三处 version 一致**）。<br>⚠️ **「兼容性测试」这个词仍偏重**：现在测的是「**当前形状被守住**」，不是「**旧形状仍被接受**」——后者要有真实的旧消费方才能测。 |
 | 4 | 第二个站点的接入**确实减少重复维护**，而非只做演示 | **❌ 未达成** | fixture 是一个**测试语料**，不是**真的第二站点**。<br>「减少重复维护」要有一个真站点用起来才知道——本轮**没有**。<br>探针输出末尾印着这句话，是刻意的。 |
 
 ## 结论
