@@ -36,6 +36,7 @@ import { MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_USAGE } from '../src/lib/cli/exit-codes.mjs';
+import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
@@ -43,8 +44,9 @@ const full = args.includes('--all');
 const question = args.filter((a) => !a.startsWith('--')).join(' ').trim();
 
 if (question === '') {
-  console.error('\n给一个问题。例：node scripts/wiki-ask.mjs "为什么行宽用 em 不用 ch"\n');
-  process.exit(EXIT_USAGE);
+  failWithJson(asJson ? 'json' : 'text', EXIT_USAGE, '给一个问题。', {
+    hint: '例：node scripts/wiki-ask.mjs "为什么行宽用 em 不用 ch"',
+  });
 }
 
 const ROOT = process.cwd();
@@ -77,12 +79,14 @@ function loadCorpus() {
     try {
       files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f)).sort();
     } catch {
-      console.error(`读不到 ${dir}——请在仓库根目录运行。`);
-      process.exit(EXIT_ENVIRONMENT);
+      failWithJson(asJson ? 'json' : 'text', EXIT_ENVIRONMENT, `读不到 ${dir}。`, {
+        hint: '请在仓库根目录运行。',
+      });
     }
     if (files.length === 0) {
-      console.error(`${dir} 里一个条目都没有——这个命令只能检索一半的内容。`);
-      process.exit(EXIT_EMPTY_INPUT);
+      failWithJson(asJson ? 'json' : 'text', EXIT_EMPTY_INPUT, `${dir} 里一个条目都没有。`, {
+        hint: '这个命令只能检索一半的内容——空的那一半会给出误导性的结果。',
+      });
     }
     for (const file of files) pages.push(readContentPage(dir, file));
   }
@@ -116,7 +120,16 @@ const { passages: ranked, supported, reason } = {
 };
 
 if (asJson) {
-  console.log(JSON.stringify(pack, null, 2));
+  /*
+   * ⚠️ **加 `ok` 是为了形状固定。**
+   * 消费方要能写「先 `JSON.parse`，再看 `ok`」——
+   * 而不必在解析之前先判断「这次是不是成功」
+   * （很多运行时会丢掉退出码，stdout 里的 JSON 总是拿得到的）。
+   *
+   * 而「无依据」是**成功不是失败**（`supported: false`），
+   * 所以它的 `ok` 仍是 true——**那是一条结论，不是一次错误**。
+   */
+  console.log(JSON.stringify(jsonOk(pack), null, 2));
   process.exit(0);
 }
 

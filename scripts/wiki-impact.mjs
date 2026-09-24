@@ -40,6 +40,7 @@ import { loadSources } from '../src/lib/wiki/sources.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
 import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { EXIT_EMPTY_INPUT, EXIT_INVARIANT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
+import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
 
 const args = process.argv.slice(2);
 const getArg = (name) => {
@@ -51,6 +52,7 @@ const getArg = (name) => {
 const sourceId = getArg('source');
 const revision = getArg('revision');
 const listOnly = args.includes('--list');
+const asJson = args.includes('--json');
 
 const WIKI_DIR = join(process.cwd(), 'src', 'content', 'wiki');
 const POSTS_DIR = join(process.cwd(), 'src', 'content', 'posts');
@@ -58,11 +60,30 @@ const DOCS_DIR = join(process.cwd(), 'knowledge', 'sources');
 const registry = loadSources(DOCS_DIR);
 
 if (registry.size === 0) {
-  console.error(`\n${DOCS_DIR} 里一个来源都没登记——这一步什么都分析不了。`);
-  process.exit(EXIT_EMPTY_INPUT);
+  failWithJson(asJson ? 'json' : 'text', EXIT_EMPTY_INPUT, `${DOCS_DIR} 里一个来源都没登记。`, {
+    hint: '这一步什么都分析不了。',
+  });
 }
 
 if (listOnly || !sourceId) {
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        jsonOk({
+          sources: [...registry]
+            .sort(([a], [b]) => (a < b ? -1 : 1))
+            .map(([id, src]) => ({
+              id,
+              title: src.title,
+              url: src.url,
+              revisions: src.revisions.map((r) => r.id),
+            })),
+        }),
+      ),
+    );
+    process.exit(0);
+  }
+
   console.log('\n已登记的来源');
   console.log('─'.repeat(64));
   for (const [id, src] of [...registry].sort()) {
@@ -76,15 +97,15 @@ if (listOnly || !sourceId) {
 
 const source = registry.get(sourceId);
 if (!source) {
-  console.error(`\n没登记过 "${sourceId}"。已登记：${[...registry.keys()].sort().join('、')}`);
-  process.exit(EXIT_NOT_FOUND);
+  failWithJson(asJson ? 'json' : 'text', EXIT_NOT_FOUND, `没登记过 "${sourceId}"。`, {
+    hint: '不加 --source 时会列出全部已登记的来源。',
+    valid: [...registry.keys()].sort(),
+  });
 }
 if (revision && !source.revisions.some((r) => r.id === revision)) {
-  console.error(
-    `\n"${sourceId}" 没有登记过版本 "${revision}"。` +
-      `已登记：${source.revisions.map((r) => r.id).join('、')}`,
-  );
-  process.exit(EXIT_NOT_FOUND);
+  failWithJson(asJson ? 'json' : 'text', EXIT_NOT_FOUND, `"${sourceId}" 没有登记过版本 "${revision}"。`, {
+    valid: source.revisions.map((r) => r.id),
+  });
 }
 
 /*
@@ -143,6 +164,28 @@ if (!isDisjoint({ direct, candidates: neighbors }, repoMentions)) {
 
 // ── 输出 ────────────────────────────────────────────────────────────
 const revLabel = revision ? `@${revision}` : '（全部版本）';
+
+/*
+ * `--json` 分支放在人读输出**之前**，两者共用同一批变量——
+ * 这样「三组互不重叠」这条不变式**只在一个地方成立**。
+ * 复制一份到 JSON 里的话，迟早会有一边漏掉重叠检查。
+ */
+if (asJson) {
+  console.log(
+    JSON.stringify(
+      jsonOk({
+        source: { id: sourceId, revision: revision ?? null, title: source.title, url: source.url },
+        // 字段名与 `computeImpact` 的返回一致（direct / candidates），
+        // 仓库辅助载体是本脚本额外加的第三组
+        direct,
+        candidates: [...neighbors].map(([slug, via]) => ({ slug, via })),
+        repoMentions: [...repoMentions].sort(),
+      }),
+    ),
+  );
+  process.exit(0);
+}
+
 console.log(`\n${source.title}`);
 console.log(`  ${sourceId}${revLabel}  ·  ${source.url}`);
 console.log('─'.repeat(64));

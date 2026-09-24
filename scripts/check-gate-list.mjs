@@ -48,6 +48,8 @@ const EXPECTED = [
   ['npm run verify:site-mutations', '上一道门禁的负向验证（把它依次弄坏四次，每次都必须真红）'],
   ['npm run check:exit-codes', '**CLI 错误码都已归类**（阶段 4 第 3 项）'],
   ['npm run verify:exit-codes', '上一道门禁的负向验证（三种漏法：字面 1、拼错常量名、未登记的数字）'],
+  ['npm run verify:json-output', '**`--json` 模式下失败也有结构化输出**（阶段 4 第 3 项剩的一半）'],
+  ['npm run verify:json-mutations', '上一道的负向验证（三类违约：stdout 空 / ok 不是 false / code 与退出码打架）'],
   ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
   ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集'],
@@ -226,6 +228,7 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
       'verify:site-mutations',
       'verify:exit-codes',
       'verify:migrate',
+      'verify:json-mutations',
     ];
     const missing = NEGATIVE_VERIFICATIONS.filter((n) => typeof scripts[n] !== 'string');
     if (missing.length > 0) {

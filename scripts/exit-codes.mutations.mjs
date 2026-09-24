@@ -23,9 +23,7 @@ import { execFileSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const GATE = join(ROOT, 'scripts/check-exit-codes.mjs');
-const TARGET = join(ROOT, 'scripts/wiki-review.mjs');
-
-const original = readFileSync(TARGET, 'utf8');
+// ⚠️ 不再有固定的 TARGET：每个变异自带 `file`（注入点随实现移动，见 MUTATIONS 处的说明）。
 
 const runGate = () => {
   try {
@@ -36,20 +34,47 @@ const runGate = () => {
   }
 };
 
+/*
+ * ⚠️ **注入点从 `wiki-review.mjs` 换到了 `wiki-impact.mjs`，中间还绕了一次弯路。**
+ *
+ * 2026-09-24 迭代 AP：`wiki-review` 的错误出口改走 `failWithJson(...)`，
+ * 锚点 `process.exit(EXIT_NOT_FOUND);` 随之消失。
+ *
+ * 弯路一：改注入点为 `json-output.mjs` 里的 `process.exit(code)`——
+ * **那样门禁确实抓不到，而抓不到是对的**：
+ * `check-exit-codes` 只管**面向用户的 CLI**（库文件不在名单里）。
+ * 这不是门禁有洞，是它的范围本来就窄——而**范围窄是刻意的**
+ * （见门禁文件里「门禁脚本的 exit(1) 不在管辖内」那段）。
+ *
+ * 弯路二：想改注释却只改了正文，于是标题写着「换到了 json-output.mjs」
+ * 而实际是 `wiki-impact.mjs`——**注释与代码说的不是一回事**，
+ * 与本轮反复出现的那一类同型。判据是「注释里写了而代码没做」的镜像。
+ *
+ * > 症状本身很有教育意义：三个变异「全部不生效」时，
+ * > 脚本**自己报了出来**（「锚点找不到，变异没注入」），
+ * > 于是 `verify:all` 是**红的**而不是假绿。
+ * >
+ * > 那是 `if (!original.includes(find))` 这句的价值：
+ * > **锚点漂移必须显式失败，不能静默跳过。**
+ * > 否则「没注入」与「注入了但门禁没抓到」在输出里长得一样。
+ */
 const MUTATIONS = [
   {
     name: '① 写回字面 exit(1)',
-    replace: ['process.exit(EXIT_NOT_FOUND);', 'process.exit(1);'],
+    file: 'scripts/wiki-impact.mjs',
+    replace: ['  process.exit(EXIT_INVARIANT);', '  process.exit(1);'],
     expect: /未归类的失败/,
   },
   {
     name: '② 写一个不存在的常量名',
-    replace: ['process.exit(EXIT_NOT_FOUND);', 'process.exit(EXIT_TYPO_HERE);'],
+    file: 'scripts/wiki-impact.mjs',
+    replace: ['  process.exit(EXIT_INVARIANT);', '  process.exit(EXIT_TYPO_HERE);'],
     expect: /认不出来的写法/,
   },
   {
     name: '③ 写一个语法合法但未登记的数字',
-    replace: ['process.exit(EXIT_NOT_FOUND);', 'process.exit(9);'],
+    file: 'scripts/wiki-impact.mjs',
+    replace: ['  process.exit(EXIT_INVARIANT);', '  process.exit(9);'],
     expect: /没有登记在 exit-codes\.mjs 里/,
   },
 ];
@@ -66,14 +91,16 @@ console.log('  ✓ 干净状态：绿\n');
 
 for (const m of MUTATIONS) {
   const [find, to] = m.replace;
+  const target = join(ROOT, m.file);
+  const original = readFileSync(target, 'utf8');
   if (!original.includes(find)) {
-    console.log(`  ✗ ${m.name}：锚点 "${find}" 找不到（源码已漂，变异没注入）`);
+    console.log(`  ✗ ${m.name}：锚点 "${find}" 在 ${m.file} 里找不到（源码已漂，变异没注入）`);
     allGood = false;
     continue;
   }
-  writeFileSync(TARGET, original.replace(find, to), 'utf8');
+  writeFileSync(target, original.replace(find, to), 'utf8');
   const { red, out } = runGate();
-  writeFileSync(TARGET, original, 'utf8');
+  writeFileSync(target, original, 'utf8');
 
   if (red && m.expect.test(out)) {
     console.log(`  ✓ ${m.name} → 红了（命中预期判据）`);
