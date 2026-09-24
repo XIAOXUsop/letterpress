@@ -62,6 +62,7 @@ const EXPECTED = [
   ['npm run verify:formats', '内容发布探针 + 产物级断言'],
   ['npm run check:anchors', '**文档里的锚点链接点得到**（slug 规则与 GitHub 一致）'],
   ['npm run check:refs', '**文档里提到的路径都存在**（放最后：verify:formats 会清 dist，本检查要 dist 才判产物）'],
+  ['npm run check:agents-doc', '**AGENTS.md 的可证伪声明还成立**（规则名 / 例子 slug / 行为声明）'],
 ];
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));

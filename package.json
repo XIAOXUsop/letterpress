@@ -24,7 +24,7 @@
     "wiki:review": "node scripts/wiki-review.mjs",
     "wiki:impact": "node scripts/wiki-impact.mjs",
     "verify:base": "node scripts/check-base.mjs",
-    "verify:all": "npm run check && npm run verify:gates && npm test && npm run verify && npm run verify:testcount && npm run verify:search && npm run verify:questions && npm run verify:impact && npm run verify:answers && npm run verify:review && npm run verify:portability && npm run check:site-agnostic && npm run verify:site-mutations && npm run check:exit-codes && npm run verify:exit-codes && npm run verify:json-output && npm run verify:json-mutations && npm run verify:migrate && npm run check:single-source && npm run verify:second-site && npm run verify:second-site-real && npm run verify:second-site-real-mutations && npm run verify:anchors && npm run verify:reproducible && npm run verify:base && npm run check:manifest-schema && npm run verify:formats && npm run check:anchors && npm run check:refs",
+    "verify:all": "npm run check && npm run verify:gates && npm test && npm run verify && npm run verify:testcount && npm run verify:search && npm run verify:questions && npm run verify:impact && npm run verify:answers && npm run verify:review && npm run verify:portability && npm run check:site-agnostic && npm run verify:site-mutations && npm run check:exit-codes && npm run verify:exit-codes && npm run verify:json-output && npm run verify:json-mutations && npm run verify:migrate && npm run check:single-source && npm run verify:second-site && npm run verify:second-site-real && npm run verify:second-site-real-mutations && npm run verify:anchors && npm run verify:reproducible && npm run verify:base && npm run check:manifest-schema && npm run verify:formats && npm run check:anchors && npm run check:refs && npm run check:agents-doc",
     "verify:formats": "node scripts/check-formats.mjs",
     "verify:online": "node scripts/smoke-online.mjs",
     "verify:reproducible": "node scripts/check-reproducible.mjs",
@@ -52,7 +52,8 @@
     "verify:json-mutations": "node scripts/json-output.mutations.mjs",
     "verify:second-site-real": "node scripts/check-second-site-real.mjs",
     "verify:second-site-real-mutations": "node scripts/second-site-real.mutations.mjs",
-    "check:manifest-schema": "npm run build && node scripts/check-manifest-schema.mjs"
+    "check:manifest-schema": "npm run build && node scripts/check-manifest-schema.mjs",
+    "check:agents-doc": "node scripts/check-agents-doc.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",
