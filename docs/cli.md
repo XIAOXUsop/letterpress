@@ -23,7 +23,10 @@
 | `npm run verify:site-mutations` | 上一道门禁的**负向验证**：把它依次弄坏四次（删参数、删透传、删注入口、**声明了能力却没接线**），每次都必须真的变红，恢复后必须回绿。**门禁自己绿不算数——它得能被证明是尺子。** |
 | `npm run check:exit-codes` | **CLI 错误码都已归类**（阶段 4 第 3 项）。码表在 `src/lib/cli/exit-codes.mjs`：`2` 用法错、`3` 环境错、`4` 语料为空、`5` 查无此项、`6` **内部不变式被破坏**（本工具的 bug，不是用法问题）。`exit(1)` 被明确留给「未归类」，而门禁禁止主动用它——于是**漏归类会表现为退化成 1，可被发现**。门禁脚本的 `exit(1)` 不在管辖内：它们是二元的（红/绿），细分语义只对读输出的人有意义 |
 | `npm run verify:exit-codes` | 上一道门禁的**负向验证**：注入三种漏法（字面 `exit(1)`、拼错的常量名、**语法合法但未登记的数字**），每次都必须真红。第三种最要紧——它不会自己暴露 |
-| `npm run verify:all` | **21 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:impact` → `verify:answers` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:second-site` → `verify:anchors` → `verify:reproducible` → `verify:base` → `verify:formats` → `check:anchors` → `check:refs`），**不含** `verify:online`（需要外部环境）与三个交互式命令 |
+| `npm run migrate:manifest -- <v1.json> [-o out.json] [--check]` | 把 `version: 1` 的内容清单迁到 `version: 2`。**`--check` 只验证能否迁移，不写文件**。迁移器**不补任何 `provenance` 默认值**——v1 的 11 篇一条来源信息都没有，补 `pending` 或 `original` 都是撒谎；正确做法是让该键**保持缺席**并在输出里逐条列出。输出**确定性**：不含时间戳，跨时区跑三次逐字节一致。逐字段列举而非 `{...input, version: 2}`——展开会在 v1 日后新增字段时**静默透传**，产出一个「看着像 v2」的假清单 |
+| `npm run verify:migrate` | 上一条的**负向验证**：往**真实的线上 v1**（`knowledge/fixtures/manifest-v1.json`）里注入 5 种坏法（缺 `id` / `sha256` 不合法 / ID 重复 / `documentCount` 对不上 / 出现不认识的 v1 字段），每次都必须报出**能定位到具体条目**的诊断。对应路线图退出条件的后半句「**失败时有精确诊断**」 |
+| `npm run check:single-source` | **版本号只有一处真值**。`CONTENT_MANIFEST_VERSION` 的真值在 `src/lib/content-manifest.ts`；任何地方再写一遍 `MANIFEST_VERSION = 2` 都会红（注释里的不算）。这条来自一次**真故障**：提交把生产端升到 v2 时同步器与它的测试固件都没跟上，于是**同步器对着本站自己的清单必然报错，而 453 条测试全绿**——因为测试固件也写着旧值，**测的是一个已不存在的格式** |
+| `npm run verify:all` | **23 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:impact` → `verify:answers` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:migrate` → `check:single-source` → `verify:second-site` → `verify:anchors` → `verify:reproducible` → `verify:base` → `verify:formats` → `check:anchors` → `check:refs`），**不含** `verify:online`（需要外部环境）、`migrate:manifest`（需要显式输入）与三个交互式命令 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 
@@ -52,21 +55,31 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 而且 `verify:base` 只跑 `astro build`、**不生成 Pagefind 索引**——
 它留下的那份产物是**没有搜索**的。若此时部署或本地预览，搜索会静默缺失。
 
-### 哪一道验证会改写**源码**
+### 哪几道验证会改写**源码**
 
-`verify:site-mutations` 会**真的改掉** `src/lib/wiki/graph.ts` 与 `lint.ts`
-再改回来——它靠这个证明门禁不是装饰。
+有三道靠「真的改坏再改回来」证明自己不是装饰：
 
-- 它在 `verify:all` 里排在 `verify:portability` 之后，**串行**，不会并发踩到彼此；
+| 命令 | 改哪些文件 | 还原保证 |
+|---|---|---|
+| `verify:site-mutations` | `src/lib/wiki/graph.ts`、`lint.ts` | 末尾再跑一次门禁，没回绿就退出码 1 |
+| `verify:exit-codes` | `scripts/wiki-review.mjs` | 同上 |
+| `verify:migrate` | 只改 `.verify/` 下的**临时副本**，`knowledge/fixtures/` 不动 | 用完即删 |
+
+- 它们在 `verify:all` 里**串行**执行，不会并发踩到彼此；
+- 还原失败（比如中途 `Ctrl-C`）会留下被改坏的源码。这种情况下
+  `git checkout -- src/lib/wiki/graph.ts src/lib/wiki/lint.ts scripts/wiki-review.mjs` 即可。
 - 跑完必然还原，且脚本末尾会**再跑一次门禁确认已回绿**——
-  没回绿就退出码 1，明说「本轮结论不作数」；
-- 还原失败（比如中途 `Ctrl-C`）会留下被改坏的源码。
-  这种情况下 `git checkout -- src/lib/wiki/graph.ts src/lib/wiki/lint.ts` 即可，
-  本轮只改这两份文件。
+  没回绿就退出码 1，明说「本轮结论不作数」。
 
 > 写成一次不报错、什么都不变的操作，是因为此前把这个脚本放在 `.verify/` 里——
 > 而那个目录**被 `.gitignore` 忽略、也被 `npm run clean` 清掉**，
 > 于是它既进不了版本库、CI 上也跑不到。**一个跑不到的门禁等于没有。**
+>
+> 同一类错误本轮还犯过一次：注入变异的函数收到的是 `'graph'`（无 `.ts` 后缀），
+> 于是它写出了一个**没有扩展名的文件**，而门禁读的 `graph.ts` **从头到尾没被改过**——
+> 四次变异「全部不生效」，症状与「门禁坏了」一模一样。
+> 查出来的办法是**打印绝对路径**：逐字比对锚点、验 cwd、验 `writeFileSync`
+> 都对，因为它们都在验证前提，而真凶是「**写到了别处**」。
 
 ---
 

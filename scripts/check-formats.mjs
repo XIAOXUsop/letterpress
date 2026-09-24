@@ -254,32 +254,34 @@ try {
      * `Cannot find module '.../wiki/graph.js'`。
      * 仓库里其它脚本能 import 源码，是因为它们 import 的模块内部没有 `.js` 引用。
      *
-     * 所以期望值写在下面这个常量里。
+     * 所以**读源码文本**取那个常量。
      *
-     * **单向检查是不够的**：只查「产物 == 期望值」，那么源码升了、
-     * 期望值忘了改，产物与期望值仍然相等，**契约照样绿**——
-     * 而产物里的版本已经和源码声明的对不上了。
-     * 所以下面**同时**从源码文本里读出常量，两个数一起比。
-     * （读文本而不是 import，正是为了绕开上面那个 `.js` 解析问题。）
+     * ── 2026-09-24 修正：删掉了 `EXPECTED_MANIFEST_VERSION = 2` ──────
+     *
+     * 原先这里有两份：源码里的常量一份、这个期望值一份，
+     * 然后「两个数一起比」，并提示「改了字段形状要**同时**改两处」。
+     *
+     * > **那个提示本身就是缺陷的形状**：它承认了「会有两处」，
+     * > 于是把「记得改两处」当成流程的一部分。
+     * > 而这个约定**已经被违反过一次**——提交 `2518438` 把生产端升到 2，
+     * > 同步器与它的测试固件都没跟上，结果**同步器对着本站自己的清单必然报错，
+     * > 而 453 条测试全绿**（测试固件也写着 1，测的是一个已不存在的格式）。
+     *
+     * 现在只留一个真值：期望值**就是源码里那个常量**。
+     * `check-single-source.mjs` 保证没人再写第二份。
      */
-    const EXPECTED_MANIFEST_VERSION = 2;
     const declared = await readFile(
       join(dist, '..', 'src', 'lib', 'content-manifest.ts'),
       'utf8',
     ).then((t) => /CONTENT_MANIFEST_VERSION\s*=\s*(\d+)/.exec(t)?.[1]);
     if (!declared) {
       problems.push('从 src/lib/content-manifest.ts 里读不出 CONTENT_MANIFEST_VERSION');
-    } else if (Number(declared) !== EXPECTED_MANIFEST_VERSION) {
-      problems.push(
-        `源码里的 CONTENT_MANIFEST_VERSION 是 ${declared}，` +
-          `而本检查期望 ${EXPECTED_MANIFEST_VERSION}。` +
-          `改了字段形状要**同时**改两处：常量与这个期望值。`,
-      );
     }
-    if (manifest.version !== EXPECTED_MANIFEST_VERSION) {
+    const expected = declared ? Number(declared) : null;
+    if (manifest.version !== expected) {
       problems.push(
         `产物里的 manifest version 是 ${manifest.version}，` +
-          `期望 ${EXPECTED_MANIFEST_VERSION}。` +
+          `而源码声明的是 ${expected ?? '（读不出来）'}。` +
           `**改了字段形状就要升版本**——同一份 version 对应两种形状，` +
           `正是版本号要防的事。（同时确认 src/lib/content-manifest.ts 里的 ` +
           `CONTENT_MANIFEST_VERSION 也改了）`,

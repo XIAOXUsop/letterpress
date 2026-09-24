@@ -1,0 +1,344 @@
+{
+  "format": "letterpress-content-manifest",
+  "version": 1,
+  "site": {
+    "name": "此间札记",
+    "language": "zh-CN",
+    "home": "https://xiaoxusop.github.io/letterpress/"
+  },
+  "documentCount": 11,
+  "edgeCount": 23,
+  "documents": [
+    {
+      "id": "post:cjk-web-typography",
+      "kind": "post",
+      "slug": "cjk-web-typography",
+      "title": "中文网页排版，多数主题都做错了",
+      "summary": "行高、字重、行宽、中西文间距——这四个参数直接套西文的值，中文读者看到的是一份「能读但别扭」的页面。2026 年有三个原生 CSS 属性可以修好其中一半。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/cjk-web-typography/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/cjk-web-typography.md"
+      },
+      "publishedAt": "2026-09-12T00:00:00.000Z",
+      "updatedAt": "2026-09-23T00:00:00.000Z",
+      "tags": [
+        "排版",
+        "css",
+        "中文"
+      ],
+      "relations": {
+        "outgoing": [
+          "wiki:cjk-typography",
+          "wiki:content-negotiation"
+        ],
+        "backlinks": [
+          "wiki:cjk-typography"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 10498,
+        "sha256": "cf639a29087738c1b9e2b6f7f937b86c1280fc0a76b89bbdf04774fba688ca37"
+      }
+    },
+    {
+      "id": "post:how-this-works",
+      "kind": "post",
+      "slug": "how-this-works",
+      "title": "这个博客是怎么搭的",
+      "summary": "改一个配置文件就能上线，文章放在一个目录里，知识层会自动长出链接图。这一篇解释目录结构、写作流程，以及怎么把它换成你自己的。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/how-this-works/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/how-this-works.md"
+      },
+      "publishedAt": "2026-09-12T00:00:00.000Z",
+      "tags": [
+        "使用说明"
+      ],
+      "relations": {
+        "outgoing": [
+          "wiki:cjk-typography",
+          "wiki:content-negotiation",
+          "wiki:design-tokens",
+          "wiki:llm-wiki"
+        ],
+        "backlinks": []
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 5129,
+        "sha256": "b81cc19361fbe100f3435457e86c9f57faa198200fb0220402c347adbb8269fd"
+      }
+    },
+    {
+      "id": "post:markdown-for-agents",
+      "kind": "post",
+      "slug": "markdown-for-agents",
+      "title": "你的博客该不该给 AI 一份 markdown",
+      "summary": "内容协商是 HTTP 自带的能力，但博客圈几乎没人用。三个 agent 会主动要 markdown，四个不会——而现有工具都跳过了最难的那一步。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/markdown-for-agents/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/markdown-for-agents.md"
+      },
+      "publishedAt": "2026-09-12T00:00:00.000Z",
+      "updatedAt": "2026-09-23T00:00:00.000Z",
+      "tags": [
+        "web",
+        "agent",
+        "http"
+      ],
+      "relations": {
+        "outgoing": [
+          "wiki:content-negotiation"
+        ],
+        "backlinks": [
+          "wiki:content-negotiation"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 8469,
+        "sha256": "63b66f691596f99c3434a6b190090b84c71808806d2bb269b6ebbb9dc880868c"
+      }
+    },
+    {
+      "id": "post:reproducible-builds",
+      "kind": "post",
+      "slug": "reproducible-builds",
+      "title": "构建可复现比你想的难，而且它值得",
+      "summary": "同一份源码在两台机器上构建出不同的产物——这件事的代价不是洁癖，是你没法用 diff 判断\"这次改动干了什么\"。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/reproducible-builds/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/reproducible-builds.md"
+      },
+      "publishedAt": "2025-11-20T00:00:00.000Z",
+      "updatedAt": "2026-09-19T00:00:00.000Z",
+      "tags": [
+        "构建",
+        "可复现",
+        "ci"
+      ],
+      "relations": {
+        "outgoing": [
+          "wiki:build-probe"
+        ],
+        "backlinks": [
+          "wiki:build-probe"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 5275,
+        "sha256": "634f629fc24b489d7ba3f0baac9850ced04666f409b333c51249d2995ccfe83d"
+      }
+    },
+    {
+      "id": "post:static-site-search",
+      "kind": "post",
+      "slug": "static-site-search",
+      "title": "静态站搜索的三种做法，以及它们各自真实的上限",
+      "summary": "前端过滤、构建期索引、外挂服务——三种方案的取舍不在功能多少，在「索引存在哪」这一件事上。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/static-site-search/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/static-site-search.md"
+      },
+      "publishedAt": "2026-08-14T00:00:00.000Z",
+      "tags": [
+        "搜索",
+        "静态站",
+        "索引"
+      ],
+      "relations": {
+        "outgoing": [
+          "wiki:content-negotiation"
+        ],
+        "backlinks": []
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 4830,
+        "sha256": "ba6735e2ae16602acb58364c95a19f77bf4a57234b5334ff0ea1d5f92e439015"
+      }
+    },
+    {
+      "id": "wiki:build-probe",
+      "kind": "wiki",
+      "wikiKind": "concept",
+      "slug": "build-probe",
+      "title": "构建探针",
+      "summary": "对「构建产物」本身做的断言——问的不是「代码写对没有」，而是「生成出来的东西对不对」。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/wiki/build-probe/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/wiki/build-probe.md"
+      },
+      "tags": [],
+      "relations": {
+        "outgoing": [
+          "post:reproducible-builds",
+          "wiki:letterpress"
+        ],
+        "backlinks": [
+          "post:reproducible-builds"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 4059,
+        "sha256": "5c7c388280630cfe88e84ed2896e0b2d817d3a5ebc7bbf62ae86947416bd9eb3"
+      }
+    },
+    {
+      "id": "wiki:cjk-typography",
+      "kind": "wiki",
+      "wikiKind": "concept",
+      "slug": "cjk-typography",
+      "title": "中文排版",
+      "summary": "行高、字重、行宽、中西文间距——四个参数直接套西文的值，中文读者看到的是「能读但别扭」的页面。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/wiki/cjk-typography/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/wiki/cjk-typography.md"
+      },
+      "updatedAt": "2026-09-22T00:00:00.000Z",
+      "tags": [],
+      "relations": {
+        "outgoing": [
+          "post:cjk-web-typography",
+          "wiki:design-tokens"
+        ],
+        "backlinks": [
+          "post:cjk-web-typography",
+          "post:how-this-works",
+          "wiki:design-tokens",
+          "wiki:letterpress"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 4453,
+        "sha256": "8c10d3cb0fd127ea8668a9ef60b56a2f50dfb523b16d9c26b215924c2c640000"
+      }
+    },
+    {
+      "id": "wiki:content-negotiation",
+      "kind": "wiki",
+      "wikiKind": "concept",
+      "slug": "content-negotiation",
+      "title": "内容协商",
+      "summary": "用 HTTP 的 Accept 头决定返回 HTML 还是 markdown。算法只有四十行，难的是静态托管不解析请求头。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/wiki/content-negotiation/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/wiki/content-negotiation.md"
+      },
+      "tags": [],
+      "relations": {
+        "outgoing": [
+          "post:markdown-for-agents",
+          "wiki:llm-wiki"
+        ],
+        "backlinks": [
+          "post:cjk-web-typography",
+          "post:how-this-works",
+          "post:markdown-for-agents",
+          "post:static-site-search",
+          "wiki:letterpress",
+          "wiki:llm-wiki"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 3946,
+        "sha256": "dde207eb2ab35d8c40dae6799b0cd33691894384fa0111e3a441f47d31830875"
+      }
+    },
+    {
+      "id": "wiki:design-tokens",
+      "kind": "wiki",
+      "wikiKind": "concept",
+      "slug": "design-tokens",
+      "title": "设计令牌",
+      "summary": "三层 token 结构，命名描述用途而非外观。换配色时只动原始值，换暗色模式时只动语义映射。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/wiki/design-tokens/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/wiki/design-tokens.md"
+      },
+      "tags": [],
+      "relations": {
+        "outgoing": [
+          "wiki:cjk-typography",
+          "wiki:letterpress"
+        ],
+        "backlinks": [
+          "post:how-this-works",
+          "wiki:cjk-typography",
+          "wiki:letterpress"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 2821,
+        "sha256": "968531566511bd76efd4b7700406de88126c7275f59284dac8896ecef10125d8"
+      }
+    },
+    {
+      "id": "wiki:letterpress",
+      "kind": "wiki",
+      "wikiKind": "entity",
+      "slug": "letterpress",
+      "title": "letterpress",
+      "summary": "本站所属的开源项目。一个把中文排版做对、同时写给人和 AI 读的静态博客主题。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/wiki/letterpress/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/wiki/letterpress.md"
+      },
+      "tags": [],
+      "relations": {
+        "outgoing": [
+          "wiki:cjk-typography",
+          "wiki:content-negotiation",
+          "wiki:design-tokens",
+          "wiki:llm-wiki"
+        ],
+        "backlinks": [
+          "wiki:build-probe",
+          "wiki:design-tokens",
+          "wiki:llm-wiki"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 2698,
+        "sha256": "cecace902c50949c996746e8ab6c3179cefe5d81605ca3d96d2897a7b31d9874"
+      }
+    },
+    {
+      "id": "wiki:llm-wiki",
+      "kind": "wiki",
+      "wikiKind": "concept",
+      "slug": "llm-wiki",
+      "title": "LLM 知识库",
+      "summary": "Karpathy 2026 年 4 月提出的模式——让 agent 主动读写并维护一层知识库，新素材进来时做的是「重构」而不是「追加」。",
+      "urls": {
+        "html": "https://xiaoxusop.github.io/letterpress/wiki/llm-wiki/",
+        "markdown": "https://xiaoxusop.github.io/letterpress/wiki/llm-wiki.md"
+      },
+      "updatedAt": "2026-09-23T00:00:00.000Z",
+      "tags": [],
+      "relations": {
+        "outgoing": [
+          "wiki:content-negotiation",
+          "wiki:letterpress"
+        ],
+        "backlinks": [
+          "post:how-this-works",
+          "wiki:content-negotiation",
+          "wiki:letterpress"
+        ]
+      },
+      "markdown": {
+        "mediaType": "text/markdown",
+        "bytes": 6243,
+        "sha256": "55a7739a6dc9498165bc3cdbb2f2912090b9588aabe3762614ca477bfe41bda1"
+      }
+    }
+  ]
+}

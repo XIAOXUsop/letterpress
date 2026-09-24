@@ -107,6 +107,42 @@ JSON，就能只下载发生变化的 `.md` 文件。
 ID 由内容类型与 slug 组成，例如 `post:hello`、`wiki:content-negotiation`。
 只要类型和 slug 不变，ID 就稳定；改 slug 应被同步端视作「删除旧 ID、新增新 ID」。
 
+## `version` 不认识时该怎么办
+
+**不要猜。** 判据只有一条：**`version` 不是 2，就中止并报错**——
+不要「尽量读几个认识的字段」，那样会在字段语义已变时静默产出错误索引。
+
+### v1 的情况
+
+`version: 1` **真实存在过**（2026-09-24 实测线上 Demo 返回的就是它，11 篇文档）。
+它与 v2 的差异**只有一个字段**：v2 多了 `provenance`。
+
+| 字段 | v1 | v2 |
+|---|---|---|
+| 稳定 ID / URLs / sha256 / bytes / relations | ✅ | ✅ |
+| `provenance`（来源版本、复核状态、原创声明） | ❌ **整键缺席** | ✅ 可选 |
+
+仓库里带了迁移器，可以直接用**真实线上 v1**（`knowledge/fixtures/manifest-v1.json`）：
+
+```bash
+npm run migrate:manifest -- knowledge/fixtures/manifest-v1.json --check
+npm run migrate:manifest -- knowledge/fixtures/manifest-v1.json -o v2.json
+```
+
+> ⚠️ **迁移不会凭空补出 `provenance`。** v1 的 11 篇一条来源信息都没有，
+> 补一个 `status: pending` 是撒谎（没人复核过），
+> 补 `original` 也是撒谎（那不是原创实践，是「从未进过治理流程」）。
+> 迁移后的正确形态是**整键保持缺席**——它表示「这份数据没经过治理」，
+> **不是**「已复核、确认无外部来源」。
+> 这两种情况在数据里长得一样，正是本项目此前踩过的坑
+> （`provenance` 字段存在的理由就是让它们可区分）。
+>
+> 因此：**如果你的下游依赖 `provenance` 判断内容可信度，
+> 迁移 v1 解决不了问题**——那些内容需要重新复核，而不是打一个标记。
+
+内置的[内容镜像同步器](content-sync.md)遇到非 v2 清单会**明确报错并中止**
+（`assertManifest` 检查 `format` 与 `version`），不会静默降级读 v1。
+
 ## hash 到底覆盖什么
 
 SHA-256 针对 `.md` 端点实际返回的 UTF-8 字节计算，而不是仅针对源文件正文。

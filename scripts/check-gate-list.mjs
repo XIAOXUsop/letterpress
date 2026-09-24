@@ -47,6 +47,8 @@ const EXPECTED = [
   ['npm run verify:site-mutations', '上一道门禁的负向验证（把它依次弄坏四次，每次都必须真红）'],
   ['npm run check:exit-codes', '**CLI 错误码都已归类**（阶段 4 第 3 项）'],
   ['npm run verify:exit-codes', '上一道门禁的负向验证（三种漏法：字面 1、拼错常量名、未登记的数字）'],
+  ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
+  ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集'],
   ['npm run verify:anchors', '锚点契约'],
   ['npm run verify:reproducible', '跨时区可复现构建'],
@@ -134,6 +136,11 @@ const NOT_IN_ALL = new Map([
   // 人工核对的清单类
   ['measure', '量产物给**人**看，判定由 check-formats 里对应的门禁做'],
   ['list:overclaims', '列出可被证伪的声称供人工核对，**退出码恒为 0**'],
+  // 需要显式输入才跑得起来的
+  ['migrate:manifest', '需要 `node migrate-manifest.mjs <v1.json>`——'
+    + '**没有默认输入**：仓库里那份 v1 是真实线上产物（knowledge/fixtures/），'
+    + '但迁移本身是一次性动作，不需要每次构建都跑。它可测的部分（诊断是否精确）'
+    + '已由 verify:migrate 覆盖'],
 ]);
 for (const name of Object.keys(scripts)) {
   /*
