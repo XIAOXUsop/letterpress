@@ -98,9 +98,10 @@ src/
 
 这一站有两个出口，服务两类读者：
 
-**内容协商。** 请求时带上 `Accept: text/markdown`，你会拿到 markdown 版本
-而不是 HTML。Claude Code、Cursor、OpenCode 会主动这么做——
-原理和踩坑见 [[内容协商]]。
+**Markdown 孪生文件。** 每篇文章和知识页都有可直接访问的 `.md` URL。
+在支持内容协商的部署平台上，请求页面 URL 时带上 `Accept: text/markdown`
+也会得到 markdown；本站使用 GitHub Pages，因此应直接访问 `.md` 链接。
+原理和托管限制见 [[内容协商]]。
 
 **目录与全文。** `/llms.txt` 是给 agent 看的目录（标题 + 一句话说明），
 `/llms-full.txt` 是全文内联版。每个页面还有 `.md` 孪生文件，
@@ -108,7 +109,7 @@ src/
 
 需要说明的是：**`llms.txt` 的实际效果被高估了**——
 Ahrefs 实测 13.7 万个域名里 97% 的 llms.txt 从未被请求过。
-本站生成它是因为零成本，但不是靠它。真正的杠杆是内容协商和干净的 HTML。
+本站生成它是因为零成本，但主要依靠显式 `.md` 链接、内容清单和干净的 HTML。
 
 ## 部署
 

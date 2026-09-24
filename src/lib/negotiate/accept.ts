@@ -248,13 +248,13 @@ export function markdownResponseHeaders(
  * ⚠️ **原注释写的是「宁可偏保守（高估）」——实测是反的，它一直在低估。**
  *
  * 2026-09-23 首次用真实分词器（`o200k_base`）对本站三个页面逐页对照，
- * 2026-09-24 内容修订后**在同一批文本上重算**（估算取 `estimateTokens` 自身，
+ * 2026-09-25 页面提示文案修订后**在同一批文本上重算**（估算取 `estimateTokens` 自身，
  * 真实取 `o200k_base` 对同一字符串编码）：
  *
  *   页面                        HTML 估算/真实    偏低
- *   /markdown-for-agents/        6750 / 7530     10.4%
- *   /cjk-web-typography/         8595 / 9960     13.7%
- *   /wiki/content-negotiation/   3958 / 4330      8.6%
+ *   /markdown-for-agents/        6779 / 7556     10.3%
+ *   /cjk-web-typography/         8762 / 10121    13.4%
+ *   /wiki/content-negotiation/   4419 / 4813      8.2%
  *
  * 三个页面**无一例外**偏低，也就是「agent 以为塞得下」的那一侧——
  * 与注释声称的安全方向正好相反。低估的成因是中文：真实词表把常见双字词

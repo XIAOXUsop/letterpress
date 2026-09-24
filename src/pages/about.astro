@@ -99,15 +99,14 @@ const onGitHubPages = site.url.includes('github.io');
     </ul>
     <p>
       另外，<strong>文章与知识库条目</strong>都有一个 <code>.md</code> 孪生文件
-      （把页面 URL 结尾加 <code>.md</code> 即可）。请求时带上
-      <code>Accept: text/markdown</code> 头，会直接拿到 markdown 版本而不是 HTML。
+      （把页面 URL 结尾加 <code>.md</code> 即可）。在支持内容协商的部署平台上，
+      对页面 URL 发送 <code>Accept: text/markdown</code> 也能拿到它。
     </p>
     {/*
       Demo 与「模板能做什么」是两件事。
 
-      这一句在**本站上是假的**：站点部署在 GitHub Pages，而该平台的响应头
-      不可改，内容协商根本不会发生。所以如实标注，并把验证方法一并给出——
-      读者点一下就能自己确认，而不是读一句在 Demo 上不成立的宣传。
+      本站部署在 GitHub Pages，响应头不可改，内容协商不会发生。
+      因此显式说明这个限制，并指向始终可用的 .md 孪生文件。
     */}
     {onGitHubPages && (
       <p style="color: var(--color-text-muted); font-size: var(--text-sm)">
@@ -120,7 +119,7 @@ const onGitHubPages = site.url.includes('github.io');
     <p>
       另外，<code>llms.txt</code> 的实际效果被高估了——
       有实测显示 97% 的 llms.txt 从未被请求过。这里生成它是因为零成本，
-      但真正起作用的是内容协商。
+      本站在 GitHub Pages 上依靠显式 <code>.md</code> 链接和内容清单提供机器可读内容。
     </p>
 
     <h2>内容统计</h2>

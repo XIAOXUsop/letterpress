@@ -17,7 +17,8 @@ const { href } = Astro.props;
   <button class="md-available__copy" type="button" data-copy-markdown hidden>复制 Markdown</button>
   <span class="md-available__status" role="status" aria-live="polite" data-copy-status></span>
   <br />
-  请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。
+  直接打开上面的 <code>.md</code> 链接即可读取；在支持内容协商的部署平台上，
+  也可以对页面 URL 发送 <code>Accept: text/markdown</code>。
 </p>
 
 <script>

@@ -28,7 +28,7 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Estimated saving: **57.7% / 55.1%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
+  Estimated saving: **57.9% / 55.3%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin — **approximate**; what's guaranteed is that the
   column tracks font-size, not how many characters fit), native `text-autospace`,
@@ -86,7 +86,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **57.7% / 55.1%** 的 token。**这是估算不是真实用量**；用真实词表 `o200k_base` 在同一批文本上复算是 **60.6% / 57.9%**（估算在 HTML 侧稳定偏低 8–14%）。两组数不能混着用。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **57.9% / 55.3%** 的 token。**这是估算不是真实用量**；用真实词表 `o200k_base` 在同一批文本上复算是 **60.8% / 58.0%**（估算在 HTML 侧稳定偏低约 8–14%）。两组数不能混着用。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -211,21 +211,13 @@ review:
   （对着 Demo 跑 `npm run verify:online` 会在协商那几项上报红——**那是这条限制本身，
   不是部署事故**；同一个脚本会同时证明 Pages 能做到的部分是好的。）
 
-  > **2026-09-24 实测：那 8 项红的完整清单**（此前 README 只提了其中 2 项）。
-  > `Vary: Accept` 缺失（实际是 `Vary: Accept-Encoding`）、
-  > `Content-Location` 缺失、`Link: rel="alternate"` 缺失——
-  > **三项都没登记过**，而它们与协商是**同一件事**（响应头不可改）。
-  >
-  > 当时第 7 项是线上清单仍为 v1，而源码已升到 v2。v2 现已进入 main；
-  > 线上是否完成重新部署，以运行 `npm run verify:online` 的结果为准。
-  >
-  > 顺带一提：**`verify:online` 此前根本跑不起来**（第 0 步就崩），
-  > 而它在门禁编排里挂着的理由是「基线本身就是红的」——
-  > **那句「基线是红的」从来没被实测过**。它连跑都跑不起来。
-  > 修好之后才有上面这份清单。
+  > **2026-09-25 线上实测：`verify:online` 有 7 项不通过。**其中 6 项是
+  > `Accept` 请求仍返回 HTML，以及 `Vary: Accept`、`Content-Location`、
+  > `Link: rel="alternate"` 等协商响应头缺失；另 1 项是下述 NDJSON MIME。
+  > 清单已返回 v2，11 篇文档及抽样 Markdown 的字节数和 SHA-256 均通过。
 - **同一个限制还影响 `/content.ndjson` 的 Content-Type。** 源码里设的是
   `application/x-ndjson`，三个平台的配置也都声明了它，但 **Pages 上下不来**——
-  2026-09-20 实测线上 Demo 返回的是 `application/octet-stream`
+  2026-09-25 复测线上 Demo 仍返回 `application/octet-stream`
   （`.ndjson` 不在 Pages 认识的扩展名表里，响应头又不可改）。
   **按行解析不受影响**（`fetch(...).text()`、逐行读都照常），
   但按 MIME 分流、把 `octet-stream` 当下载附件的客户端会中招。
