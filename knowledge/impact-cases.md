@@ -35,7 +35,7 @@ expectCandidates: <slug、slug>
 ## 这份金标量不到什么（写在前面，免得被它的绿灯误导）
 
 1. **它只量 wiki 层。** `impact.ts` 的输入就是 `src/content/wiki/` 的页面，
-   posts 尚未参与来源模型（见 `knowledge/log.md` 迭代 G 的未决项）。
+   posts 尚未参与来源模型。
    下面两条 `expectDirect` 为空的用例正是这个边界的直接后果。
 2. **它不联网。** 查的是「已登记的这个来源被谁引用」，
    **不是**「远端有没有出新版」。后者是另一件事。

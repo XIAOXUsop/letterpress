@@ -382,8 +382,7 @@ const checks = [
    * | `ambiguous-wikilink` | **error** | **有人写**了那个歧义标题（必须有人决定指哪篇） |
    * | `ambiguous-title` | **warn** | 同名标题存在，**但还没人用它**（预防性提醒） |
    *
-   * 断言当时改对了（用 `ambiguous-wikilink`），**只有注释说错了**——
-   * 而那句错话后来被我抄进了 `knowledge/log.md`，差点变成「事实」。
+   * 断言使用 `ambiguous-wikilink`；注释也应与断言保持一致。
    *
    * > **注释里的错误陈述比没有注释更糟**：
    * > 读代码的人会拿它当依据，而它看起来和正确的陈述一模一样。
