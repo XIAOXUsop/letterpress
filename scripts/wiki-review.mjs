@@ -29,7 +29,7 @@ import { join } from 'node:path';
 /*
  * ⚠️ **这里原来写着「直接 import TS 源，不在这里重写一份算法」——
  * 而下面紧接着就重写了 `frontmatterField` 与 `bodyOf`。**
- * 那是本轮第五次「注释承诺了而代码没做」（见 knowledge/log.md 迭代 AN）。
+ * 注释与实际代码不一致会误导维护者。
  *
  * 重写的代价不是「多几行代码」，是**它会一本正经地说谎**：
  * `frontmatterField(source, 'status')` 用 `^status:` 匹配**行首**，

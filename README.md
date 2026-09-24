@@ -33,17 +33,14 @@
   (≈34 Chinese chars ≈ 68 Latin — **approximate**; what's guaranteed is that the
   column tracks font-size, not how many characters fit), native `text-autospace`,
   no synthetic italics.
-  → [details](docs/cjk-typography.md)
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
-  → [details](docs/features.md)
 - **Conclusions carry their provenance.** Sources are pinned to a dated spec
   revision; editing the body without re-reviewing fails the build, so "reviewed"
   never becomes a stale green checkmark. The same state ships in
   `content-manifest.json` / `content.ndjson`, so a subscriber can tell which
   pages are no longer trustworthy — and pages that are *this project's own
   choices* say so explicitly instead of pretending to cite something.
-  → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
   search page on-demand loads same-origin Pagefind. · 481 unit tests · MIT
 
@@ -89,7 +86,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **57.7% / 55.1%** 的 token——**这是估算不是真实分词器**（用真实词表 `o200k_base` 在同一批文本上复算是 60.6% / 57.9%）。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **57.7% / 55.1%** 的 token。这不是模型真实用量；页面内容变化后需重新测量。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -144,7 +141,6 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 「66ch ≈ 33 字」则额外依赖「0 字形约 0.5em」这个未实测的假设。
 **被保证的是容器宽度，不是每行字数。**
 
-→ [取值理由、字体栈顺序、怎么验证](docs/cjk-typography.md)
 
 ### 三、知识层，断链会让构建失败
 
@@ -197,7 +193,7 @@ review:
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **107 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **1.21 / 1.21 / 1.23 秒**（三次），整条 `npm run build` **2.94 / 2.98 / 2.96 秒**；Pagefind 自己报 0.136 秒、单独跑 `npx pagefind` 共 0.66 秒。**差值约 1.5 秒是 npm 起 node、连跑两条 npm script 的开销**（本机 Windows 实测；原表写的 1.1 / 2.6 秒偏低，且把差值的成因写成"npm 启动开销 + Pagefind 0.14 秒"，量级对、口径没有出处） |
 | 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
-| 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind 1.5.2，实测运行时资源 **6 个 js**、未压缩共 **431 KB**（441271 bytes；`npm run measure` 的口径，全部 6 个 gzip 合计 **105 KB**）；**访问者真正会加载的是 5 个 js**：`pagefind.js` + `pagefind-worker.js` + 三个 UI 包，未压缩 387 KB、**gzip 93 KB**；其中三个 UI 包单独算是 302 KB / gzip 69 KB（`docs/compare.md` 引的是这个 narrower 口径）。复测日期 2026-09-24；此前写的「17 个文件、146 KB gzip」在当前环境**已无法复现**（pagefind 版本未变而产物结构对不上），故改为可复现的口径 |
+| 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind 1.5.2，实测运行时资源 **6 个 js**、未压缩共 **431 KB**（441271 bytes；`npm run measure` 的口径，全部 6 个 gzip 合计 **105 KB**）；**访问者真正会加载的是 5 个 js**：`pagefind.js` + `pagefind-worker.js` + 三个 UI 包，未压缩 387 KB、**gzip 93 KB**；其中三个 UI 包单独算是 302 KB / gzip 69 KB。复测日期 2026-09-24；此前写的「17 个文件、146 KB gzip」在当前环境**已无法复现**（pagefind 版本未变而产物结构对不上），故改为可复现的口径 |
 | CSS | 单文件 **24.1 KB / gzip 5.1 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
@@ -295,7 +291,7 @@ review:
   不支持时版式不坏。
 - **搜索的加载器要求 CSP 允许 `unsafe-eval`**，原因见
   [命令行](docs/cli.md#搜索的加载器为什么要求-csp-允许-unsafe-eval)。
-- **没有数学公式、流程图、多语言、图片灯箱、评论。** 见[竞品对照](docs/compare.md)。
+- **没有数学公式、流程图、多语言、图片灯箱、评论。**
 
 ---
 
@@ -303,13 +299,10 @@ review:
 
 | | |
 |---|---|
-| [竞品对照](docs/compare.md) | vs AstroPaper / Fuwari / PaperMod，以及本项目缺什么 |
-| [功能清单](docs/features.md) | 完整功能表、没有做的、为什么删掉「定时发布」 |
 | [内容协商](docs/content-negotiation.md) | 原理、七个 agent、会静默失败的三个地方、收益率 |
 | [内容清单](docs/content-manifest.md) | Agent / RAG 如何按 SHA-256 增量同步，以及格式的真实边界 |
 | [内容镜像同步](docs/content-sync.md) | 可运行的首次导入、增量更新、删除传播、损坏修复与失败回滚 |
 | [全量导出](docs/content-export.md) | NDJSON 首次导入、逐行格式、校验与适用边界 |
-| [中文排版取值](docs/cjk-typography.md) | 行高 / 字重 / 行宽 / 原生属性 / 字体栈 |
 | [部署](docs/deploy.md) | 四个平台、子路径、`Vary: Accept`、安全头 |
 | [命令行](docs/cli.md) | 每个脚本做什么、两个会咬人的地方 |
 | [AGENTS.md](AGENTS.md) | 给 AI agent 读的项目约定（知识层怎么写、检查怎么加） |

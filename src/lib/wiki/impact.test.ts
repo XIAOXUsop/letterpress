@@ -106,7 +106,7 @@ describe('三组互不重叠', () => {
   it('真正不同的辅助载体不算重叠', () => {
     const pages = [page('a', { sources: [ref(S, 'v1')] })];
     const result = computeImpact(pages, S);
-    expect(isDisjoint(result, ['docs/cjk-typography.md', 'src/styles/tokens.css'])).toBe(true);
+    expect(isDisjoint(result, ['docs/content-negotiation.md', 'src/styles/tokens.css'])).toBe(true);
   });
 
   it('非 wiki 路径即使同名也不算重叠', () => {
