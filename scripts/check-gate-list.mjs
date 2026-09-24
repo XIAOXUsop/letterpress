@@ -40,6 +40,7 @@ const EXPECTED = [
   ['npm run verify:testcount', '测试条数对账'],
   ['npm run verify:search', '搜索可用性前提'],
   ['npm run verify:questions', '检索金标（23 条，其中 3 条登记为已知局限）'],
+  ['npm run verify:retrieval-gates', '**五道检索闸逐一失效，每次金标都变红**（它们曾经被「这道闸有人在量」想当然）'],
   ['npm run verify:impact', '影响分析金标（9 条）'],
   ['npm run verify:answers', '**答案能定位到证据**（阶段 3 退出条件 ③）'],
   ['npm run verify:review', '**wiki:review 说的复核状态与 frontmatter 一致**（它原先全报「未复核」）'],
@@ -318,6 +319,7 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
       'verify:migrate',
       'verify:json-mutations',
       'verify:second-site-real-mutations',
+      'verify:retrieval-gates',
     ];
     const missing = NEGATIVE_VERIFICATIONS.filter((n) => typeof scripts[n] !== 'string');
     if (missing.length > 0) {
