@@ -312,7 +312,6 @@ review:
 | [中文排版取值](docs/cjk-typography.md) | 行高 / 字重 / 行宽 / 原生属性 / 字体栈 |
 | [部署](docs/deploy.md) | 四个平台、子路径、`Vary: Accept`、安全头 |
 | [命令行](docs/cli.md) | 每个脚本做什么、两个会咬人的地方 |
-| [设计取舍](docs/design-notes.md) | 为什么不用 Tailwind、为什么配色避开米色衬线 |
 | [AGENTS.md](AGENTS.md) | 给 AI agent 读的项目约定（知识层怎么写、检查怎么加） |
 
 ---

@@ -172,6 +172,89 @@ for (const name of Object.keys(scripts)) {
   );
 }
 
+/*
+ * ── 4b. 有负向验证的门禁，它的负向验证覆盖了每一项判据 ──────────────
+ *
+ * ⚠️ **2026-09-24 补的**：上一轮我在 `check-site-agnostic.mjs` 的收尾语里
+ * 写了「新增要手写」——而**那句话没有任何东西守着**。
+ * 于是「加了一条判据但没加对应的变异」会静默通过。
+ *
+ * > **这是「注释里写了而代码没做」的第 N 次**，
+ * > 只是这次「注释」是**给读者的输出**而不是源码注释。
+ *
+ * 判据：对每个「配了负向验证」的门禁，读它的负向脚本，
+ * 确认变异条数**不少于**被测门禁的 `REQUIREMENTS` 条数。
+ * 不够就红，并说清差几条。
+ */
+/*
+ * 只列**有可数判据清单**的门禁。
+ *
+ * ⚠️ `check-exit-codes.mjs` 与 `check-json-output.mjs` **故意不在这里**：
+ * 它们的判据是**平铺在代码里的**（`if (...) problems.push(...)`），
+ * 没有可数的清单——而**用正则去数那些 `if` 会把错误分支的措辞也算进去**，
+ * 得到的数不可信。
+ *
+ * > **一个不可信的自动检查比没有检查更糟**——
+ * > 它要么误报训练人忽略输出，要么漏报让人误以为覆盖了。
+ * > 所以这里显式排除，而不是「数一下凑合」。
+ * >
+ * > 那两个门禁的覆盖靠**它们各自的负向验证**（各 3 个变异），
+ * > 以及**每次增删判据时人工同步**变异——这是现状，不是本检查提供的保证。
+ */
+const GATES_WITH_MUTATIONS = [
+  { gate: 'scripts/check-site-agnostic.mjs', mutations: 'scripts/site-agnostic.mutations.mjs' },
+];
+
+console.log('');
+console.log('负向验证是否覆盖了被测门禁的每一项判据');
+console.log('─'.repeat(64));
+
+for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
+  const gatePath = join(ROOT, gate);
+  if (!existsSync(gatePath)) continue;
+  const gateText = readFileSync(gatePath, 'utf8');
+  // 判据条数 = `mustMatch: [` 的个数（每条判据一个）
+  const criteria = (gateText.match(/mustMatch: \[/g) ?? []).length;
+  if (criteria === 0) {
+    console.log(`  – ${gate}：没有 REQUIREMENTS 式的判据清单，跳过`);
+    continue;
+  }
+  const mutPath = join(ROOT, mutations);
+  if (!existsSync(mutPath)) {
+    problems.push(`${gate} 有 ${criteria} 项判据，但它的负向验证 ${mutations} 不存在`);
+    console.log(`  ✗ ${gate}：负向验证缺失`);
+    continue;
+  }
+  const mutText = readFileSync(mutPath, 'utf8');
+
+  /*
+   * ⚠️ 第一版只比**数量**（判据 3 项 vs 变异 4 个 → 绿）。
+   * 而**数量够不等于每一项都被覆盖**——4 个变异可能都在测前两项。
+   *
+   * 变异验证实测：加第三条判据而不加对应变异，门禁**照样绿**。
+   *
+   * > 这与「只查一个方向」是同一类：**判据与被测对象不是一一对应**，
+   * > 而「数量」这个代理指标**看起来足够、实际不够**。
+   *
+   * 所以改成**按 `file` 逐项对应**：每条 `REQUIREMENTS` 的 `file`
+   * 要在变异脚本里被至少一个变异点到。
+   */
+  const requirementFiles = [...gateText.matchAll(/file: '([^']+)'/g)].map((m) => m[1]);
+  const uncovered = requirementFiles.filter(
+    (f) => !mutText.includes(f),
+  );
+  if (uncovered.length > 0) {
+    problems.push(
+      `${gate} 的这些判据在 ${mutations} 里**没有任何变异点到**：\n` +
+        uncovered.map((f) => `        ${f}`).join('\n') + '\n' +
+        `    **「新增要手写」这句话原本没有任何东西守着**。`,
+    );
+    console.log(`  ✗ ${gate}：${uncovered.length} 项判据没有对应的变异（${uncovered.join('、')}）`);
+  } else {
+    console.log(`  ✓ ${gate}：${requirementFiles.length} 项判据都有对应变异`);
+  }
+}
+
 // ── 5. 文档里转述的步骤数与实际一致 ────────────────────────────
 /*
  * **两份文档，不是一份。**

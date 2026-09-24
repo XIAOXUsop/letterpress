@@ -157,4 +157,8 @@ if (problems.length > 0) {
   );
   process.exit(1);
 }
-console.log('\n核心模块的站点事实都能由调用方覆盖。\n');
+console.log(
+  `\nREQUIREMENTS 里登记的 ${REQUIREMENTS.length} 项站点事实都能由调用方覆盖。\n` +
+    '  ⚠️ **这不是「所有站点事实」**——清单在下方，新增要手写。\n' +
+    '  门禁测不出的部分见本文件头部（「必须知道，否则会高估它」那一节）。',
+);
