@@ -50,6 +50,16 @@ const LIB = join(ROOT, 'src', 'lib', 'wiki');
  * 设计约束是**零耦合**——不读文件、不碰 Astro、不依赖本站配置。
  * 那条约束的价值全靠本门禁兑现：写在注释里而没有检查，就只是愿望。
  */
+/**
+ * 核心流程：链接图、体检、检索、影响分析、slug、摘要、context pack、页面组装。
+ * 设计约束是**零耦合**——不读文件、不碰 Astro、不依赖本站配置。
+ * 那条约束的价值全靠本门禁兑现：写在注释里而没有检查，就只是愿望。
+ *
+ * ⚠️ `page-to-doc.ts` 是 2026-09-24 迭代 AT 加进来的：
+ * 它把「每个站点都要重写一遍的接线」收进核心（实测 27 行适配层里
+ * 22 行是它）。**它零 import**，所以天然满足可加载性——
+ * 但**「天然满足」不等于「被检查过」**，所以它必须进这份名单。
+ */
 const CORE = [
   'graph.ts',
   'lint.ts',
@@ -58,6 +68,7 @@ const CORE = [
   'slug.ts',
   'digest.ts',
   'context-pack.ts',
+  'page-to-doc.ts',
 ];
 
 /** 会被误写成「可选链 + 直接调方法」的字段名。 */
@@ -81,10 +92,45 @@ const problems = [];
 console.log('核心模块可加载性（裸 Node）');
 console.log('─'.repeat(64));
 
+/**
+ * 每个核心模块**必须导出它承诺的那个函数**。
+ *
+ * ⚠️ 2026-09-24 实测这个缺口：把 `page-to-doc.ts` 的 `export function`
+ * 去掉一个 `export`，**`import()` 照样成功**（模块能解析），
+ * 于是门禁报 `✓` —— 而任何 `import { pageToDoc }` 的调用方都会拿到 `undefined`，
+ * 报错出现在**别处**（`pageToDoc is not a function`），离原因十万八千里。
+ *
+ * > **能加载 ≠ 导出了该导出的东西。**
+ * > 而这个门禁的名字叫「可加载性」，它从没承诺过后者——
+ * > 所以这不算它失职，是**它旁边缺一条断言**。
+ */
+const REQUIRED_EXPORTS = {
+  'graph.ts': ['buildGraph', 'urlFor'],
+  'lint.ts': ['lint', 'hasErrors'],
+  'retrieve.ts': ['rank', 'splitPassages'],
+  'impact.ts': ['computeImpact', 'isDisjoint'],
+  'slug.ts': ['slugify', 'resolveSlug'],
+  'digest.ts': ['contentDigest'],
+  'context-pack.ts': ['buildContextPack'],
+  'page-to-doc.ts': ['pageToDoc'],
+};
+
 for (const file of CORE) {
   const full = join(LIB, file);
   try {
-    await import(pathToFileURL(full).href);
+    const mod = await import(pathToFileURL(full).href);
+    const missing = (REQUIRED_EXPORTS[file] ?? []).filter((name) => typeof mod[name] !== 'function');
+    if (missing.length > 0) {
+      problems.push(
+        `${file} 能加载，但**没有导出** ${missing.join('、')}。
+` +
+          `    「能 import」与「导出了该导出的东西」是两件事：
+` +
+          `    调用方会拿到 undefined，报错出现在别处（${file} 里没有这个符号）。`,
+      );
+      console.log(`  ✗ ${file}（缺导出：${missing.join('、')}）`);
+      continue;
+    }
     console.log(`  ✓ ${file}`);
   } catch (error) {
     const msg = error instanceof Error ? error.message.split('\n')[0] : String(error);

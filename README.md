@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-473%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-481%20项-2C5E2E)
 
 </div>
 
@@ -45,7 +45,7 @@
   choices* say so explicitly instead of pretending to cite something.
   → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 473 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 481 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -185,7 +185,7 @@ review:
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **473 项**，全部离线，无网络依赖 |
+| 单元测试 | **481 项**，全部离线，无网络依赖 |
 | 端到端契约 | **200 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 门禁编排 | **28 步**，`check-gates` 逐条核对「声明了什么、顺序对不对、脚本存不存在、有没有定义了却不在编排里的」。其中五道是**会先弄坏自己再证明能报红**的负向验证 |
 | 抽象边界 | 核心模块不硬编码本站结构（知识库 URL 前缀、根层保留路由表均可注入），有**四次变异的负向验证**证明这道检查是尺子而非装饰。另有一份**读自文件的**异构内容集（6 篇：中文 slug、`§1` 编号章节、`audience:` 字段、同名标题、孤儿页），**18 条断言 + 7 种破坏的负向验证**全部成立。⚠️ 但它**只证明「核心不依赖本站的形状」**——适配层那 20 行仍是接新站点时要写的，而「接入确实减少重复维护」这一条**仍无证据**（fixture 是测试语料，不是真的第二站点） |

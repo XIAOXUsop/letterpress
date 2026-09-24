@@ -57,6 +57,7 @@ import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { resolveSlug } from '../src/lib/wiki/slug.ts';
+import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
 import { splitPassages, rank } from '../src/lib/wiki/retrieve.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 
@@ -90,7 +91,10 @@ const pages = files.map((file) => {
   return {
     page,
     summary: frontmatterField(source, 'summary') ?? '',
-    // 这个站点的关系声明叫 `audience`，核心只认 `related`
+    // ⚠️ **这 5 行是这个适配层里唯一「站点专属」的部分。**
+    // 站点把关系声明叫 `audience`，核心只认 `related`。
+    // 其余的接线（补 summary、拼 Doc、填显式字段）由 `pageToDoc` 提供——
+    // **那不是适配，是每站都要重写一遍的接线**（迭代 AS 实测：27 行里 22 行是它）。
     audience: (frontmatterField(source, 'audience') ?? '')
       .replace(/^\[|\]$/g, '')
       .split(',')
@@ -99,18 +103,8 @@ const pages = files.map((file) => {
   };
 });
 
-const docs = pages.map(({ page, summary, audience }) => ({
-  kind: 'wiki',
-  slug: page.slug,
-  title: page.title,
-  summary,
-  body: page.body,
-  sources: page.sources,
-  wikiKind: page.kind,
-  declaredRelations: audience,
-  explicitSlug: true,
-  draft: false,
-}));
+const docs = pages.map(({ page, summary, audience }) =>
+  pageToDoc(page, { summary, relations: audience }));
 
 console.log(`  读了 ${docs.length} 篇：${docs.map((d) => d.slug).join('、')}\n`);
 
