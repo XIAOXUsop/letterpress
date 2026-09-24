@@ -2,6 +2,8 @@
 title: 内容协商
 summary: 用 HTTP 的 Accept 头决定返回 HTML 还是 markdown。算法只有四十行，难的是静态托管不解析请求头。
 kind: concept
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: content-negotiation
 related: [markdown-for-agents, llm-wiki]
 # 标准归因的依据：规范按**具体程度**排优先级，对并列的只说 equally preferred。
 # 「并列靠前优先」是本站的实现选择，不是规范要求。

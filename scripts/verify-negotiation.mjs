@@ -20,6 +20,10 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
+import {
+  CONTENT_MANIFEST_VERSION,
+} from '../src/lib/content-manifest.ts';
+import { CONTENT_EXPORT_VERSION } from '../src/lib/content-export.ts';
 import { negotiate } from '../src/lib/negotiate/edge.ts';
 import { estimateTokens } from '../src/lib/negotiate/accept.ts';
 import { RESERVED_POST_SLUGS } from '../src/lib/wiki/lint.ts';
@@ -381,7 +385,10 @@ console.log('\n[1e] Agent 增量同步清单');
   }
 
   check(manifest.format === 'letterpress-content-manifest', '格式名明确且不伪装成外部标准');
-  check(manifest.version === 1, '清单版本为 1');
+  check(
+    manifest.version === CONTENT_MANIFEST_VERSION,
+    `清单版本为 ${CONTENT_MANIFEST_VERSION}`,
+  );
 
   const documents = Array.isArray(manifest.documents) ? manifest.documents : [];
   check(manifest.documentCount === documents.length, 'documentCount 与条目数一致');
@@ -455,7 +462,8 @@ console.log('\n[1f] Agent / RAG 全量内容导出');
   check(
     records.every(
       (record) =>
-        record.format === 'letterpress-content-record' && record.version === 1,
+        record.format === 'letterpress-content-record' &&
+          record.version === CONTENT_EXPORT_VERSION,
     ),
     '每条记录都声明明确的格式名与版本',
   );
@@ -658,6 +666,29 @@ console.log('\n[4b] SEO / 分享 / 无障碍契约');
   check(article !== null && article.includes('application/ld+json'), '文章页含 JSON-LD');
   check(article !== null && article.includes('"BlogPosting"'), 'JSON-LD 含 BlogPosting');
   check(article !== null && article.includes('"dateModified"'), 'JSON-LD 含 dateModified');
+
+  /*
+   * 知识库条目也必须有 JSON-LD。
+   *
+   * 2026-09-24 实测：wiki 路由（`src/pages/wiki/[slug].astro`）**根本没引入
+   * `JsonLd`**，于是这一类页面完全没有结构化数据——而文章页有。
+   * 搜索引擎与 agent 因此拿不到知识页的结构。
+   *
+   * 类型用 `Article` 而不是 `TechArticle`：后者的定义**在 2026-09-24 无法核实**
+   * （schema.org 页面超时、机器可读端点 404），
+   * **写一个没核实过的 `@type` 比用一个确定存在的上位类更糟**——
+   * 错误的名字会让搜索引擎静默忽略整块。理由写在组件里。
+   */
+  const wikiPage = await read('wiki/cjk-typography/index.html');
+  check(wikiPage !== null && wikiPage.includes('application/ld+json'), '知识页含 JSON-LD');
+  check(wikiPage !== null && wikiPage.includes('"Article"'), '知识页 JSON-LD 含 Article');
+  check(wikiPage !== null && wikiPage.includes('"dateModified"'), '知识页 JSON-LD 含 dateModified');
+  // 知识页**没有发布时间**（它是持续修订的）——给一个假的 datePublished
+  // 会误导「这一篇写了多久」。所以这里反过来断言它**不该有**。
+  check(
+    wikiPage !== null && !wikiPage.includes('"datePublished"'),
+    '知识页 JSON-LD 不含编造的 datePublished',
+  );
 
   /**
    * **绝不能让 localhost 进产物。**
@@ -1025,14 +1056,31 @@ check(
 );
 
 /** README 摘要那行的 `**X% / Y%**` 对应实测的前两页。 */
-const claimedSavings = (readme.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
+/*
+ * ⚠️ **2026-09-24 修正**：原判据要求 README 里**每一组** `X% / Y%`
+ * 都等于本次实测的**估算**节省率。
+ *
+ * 而 README 现在合法地有两组数：估算（每次构建都重打，门禁该管）
+ * 与**真实词表** `o200k_base` 复算（60.6 / 57.9，那不是估算）。
+ * 于是加了第二组之后这条判据红了——**而它红得不对**。
+ *
+ * > **一个判据把两类东西当成一类，就会逼人把真数据删掉。**
+ *
+ * 现在只取**紧跟在 `**` 之后、且后面不接「真实词表」字样的那组**——
+ * 也就是摘要里的估算值。真实词表那组由 `docs/content-negotiation.md`
+ * 里的表负责（那张表量的是当次构建的产物，**刻意不进门禁**）。
+ */
+const estimatedOnly = readme.replace(/用真实词表[^）]*?（估算在 HTML 侧稳定偏低[^）]*?）[。.]?/g, '');
+const claimedSavings = (estimatedOnly.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
   [...s.matchAll(/([\d.]+)%/g)].map((m) => m[1]),
 );
 const expectedSavings = measured.slice(0, 2).map((r) => r.saved);
 check(
   claimedSavings.length > 0 && claimedSavings.every(([a, b]) => a === expectedSavings[0] && b === expectedSavings[1]),
-  'README 摘要那行的 token 节省率与实测一致',
-  `README 写 ${claimedSavings.map((p) => p.join('/')).join(' ') || '（没有）'}，实测前两页 ${expectedSavings.join(' / ')}%`,
+  'README 摘要那行的 token 节省率（估算）与实测一致',
+  `README 写 ${claimedSavings.map((p) => p.join('/')).join(' ') || '（没有）'}，实测前两页 ${expectedSavings.join(' / ')}%
+` +
+    '    **真实词表那组（60.6 / 57.9）刻意不归这条判据管**——它不是估算。',
 );
 
 /**
@@ -1051,8 +1099,41 @@ check(
  * 这个文件的注释里记着更早的两回：契约数 177 → 180、`docs/content-negotiation.md`
  * 里的 4728 / 5416 / 3055 漂过都没出声。前者早就补上了，后者这次一并补。
  */
-const reconciliationChecks = 2;
-const finalTotal = assertions + reconciliationChecks;
+/*
+ * ⚠️ **2026-09-24：我又踩了注释里警告过的那个坑。**
+ *
+ * 上面那段注释写着「再加一条就会错位」——而我**正好又加了一条**
+ * （`docsMentions.length > 0`），`reconciliationChecks` 仍是 2，
+ * 于是 `finalTotal` 报 200 而实际是 201，**门禁自己报错了自己的数字**。
+ *
+ * 两次都是同一类：**一个「后面还有 N 条」的计数靠手写**。
+ * 而它一旦与实际不符，报出来的红是**假的**——
+ * 我第一反应真的是「我漏改了某处文档」，去改了两处本来正确的地方。
+ *
+ * 所以改成**不手写**：先跑完那几条，再数。
+ * 代价是 `finalTotal` 要在那之后才算得出——而它只被那几条用，所以顺序正好。
+ */
+/*
+ * ⚠️⚠️ **这里试错了两次，而两次的症状都是「门禁报错了自己的数字」。**
+ *
+ * ① 手写 `reconciliationChecks = 2`：我加了一条对账检查，它仍是 2 → 少算。
+ *    ——而这段注释**早就警告过「再加一条就会错位」**，我正好又加了一条。
+ * ② 改成「每次调用自增」：第二次比较时 `assertions` **已经包含了第一次对账
+ *    自己产生的 check** → 多算（202 而实际 201）。
+ *
+ * > **「边跑边数」必然自我污染**：被数的那个计数器，
+ * > 会在数的过程中因为「数它的那次操作」而增加。
+ *
+ * 所以：**在跑任何对账之前把「会产生的对账条数」写死成一个常量**，
+ * 且那个常量**由下方实际出现的 `check(` 调用数决定**——
+ * 我加了新的一条，就必须把它同步。
+ *
+ * > 这与 `check-single-source` 那个教训同源：**同一个事实写两遍就会漂**。
+ * > 差别是这一次「两份」是「一个常量与一串调用」，而我**至少让它错在明处**
+ * > （改错时门禁立刻报假红，而不是静默放过）。
+ */
+const RECONCILIATION_CHECKS = 3; // 下方三处 check：README 一致、docs 非空、docs 一致
+const finalTotal = assertions + RECONCILIATION_CHECKS;
 
 const claimed = [
   ...readme.matchAll(/(\d+)\s*end-to-end contracts/g),
@@ -1072,12 +1153,29 @@ for (const name of (await readdir('docs')).sort()) {
     docsMentions.push(`${name} 写 ${m[1]}`);
   }
 }
+/*
+ * ⚠️ **「docs 里一处都没提」是一个独立失败，而它原先被当成 `check` 的 detail。**
+ *
+ * `check(ok, label, detail)` 的第三参是**失败时的详情**——
+ * 而这里传的是「若 `docsMentions` 为空就提醒我别让它静默失效」。
+ * 于是 `docsMentions` 为空时 `every` **恒真** → `ok = true` →
+ * **那句提醒永远不会显示**。
+ *
+ * > 注释写着「别让它静默失效」，而**它正是那个静默失效**。
+ * > 「被测集合是空的」这个盲区，本轮第四次以不同形态出现
+ * > （前三次：只认字面数字 / 只查一个方向 / 「若报必是」在 0 条时恒真）。
+ *
+ * 所以**必须单独判一次**：
+ */
 check(
-  docsMentions.every((d) => Number(d.split('写 ')[1]) === finalTotal),
+  docsMentions.length > 0,
+  'docs/ 里至少有一处提到契约条数（否则这条检查覆盖不到任何东西）',
+  'docs/ 里一处都没提到「N 项契约」——请确认是措辞变了，还是这条检查本来就该覆盖别的文件',
+);
+check(
+  docsMentions.length > 0 && docsMentions.every((d) => Number(d.split('写 ')[1]) === finalTotal),
   'docs/ 里写到的契约条数与实际一致',
-  docsMentions.length === 0
-    ? '（docs/ 里一处都没提到——若本来是有的，说明这条检查没覆盖到，别让它静默失效）'
-    : `${docsMentions.join('；')}，实际 ${finalTotal}`,
+  `${docsMentions.join('；')}，实际 ${finalTotal}`,
 );
 
 /**

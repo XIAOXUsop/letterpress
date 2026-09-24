@@ -2,8 +2,10 @@
 title: LLM 知识库
 summary: Karpathy 2026 年 4 月提出的模式——让 agent 主动读写并维护一层知识库，新素材进来时做的是「重构」而不是「追加」。
 kind: concept
-updated: 2026-09-23
-related: [content-negotiation, letterpress]
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: llm-wiki
+updated: 2026-09-24
+related: [letterpress]
 # ── 可证伪声明 ────────────────────────────────────────────────────────
 # 下面这张表里每一行「已实现」都对应一个文件。检查会问两件事：
 #   ① 表里那句话**还在不在页面上**（改正文忘改声明 → 报错）
@@ -35,6 +37,22 @@ verify:
     stated: 面向 agent 的检索与问题金标
     path: knowledge/questions.md
     expect: exists
+# 本页的模式出处与「10–15 页」那句的逐字定位。
+# 摘要对不上就是 stale——构建会报错，不会静默沿用旧状态。
+review:
+  status: reviewed
+  checkedAt: 2026-09-24
+  contentDigest: a21303104278ccf858e4c1194d080a20a4c4cb897d5d9ef0f5a04f4adad4d336
+# 本页的模式出处与「10–15 页」那句的原文定位。
+# 注意 `google-ai-features` **不**在这里——它支撑的是 markdown-for-agents
+# 那篇 post 的论断，不支撑本页；来源登记按「哪一页用」记，不按「同一个话题」记。
+sources:
+  - sourceId: llm-wiki-gist
+    revision: gist-2026-04
+    locator: 全文（三层结构与三个操作的出处）
+  - sourceId: llm-wiki-gist
+    revision: gist-2026-04-ingest
+    locator: Ingest 段落（10–15 页那句的逐字出处）
 ---
 
 一份由 AI 持续读写的结构化知识库，通常就是一堆 markdown 文件。
@@ -51,9 +69,15 @@ verify:
 > **「我们选择保存可编辑、可审阅的综合页面」**，而不是「所有 RAG 都不积累知识」。
 > 检索与知识整理可以共存，不是互斥的两条路。
 
-> **「一份来源可能改动 10 到 15 个页面」这个数没有出处**，本轮也没有在任何地方复现过，
-> 所以不应当当作本项目的事实引用。上面的正文保留了它作为「有人的说法」，
-> 但不建议据此设指标——把页面改动数当 KPI 会催生为了改而改。
+> **关于「一份来源可能改动 10 到 15 个页面」这个数**（勘误，2026-09-24）：
+> **它是有出处的**——Karpathy 的原始 gist 在 Ingest 段落里写着
+> `A single source might touch 10-15 wiki pages.` 本页此前写「没有出处」，
+> **那是错的**，现已逐字核对原文并补上链接。
+>
+> 该修的仍然要修：那句话是**作者描述自己工作流时的经验性例子**，
+> 不是普遍规律，所以**不能泛化、也不该当本项目的 KPI**。
+> 「有出处」与「可泛化」是两件事——**前者这次补上了，后者仍然不成立。**
+> 把页面改动数当指标会催生为了改而改。
 
 ## 三层结构
 
@@ -132,6 +156,8 @@ LLM 知识库派的做法是「让 agent 定期重构」。本项目认为两者
 ## 参考
 
 - [Andrej Karpathy 的 `llm-wiki` gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)，2026-04
-  —— 本文的模式取自它；注意它是**抽象模式**，不是框架或 npm 包
+  —— 本文的模式取自它；注意它是**抽象模式**，不是框架或 npm 包。
+  上面「10–15 个页面」那句即出自它的 Ingest 段落，原文为
+  `A single source might touch 10-15 wiki pages.`
 - DeepWiki（2025-05）、LangChain OpenWiki（2026-07）、微软 deep-wiki 插件
 - llmstxt.org 提案——注意其实际效果数据见 [[内容协商]] 末尾

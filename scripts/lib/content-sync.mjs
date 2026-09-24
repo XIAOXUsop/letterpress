@@ -6,6 +6,7 @@
  * “状态文件是旧的、正文却改了一半”的不可恢复状态。
  */
 import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
   copyFile,
   mkdir,
@@ -23,7 +24,39 @@ import { Readable } from 'node:stream';
 const STATE_FORMAT = 'letterpress-sync-state';
 const STATE_VERSION = 1;
 const MANIFEST_FORMAT = 'letterpress-content-manifest';
-const MANIFEST_VERSION = 1;
+/**
+ * 支持的 manifest 版本。**从源码里读，不在这里写死。**
+ *
+ * ⚠️ 2026-09-24 实测这里是 `1`，而生产端早已升到 `2`
+ * （提交 2518438 加 `provenance` 时一并升的）。
+ * 结果是：**同步器对着本站自己的清单必然报「不支持的版本」**。
+ *
+ * > 而 453 条测试全绿——因为测试固件也写着 `version: 1`。
+ * > **同一个事实被写了两遍，其中一遍错了，而两遍都没有对另一遍的检查。**
+ *
+ * 现在改成从 `src/lib/content-manifest.ts` 读源码文本：
+ * 那份文件内部用 `.js` 后缀 import，**裸 Node 加载不了**
+ * （见 `check-portability.mjs` 里的说明），所以只能读文本——
+ * 这与 `check-formats.mjs` 已有做法一致。
+ *
+ * **读不到就抛错，绝不退回任何写死的值**：
+ * 退回一个值等于把这个 bug 原样藏起来。
+ */
+const MANIFEST_VERSION = readManifestVersion();
+
+function readManifestVersion() {
+  const file = join(import.meta.dirname, '..', '..', 'src', 'lib', 'content-manifest.ts');
+  const text = readFileSync(file, 'utf8');
+  const matched = /CONTENT_MANIFEST_VERSION\s*=\s*(\d+)/.exec(text)?.[1];
+  if (!matched) {
+    throw new Error(
+      `从 ${file} 里读不出 CONTENT_MANIFEST_VERSION。` +
+        `同步器需要知道本站发的是哪一版清单，而**猜一个比不知道更糟**。`,
+    );
+  }
+  return Number(matched);
+}
+
 const RECORD_FORMAT = 'letterpress-content-record';
 const RECORD_VERSION = 1;
 const STATE_FILE = '.letterpress-sync.json';

@@ -247,16 +247,24 @@ export function markdownResponseHeaders(
  *
  * ⚠️ **原注释写的是「宁可偏保守（高估）」——实测是反的，它一直在低估。**
  *
- * 2026-09-23 用真实分词器（`o200k_base`）对本站三个页面逐页对照：
+ * 2026-09-23 首次用真实分词器（`o200k_base`）对本站三个页面逐页对照，
+ * 2026-09-24 内容修订后**在同一批文本上重算**（估算取 `estimateTokens` 自身，
+ * 真实取 `o200k_base` 对同一字符串编码）：
  *
  *   页面                        HTML 估算/真实    偏低
- *   /markdown-for-agents/        6214 / 6902     10.0%
- *   /cjk-web-typography/         7614 / 8876     14.2%
- *   /wiki/content-negotiation/   3681 / 3963      7.1%
+ *   /markdown-for-agents/        6750 / 7530     10.4%
+ *   /cjk-web-typography/         8595 / 9960     13.7%
+ *   /wiki/content-negotiation/   3958 / 4330      8.6%
  *
  * 三个页面**无一例外**偏低，也就是「agent 以为塞得下」的那一侧——
  * 与注释声称的安全方向正好相反。低估的成因是中文：真实词表把常见双字词
  * 合成一个 token，而这里按「1 字 1 token」数，对中文偏保守的是**真实侧**。
+ *
+ * ⚠️ **这组数字每次内容改动都会过期**，因为它量的是当次构建的产物。
+ * 同步位置有三处：`docs/content-negotiation.md` 的对照表与输出块、
+ * `README.md` 的摘要行。三处曾各自漂过——2026-09-24 本轮就是靠
+ * `npm run verify` 的契约断言才发现 README 仍写着上一版的 61.5/61.1。
+ * **别手抄：用 `estimateTokens` 跑产物，再用 `o200k_base` 编码同一文本。**
  *
  * 保留现有算式不改：没有证据表明有消费方依赖这个值做硬约束，
  * 而改它就会动到 `x-markdown-tokens` 这个对外行为。先如实记录，

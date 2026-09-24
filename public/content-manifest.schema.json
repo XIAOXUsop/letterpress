@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xiaoxusop.github.io/letterpress/content-manifest.schema.json",
+  "title": "letterpress 内容清单",
+  "description": "/content-manifest.json 的形状。**这不是行业标准**，是 letterpress 自己定义的格式；它只解决「已经同步过本站的 Agent / RAG 管线，怎样知道哪些 markdown 真的变了」。详见 docs/content-manifest.md。",
+  "type": "object",
+  "required": ["format", "version", "site", "documentCount", "documents"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "letterpress-content-manifest",
+      "description": "格式标识。**不是** MIME 类型，是个自有字符串——它唯一的作用是让消费方在读之前先确认「这是不是我要的东西」。"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "格式版本。**不认识的版本必须中止**，不要「尽量读几个认识的字段」——那样会在字段语义已变时静默产出错误索引。",
+      "$comment": "真值在 src/lib/content-manifest.ts 的 CONTENT_MANIFEST_VERSION。check-single-source 保证它只出现在一处；本文件由 check-manifest-schema 核对该值与产物一致。"
+    },
+    "site": {
+      "type": "object",
+      "required": ["name", "language", "home"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "language": {
+          "type": "string",
+          "description": "站点内容语言，BCP 47。**不是** html lang 的某个子集——它是内容语言。"
+        },
+        "home": {
+          "type": "string",
+          "format": "uri",
+          "description": "站点根地址，**带结尾斜杠**。消费方应当用 URL 解析而不是字符串拼接。"
+        }
+      }
+    },
+    "documentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "文档数。**必须等于 documents.length**——两者不一致说明清单被手工改过或生成端有 bug。"
+    },
+    "edgeCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "链接图的边数（outgoing + backlinks 的并集）。给「这份站点有多少互联」一个量级，不需要精确。"
+    },
+    "documents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/document" }
+    }
+  },
+  "$defs": {
+    "document": {
+      "type": "object",
+      "required": ["id", "kind", "slug", "title", "urls", "relations", "markdown"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(post|wiki):",
+          "description": "**稳定身份**。由内容类型与 slug 组成（除非 frontmatter 显式写了 id:）。改 slug 应被同步端视作「删除旧 ID、新增新 ID」，而不是「改名」——那两者的区别在消费端才看得出来。"
+        },
+        "kind": {
+          "enum": ["post", "wiki"],
+          "description": "文档类型。**不是** frontmatter 的 kind（那个是知识类型 concept/entity/synthesis）。"
+        },
+        "wikiKind": {
+          "enum": ["concept", "entity", "synthesis"],
+          "description": "知识类型，**只有 kind 为 wiki 的文档才有**。"
+        },
+        "slug": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "urls": {
+          "type": "object",
+          "required": ["html", "markdown"],
+          "additionalProperties": false,
+          "properties": {
+            "html": { "type": "string", "format": "uri" },
+            "markdown": {
+              "type": "string",
+              "format": "uri",
+              "description": "**`.md` 孪生文件的绝对地址**。加 `Accept: text/markdown` 拿到的就是它。"
+            }
+          }
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "**只在内容确实提供日期时出现**——清单不会编造日期。"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "同上。**它不是构建时间**——没有 frontmatter 的 updated 就不会出现。"
+        },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "relations": {
+          "type": "object",
+          "required": ["outgoing", "backlinks"],
+          "additionalProperties": false,
+          "properties": {
+            "outgoing": { "type": "array", "items": { "type": "string" } },
+            "backlinks": { "type": "array", "items": { "type": "string" } }
+          },
+          "description": "**只描述 letterpress 的 [[wiki-link]] 图**，不扫描普通 Markdown 外链。"
+        },
+        "markdown": {
+          "type": "object",
+          "required": ["mediaType", "bytes", "sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "mediaType": { "const": "text/markdown" },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "**`.md` 端点实际返回的 UTF-8 字节数**，不是源文件长度。"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "针对同一批字节的 SHA-256（**小写十六进制**）。hash 能证明「内容是否相同」，**不能证明内容可信**。"
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "**依据从哪来 + 有没有被确认过**。三者皆无时**整键缺席**，不是空对象——空对象读起来像「查过了，没有」，而缺席是「没标」。",
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sourceId", "revision"],
+            "additionalProperties": false,
+            "properties": {
+              "sourceId": {
+                "type": "string",
+                "description": "对应 knowledge/sources/ 里的某个登记项。"
+              },
+              "revision": {
+                "type": "string",
+                "description": "**钉到具体日期的规范版本**（如 `WD-20240312`）。不是「最新版」——后者会随规范修订移动，半年后回看不知道当时引的是哪一版。"
+              },
+              "locator": {
+                "type": "string",
+                "description": "引用位置（章节 + 符号名）。**消费方应当核对它**——只钉版本不钉位置，等于没说引的是哪一段。"
+              }
+            }
+          }
+        },
+        "review": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": ["reviewed", "pending", "stale"],
+              "description": "**`stale` 表示这篇的结论已经不再被确认过**（正文在复核之后被改过）。它仍然出现在清单里（内容没有消失），但**不该被当成新鲜证据**。"
+            },
+            "checkedAt": { "type": "string" },
+            "contentDigest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "复核当时的正文摘要。它与现算的值对不上就是 stale——那种情况**会让构建失败**，所以出现在产物里时必然对得上。"
+            }
+          }
+        },
+        "original": {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "type": "string",
+              "description": "「这一页讲的是本站自己的实践，没有外部来源」及其理由。它让「没登记来源」有两种**可区分**的含义：该补的 vs 正常的。"
+            }
+          }
+        }
+      }
+    }
+  }
+}

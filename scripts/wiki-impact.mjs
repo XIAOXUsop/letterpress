@@ -36,8 +36,11 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { loadSources } from '../src/lib/wiki/sources.ts';
+import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { EXIT_EMPTY_INPUT, EXIT_INVARIANT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
+import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
 
 const args = process.argv.slice(2);
 const getArg = (name) => {
@@ -49,17 +52,38 @@ const getArg = (name) => {
 const sourceId = getArg('source');
 const revision = getArg('revision');
 const listOnly = args.includes('--list');
+const asJson = args.includes('--json');
 
 const WIKI_DIR = join(process.cwd(), 'src', 'content', 'wiki');
+const POSTS_DIR = join(process.cwd(), 'src', 'content', 'posts');
 const DOCS_DIR = join(process.cwd(), 'knowledge', 'sources');
 const registry = loadSources(DOCS_DIR);
 
 if (registry.size === 0) {
-  console.error(`\n${DOCS_DIR} 里一个来源都没登记——这一步什么都分析不了。`);
-  process.exit(1);
+  failWithJson(asJson ? 'json' : 'text', EXIT_EMPTY_INPUT, `${DOCS_DIR} 里一个来源都没登记。`, {
+    hint: '这一步什么都分析不了。',
+  });
 }
 
 if (listOnly || !sourceId) {
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        jsonOk({
+          sources: [...registry]
+            .sort(([a], [b]) => (a < b ? -1 : 1))
+            .map(([id, src]) => ({
+              id,
+              title: src.title,
+              url: src.url,
+              revisions: src.revisions.map((r) => r.id),
+            })),
+        }),
+      ),
+    );
+    process.exit(0);
+  }
+
   console.log('\n已登记的来源');
   console.log('─'.repeat(64));
   for (const [id, src] of [...registry].sort()) {
@@ -73,81 +97,32 @@ if (listOnly || !sourceId) {
 
 const source = registry.get(sourceId);
 if (!source) {
-  console.error(`\n没登记过 "${sourceId}"。已登记：${[...registry.keys()].sort().join('、')}`);
-  process.exit(1);
+  failWithJson(asJson ? 'json' : 'text', EXIT_NOT_FOUND, `没登记过 "${sourceId}"。`, {
+    hint: '不加 --source 时会列出全部已登记的来源。',
+    valid: [...registry.keys()].sort(),
+  });
 }
 if (revision && !source.revisions.some((r) => r.id === revision)) {
-  console.error(
-    `\n"${sourceId}" 没有登记过版本 "${revision}"。` +
-      `已登记：${source.revisions.map((r) => r.id).join('、')}`,
-  );
-  process.exit(1);
-}
-
-// ── 读全部知识页的引用与关系 ────────────────────────────────────────
-function parseList(raw) {
-  return (raw ?? '')
-    .replace(/^\[|\]$/g, '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-const pages = [];
-for (const file of readdirSync(WIKI_DIR).filter((f) => /\.mdx?$/.test(f))) {
-  const src = readFileSync(join(WIKI_DIR, file), 'utf8');
-  const end = src.indexOf('\n---', 3);
-  const block = src.slice(3, end);
-
-  // sources 是块状数组，逐条抓 sourceId / revision
-  const refs = [];
-  const lines = block.split('\n');
-  let current = null;
-  for (const line of lines) {
-    const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
-    if (sid) {
-      if (current) refs.push(current);
-      current = { sourceId: sid[1], revision: '', locator: '' };
-      continue;
-    }
-    if (!current) continue;
-    const rev = /^\s*revision:\s*(.+?)\s*$/.exec(line);
-    if (rev) current.revision = rev[1];
-    const loc = /^\s*locator:\s*(.+?)\s*$/.exec(line);
-    if (loc) current.locator = loc[1];
-  }
-  if (current) refs.push(current);
-
-  pages.push({
-    slug: file.replace(/\.mdx?$/, ''),
-    title: frontmatterField(src, 'title') ?? file,
-    refs,
-    related: parseList(frontmatterField(src, 'related')),
+  failWithJson(asJson ? 'json' : 'text', EXIT_NOT_FOUND, `"${sourceId}" 没有登记过版本 "${revision}"。`, {
+    valid: source.revisions.map((r) => r.id),
   });
 }
 
-const bySlug = new Map(pages.map((p) => [p.slug, p]));
+/*
+ * 语料 = wiki **与 posts**，读取交给 `src/lib/wiki/read-page.ts`。
+ *
+ * 此前只扫 wiki，于是「google / ahrefs 没人引用」其实是**这一层没进语料**
+ * ——它们的引用方是 post。这四份来源正是文章里那些日期化规范 URL 的登记对象，
+ * 而日期化 URL 写出来就是为了不被移动版本顶掉，**不登记等于白写**。
+ */
+const { pages } = readContentDirs([WIKI_DIR, POSTS_DIR]);
 
-// ── 三组 ────────────────────────────────────────────────────────────
-const direct = pages.filter((p) =>
-  p.refs.some((r) => r.sourceId === sourceId && (!revision || r.revision === revision)),
-);
-
+// 计算交给 `src/lib/wiki/impact.ts`——那里有 14 条测试覆盖它，
+// 包括阶段 3 的「预埋来源变更召回率 100%」。**这份逻辑原先写在本文件顶层，
+// 因此零测试**：verify.test.ts 只把这个文件当作「存不存在」的一个素材。
+// 复制一份到测试里再验一遍，等于验了个副本——所以是抽出去共用，不是不动。
+const { direct, candidates: neighbors } = computeImpact(pages, sourceId, revision);
 const directSlugs = new Set(direct.map((p) => p.slug));
-
-// 一跳邻居：直接引用者声明的关系 ＋ 别人指向它的关系
-const neighbors = new Map();
-for (const p of direct) {
-  for (const target of p.related) {
-    if (!directSlugs.has(target) && bySlug.has(target)) neighbors.set(target, p.slug);
-  }
-}
-for (const p of pages) {
-  if (directSlugs.has(p.slug)) continue;
-  for (const target of p.related) {
-    if (directSlugs.has(target)) neighbors.set(p.slug, target);
-  }
-}
 
 // 仓库辅助载体：docs/ 与代码注释里提到这个来源的地方
 const repoMentions = [];
@@ -163,8 +138,9 @@ function scanRepo(dir, depth = 0) {
       const text = readFileSync(full, 'utf8');
       if (text.includes(sourceId) || text.includes(source.url)) {
         const rel = full.slice(process.cwd().length + 1).replace(/\\/g, '/');
-        // 已经在 ① 里列过的页面不在这里重复——**三组必须互不重叠**。
+        // 已在 ① 里列过的页面不在这里重复——**三组必须互不重叠**。
         // 重叠会让人以为"还有别的地方要改"，而那正是这个工具要消除的困惑。
+        // 下面还有一道 `isDisjoint` 断言兜底：这里是过滤，断言是保证。
         const asSlug = rel
           .replace(/^src\/content\/wiki\//, '')
           .replace(/\.mdx?$/, '');
@@ -177,8 +153,39 @@ function scanRepo(dir, depth = 0) {
 scanRepo(join(process.cwd(), 'docs'));
 scanRepo(join(process.cwd(), 'src'));
 
+// 三组互不重叠是**断言**，不是约定。原先这里是内联的一个 `if (... ) continue`，
+// 靠写代码的人记得加——而重叠的后果是读者以为「还有别的地方要改」，
+// 恰好是这个工具要消除的困惑。改成断言后，重叠会直接中止。
+if (!isDisjoint({ direct, candidates: neighbors }, repoMentions)) {
+  console.error('\n① 与 ③ 出现重叠：同一篇 wiki 页既被算作直接引用者，又出现在仓库辅助载体里。');
+  console.error('这会让读者以为「还有别的地方要改」。请修 scanRepo 的收集范围。');
+  process.exit(EXIT_INVARIANT);
+}
+
 // ── 输出 ────────────────────────────────────────────────────────────
 const revLabel = revision ? `@${revision}` : '（全部版本）';
+
+/*
+ * `--json` 分支放在人读输出**之前**，两者共用同一批变量——
+ * 这样「三组互不重叠」这条不变式**只在一个地方成立**。
+ * 复制一份到 JSON 里的话，迟早会有一边漏掉重叠检查。
+ */
+if (asJson) {
+  console.log(
+    JSON.stringify(
+      jsonOk({
+        source: { id: sourceId, revision: revision ?? null, title: source.title, url: source.url },
+        // 字段名与 `computeImpact` 的返回一致（direct / candidates），
+        // 仓库辅助载体是本脚本额外加的第三组
+        direct,
+        candidates: [...neighbors].map(([slug, via]) => ({ slug, via })),
+        repoMentions: [...repoMentions].sort(),
+      }),
+    ),
+  );
+  process.exit(0);
+}
+
 console.log(`\n${source.title}`);
 console.log(`  ${sourceId}${revLabel}  ·  ${source.url}`);
 console.log('─'.repeat(64));
@@ -188,7 +195,7 @@ if (direct.length === 0) {
   console.log('    （没有页面引用它）');
 }
 for (const p of direct) {
-  for (const r of p.refs.filter((x) => x.sourceId === sourceId)) {
+  for (const r of p.sources.filter((x) => x.sourceId === sourceId)) {
     console.log(`    ${p.slug}  ·  ${r.revision}${r.locator ? `  ·  ${r.locator}` : ''}`);
   }
 }

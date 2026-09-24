@@ -13,9 +13,11 @@ import { path } from '../../lib/url.js';
 import Backlinks from '../../components/Backlinks.astro';
 import MarkdownActions from '../../components/MarkdownActions.astro';
 import Provenance from '../../components/Provenance.astro';
+import JsonLd from '../../components/JsonLd.astro';
 import {
   updatedOfDoc,
   kindOf,
+  tagsOf,
   loadContent,
   ogImageOf,
   publishedWiki,
@@ -48,6 +50,7 @@ if (!entry) {
 const { Content } = await render(entry);
 const updated = updatedOfDoc(content, doc.slug);
 const kind = kindOf(content, doc.slug);
+const tags = tagsOf(content, doc.slug);
 
 const KIND_LABELS: Record<string, string> = {
   concept: '概念',
@@ -123,6 +126,21 @@ const markdownHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
         </section>
       )
     }
+
+    <!--
+      知识库条目的结构化数据。**2026-09-24 补的**——
+      此前这一类页面完全没有 JSON-LD（wiki 路由没引入该组件），
+      而文章页有。搜索引擎与 agent 因此拿不到知识页的结构。
+    -->
+    <JsonLd
+      type="note"
+      title={doc.title}
+      description={doc.summary}
+      url={Astro.url.pathname}
+      modifiedTime={updated ?? undefined}
+      tags={tags}
+      image={ogImageOf(content, doc.slug)}
+    />
 
     <Provenance doc={doc} />
 

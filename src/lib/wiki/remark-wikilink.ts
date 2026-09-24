@@ -31,11 +31,7 @@ import { visit } from 'unist-util-visit';
 import { normalizeTarget } from './wikilink.js';
 import { resolveSlug } from './slug.js';
 import { urlFor } from './graph.js';
-import {
-  frontmatterField,
-  collectFrontmatterProblems,
-  collectFiles,
-} from './frontmatter.js';
+import { frontmatterField, collectFiles } from './frontmatter.js';
 
 interface Lookup {
   readonly byName: ReadonlyMap<string, string>;

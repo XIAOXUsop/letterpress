@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { containsCjk, resolveSlug, slugify } from './slug.js';
 import { findCodeSpans, parseWikiLinks, renderWikiLinks } from './wikilink.js';
-import { buildGraph, type Doc } from './graph.js';
+import { buildGraph, urlFor, urlOf, type Doc } from './graph.js';
 import { formatIssues, hasErrors, lint } from './lint.js';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -443,6 +443,45 @@ describe('lint', () => {
     );
   });
 
+  /*
+   * ── 2026-09-24：保留路由表改为可注入 ──────────────────────────────
+   *
+   * 这三条对着路线图阶段 4 第 6 项「剥离仅属于当前站点的展示逻辑」写。
+   * 之前那 7 条是模块级常量、函数签名里没有注入口——
+   * 第二个站点（如只有 `about` 与 `search`）要用它就得改核心源码。
+   */
+
+  it('保留路由表可以由调用方换成另一个站点的', () => {
+    const docs = [doc({ slug: 'notes', kind: 'post' })];
+    // 默认（本站）不认识 `notes`，所以不报
+    expect(lint(docs, buildGraph(docs)).some((i) => i.rule === 'reserved-post-slug')).toBe(false);
+
+    // 换一张表：`notes` 成了那个站点自己的路由，立刻要报
+    const withTable = new Map([['notes', '文章列表']]);
+    const issue = lint(docs, buildGraph(docs), { reservedPostRoutes: withTable }).find(
+      (i) => i.rule === 'reserved-post-slug',
+    );
+    expect(issue?.level).toBe('error');
+    expect(issue?.message).toContain('/notes/');
+    expect(issue?.message).toContain('文章列表');
+  });
+
+  it('注入的表**取代**默认表，而不是与之合并', () => {
+    // 若实现写成「两张表都查」，`about` 在注入表里不存在也仍会报——那就等于没注入
+    const docs = [doc({ slug: 'about', kind: 'post' })];
+    const issue = lint(docs, buildGraph(docs), { reservedPostRoutes: new Map([['notes', 'x']]) }).find(
+      (i) => i.rule === 'reserved-post-slug',
+    );
+    expect(issue).toBeUndefined();
+  });
+
+  it('空表意味着「这个站点没有保留路由」，而不是「退回默认」', () => {
+    const docs = [doc({ slug: 'about', kind: 'post' })];
+    const issue = lint(docs, buildGraph(docs), { reservedPostRoutes: new Map() }).find(
+      (i) => i.rule === 'reserved-post-slug',
+    );
+    expect(issue).toBeUndefined();
+  });
   it('孤儿页是警告级', () => {
     const docs = [doc({ slug: 'lonely', title: '没人引用我' })];
     const issues = lint(docs, buildGraph(docs));
@@ -597,5 +636,124 @@ describe('同名标题：不能按遍历顺序任选一个', () => {
     const p2 = doc({ slug: 'other', title: 'topic', body: '' });
     const graph = buildGraph([p1, p2]);
     expect(graph.lookup.get('topic')).toBe('topic');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 两条引用通道的重叠
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * 正文 `[[wikilink]]` 与 frontmatter `related` 是**两条并行的引用通道**。
+ *
+ * 代价在实测里出现过：2026-09-24 做改名实验时，改完正文 `[[...]]`
+ * 才发现 `related` 里也有同一个目标，于是构建被 `broken-wikilink` 拦下。
+ * **只搜一种写法就会漏**，而漏了不会报错，只会在改名那天突然构建失败。
+ *
+ * 图用 `Set` 去重，所以它**不算错**——重复声明是无害的。
+ * 这里量的是「有几处需要同步」，好让维护成本可见，而不是出错时才被发现。
+ */
+describe('redundantRelations', () => {
+  it('同一目标被正文与 related 各写一次 → 记下来', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['b'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.get('a')).toEqual(['b']);
+  });
+
+  it('只用 related 声明不算重复——那是它的正常用法', () => {
+    const a = doc({ slug: 'a', body: '', declaredRelations: ['b'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.size).toBe(0);
+  });
+
+  it('只在正文里链接也不算重复', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]' });
+    const b = doc({ slug: 'b' });
+    expect(buildGraph([a, b]).redundantRelations.size).toBe(0);
+  });
+
+  it('按解析后的目标比，不按字面比', () => {
+    // related 写标题、正文写 slug——指向同一页，也算重复。
+    // 只比字符串的话这两种写法看起来不同，重复就漏了。
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['标题B'] });
+    const b = doc({ slug: 'b', title: '标题B' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.get('a')).toEqual(['b']);
+  });
+
+  it('related 写了两遍同一个目标只记一次', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['b', 'b'] });
+    const b = doc({ slug: 'b' });
+    expect(buildGraph([a, b]).redundantRelations.get('a')).toEqual(['b']);
+  });
+
+  it('多个重复目标按字典序排好，保证输出可复现', () => {
+    const a = doc({ slug: 'a', body: '[[c]] [[b]]', declaredRelations: ['c', 'b'] });
+    const graph = buildGraph([a, doc({ slug: 'b' }), doc({ slug: 'c' })]);
+    expect(graph.redundantRelations.get('a')).toEqual(['b', 'c']);
+  });
+
+  it('解析不了的 related 不算重复——那是断链，由另一条规则报', () => {
+    const a = doc({ slug: 'a', body: '指向 [[b]]', declaredRelations: ['不存在'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect(graph.redundantRelations.size).toBe(0);
+    expect(graph.broken.map((x) => x.target)).toContain('不存在');
+  });
+
+  it('重复声明不产生重复的边——图不会因此算错', () => {
+    // 这条钉住「重复是无害的」：它是维护成本，不是正确性问题。
+    const a = doc({ slug: 'a', body: '[[b]] [[b]] [[b]]', declaredRelations: ['b', 'b', 'b'] });
+    const b = doc({ slug: 'b' });
+    const graph = buildGraph([a, b]);
+    expect([...graph.outbound.get('a')!]).toEqual(['b']);
+    expect(graph.backlinks.get('b')?.length).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// urlFor / urlOf —— URL 规则（2026-09-24：路径前缀改为可注入）
+// ─────────────────────────────────────────────────────────────────────
+
+describe('urlFor / urlOf', () => {
+  /*
+   * 这组对着路线图阶段 4 第 6 项写：「剥离仅属于当前站点的展示逻辑」。
+   *
+   * 此前 `urlFor` 写死 `kind === 'wiki' ? '/wiki/' + slug + '/' : '/' + slug + '/'`，
+   * 而 `/wiki/` 是**本站的目录选择**——第二个站点可能叫 `/notes/`。
+   * 写死就等于让第二个站点改核心。
+   */
+
+  it('默认行为与 2026-09 之前逐字相同（加参数不该悄悄改产物）', () => {
+    expect(urlFor('wiki', 'abc')).toBe('/wiki/abc/');
+    expect(urlFor('post', 'abc')).toBe('/abc/');
+    expect(urlOf(doc({ slug: 'abc', kind: 'wiki' }))).toBe('/wiki/abc/');
+    expect(urlOf(doc({ slug: 'abc', kind: 'post' }))).toBe('/abc/');
+  });
+
+  it('第二个站点传自己的前缀即可，不必改核心', () => {
+    expect(urlFor('wiki', 'abc', { wiki: '/notes' })).toBe('/notes/abc/');
+    expect(urlFor('wiki', 'abc', { wiki: '' })).toBe('/abc/');
+    expect(urlOf(doc({ slug: 'abc', kind: 'wiki' }), { wiki: '/kb' })).toBe('/kb/abc/');
+  });
+
+  it('前缀只影响知识库条目——文章路径不该跟着变', () => {
+    // 若实现写成「一律套前缀」，文章会变成 /notes/abc/，第二站点的文章全错
+    expect(urlFor('post', 'abc', { wiki: '/notes' })).toBe('/abc/');
+  });
+
+  it('前缀带不带结尾斜杠都给出正确结果', () => {
+    // 传入 '/notes/' 若不规范化，拼接会得到 '/notes//abc/'：
+    // 双斜杠在浏览器里通常还能跳转，但内容清单里的路径对不上、
+    // 站内链接校验会失效，而且第二站点接入时才发现——**晚了**。
+    //
+    // > 这条测试**先写成钉住 bug 的版本**（`expect(...).toBe('/notes//abc/')`），
+    // > 想了两秒才改过来：**把缺陷写成断言，等于让它从此合法**。
+    // > 和「会误报的门禁」同族——一个把 bug 合法化的测试比没有测试更糟。
+    expect(urlFor('wiki', 'abc', { wiki: '/notes/' })).toBe('/notes/abc/');
+    expect(urlFor('wiki', 'abc', { wiki: '/notes///' })).toBe('/notes/abc/');
+    expect(urlFor('wiki', 'abc', { wiki: '' })).toBe('/abc/');
   });
 });

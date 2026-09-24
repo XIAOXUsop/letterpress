@@ -5,7 +5,7 @@
  * 因此它可以在毫秒级被测试穷举，也可以在 CI 里对真实内容跑。
  */
 
-import { normalizeTarget, parseWikiLinks, type WikiLinkRef } from './wikilink.js';
+import { normalizeTarget, parseWikiLinks, type WikiLinkRef } from './wikilink.ts';
 
 /** 一篇可被链接的文档。文章与 wiki 页在链接图里地位相同。 */
 export interface Doc {
@@ -26,8 +26,9 @@ export interface Doc {
    * `body` 一路进机器出口（`.md` 孪生、`llms-full.txt`）——读者会看到一行
    * 作者从没写过的 `[[a]] [[b]]`。现在图（`buildGraph`）直接读这个字段。
    *
-   * <p>注意 `refsOf` **不**包含它——那个函数返回的是"正文里出现的引用"，
+   * <p>注意它**不**进 `body`：`parseWikiLinks(body)` 返回的是"正文里出现的引用"，
    * 带原文偏移、供替换用；声明来的关系不在正文里，给它一个 -1 偏移是陷阱。
+   * 图把两者合并进同一个 `refs` 数组，所以校验与统计都覆盖得到。
    *
    * <p>可选：绝大多数文档没有声明 `related`，而测试里的 fixture 也不必逐个补上。
    */
@@ -46,6 +47,18 @@ export interface Doc {
   readonly wikiKind?: string;
   /** 作者是否显式指定过 slug（用于 lint 提示中文 URL 的代价） */
   readonly explicitSlug: boolean;
+  /**
+   * 稳定身份，**不随 slug 变化**。
+   *
+   * <p>可选。**不写就退回 `kind:slug`**——也就是 ID 仍会随改名而变。
+   * （曾试过「按正文摘要推导」，实测两篇正文相同的不同文档会撞 ID，
+   * 而撞 ID 比改名改 ID 严重得多，已放弃；理由见 `content-manifest.ts`。）
+   *
+   * <p>为什么需要它：manifest 是对外的机器出口，订阅者按 `id` 同步。
+   * 若 ID 由 slug 组成，改一次文件名就会让下游把它当成一篇新文档，
+   * 旧文档变孤儿且无从追溯。**写了 `id` 之后，改 slug 就只动 URL，不动身份。**
+   */
+  readonly id?: string;
   readonly draft: boolean;
   /**
    * 本页声明的来源引用。空数组 = 没标，**不是**错误。
@@ -58,6 +71,27 @@ export interface Doc {
     readonly revision: string;
     readonly locator?: string;
   }[];
+  /**
+   * 「这一页讲的是本站自己的实践，没有外部来源」。
+   *
+   * <p>**它解决的是「无来源有两种含义」这个问题**：
+   * 一页没登记来源，可能是「该登记却漏了」，也可能是
+   * 「它讲的是本站自己的设计选择，外部根本找不到对应规范」。
+   * **两种在数据里原本长得一模一样**，于是 reviewer 无从判断
+   * 「没有来源」是该补还是正常。
+   *
+   * <p>路线图阶段 2 的退出条件原文：「100% 的 reviewed Wiki 页面至少能解析到
+   * **一个有效来源版本或明确的『原创实践记录』**」——
+   * 而这个概念此前在仓库里**根本不存在**，只是一句路线图上的话。
+   *
+   * <p>例：`design-tokens` 讲「本站的强调色选了 #002FA7」——
+   * 外部找不到「本站为什么选这个色」的规范，它就是原创实践记录；
+   * 而 `cjk-typography` 讲「规范说 ch 等于 0 字形」，缺来源就是漏了。
+   */
+  readonly original?: {
+    /** 为什么没有外部来源。**必填**——空理由等于没声明。 */
+    readonly reason: string;
+  };
   /** 复核记录。`contentDigest` 用**当时**算出的正文摘要，构建期现算比对。 */
   readonly review?: {
     readonly status: 'pending' | 'reviewed' | 'stale';
@@ -107,6 +141,20 @@ export interface LinkGraph {
   readonly backlinks: ReadonlyMap<string, readonly Backlink[]>;
   /** slug → 它指向的 slug 集合 */
   readonly outbound: ReadonlyMap<string, ReadonlySet<string>>;
+  /**
+   * **同一目标被声明了两次**的页面：`slug → 重复的目标 slug 列表`。
+   *
+   * 正文里写了 `[[x]]`，frontmatter 的 `related` 里又写了 `x`——两条通道
+   * 表达同一件事。图用 `Set` 去重，所以**它不会算错**；但维护上要改两处。
+   *
+   * <p>代价在实测里出现过：2026-09-24 做改名实验（`design-tokens` 改名）时，
+   * 改了正文 `[[...]]` 才发现 `related` 也是一条引用通道，
+   * 于是构建被 `broken-wikilink` 拦下——**只搜一种写法就会漏**。
+   *
+   * <p>这**不是错误**，是提示：两处都写没有坏处，只是多了一处要同步的地方。
+   * 所以 lint 的默认级别是警告。
+   */
+  readonly redundantRelations: ReadonlyMap<string, readonly string[]>;
   /** 所有解析失败的链接 */
   readonly broken: readonly BrokenLink[];
   /**
@@ -132,14 +180,54 @@ export interface LinkGraph {
  *
  * 那是同一套规则的第二份实现——`urlOf` 一改，它就静默对不上，
  * 于是 HTML 里的链接与链接图/清单各指各的。现在两边都走这一个函数。
+ *
+ * ── 2026-09-24：路径前缀改为可注入 ─────────────────────────────────
+ *
+ * 此前写死 `` kind === 'wiki' ? `/wiki/${slug}/` : `/${slug}/` ``。
+ * `/wiki/` 是**本站的目录选择**，不是知识层的必然——第二个站点可能叫
+ * `/notes/`、可能不分目录。写死它就等于**让第二个站点改核心**，
+ * 而路线图阶段 4 第 6 项要的正是剥离这类逻辑。
+ *
+ * 改法是**加参数**而不是改默认值：默认仍是 `{ wiki: '/wiki' }`，
+ * 于是既有 7 处调用方零改动、产物逐字不变。
+ * 真正要回答的问题是「第二个站点能否不碰核心就用」——
+ * 那是路线图阶段 4 的退出条件，仍欠着一个真实第二站点（`verify:second-site`
+ * 只用合成语料，**证不了那一条**）。
+ *
+ * > **默认值不是「站点知识」，是「不配置时的兜底」。**
+ * > 留成 `/wiki` 是为了让本次改动**不改变任何现有行为**——
+ * > 把默认值也改成中性 `/` 是另一件事，会让本站全部 wiki 链接失效，
+ * > 得在同一次改动里把适配层一起接上，而不是顺手改掉。
+ *
+ * `check-site-agnostic` 查的是「核心模块不写死路径前缀」——
+ * 它靠**这个参数存在**来兑现，不靠默认值是什么。
  */
-export function urlFor(kind: Doc['kind'], slug: string): string {
-  return kind === 'wiki' ? `/wiki/${slug}/` : `/${slug}/`;
+export function urlFor(
+  kind: Doc['kind'],
+  slug: string,
+  prefixes: UrlPrefixes = DEFAULT_URL_PREFIXES,
+): string {
+  if (kind !== 'wiki') return `/${slug}/`;
+  // 去掉结尾斜杠再拼：`/notes/` + `abc` 会得到 `/notes//abc/`
+  const base = prefixes.wiki.replace(/\/+$/, '');
+  return `${base}/${slug}/`;
 }
 
-/** 计算文档的对外 URL。文章与 wiki 页共用一套规则，便于互相链接。 */
-export function urlOf(doc: Doc): string {
-  return urlFor(doc.kind, doc.slug);
+/** 知识库条目的 URL 前缀。缺省为 `/wiki`，与本项目 2026-09 之前的行为一致。 */
+export interface UrlPrefixes {
+  /** 知识库条目的目录前缀，不要带结尾斜杠 */
+  readonly wiki: string;
+}
+
+const DEFAULT_URL_PREFIXES: UrlPrefixes = { wiki: '/wiki' };
+
+/**
+ * 计算文档的对外 URL。文章与 wiki 页共用一套规则，便于互相链接。
+ *
+ * `prefixes` 一路透传——不给就用默认，于是**既有调用方零改动**。
+ */
+export function urlOf(doc: Doc, prefixes: UrlPrefixes = DEFAULT_URL_PREFIXES): string {
+  return urlFor(doc.kind, doc.slug, prefixes);
 }
 
 export interface GraphOptions {
@@ -205,6 +293,7 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
   const outbound = new Map<string, Set<string>>();
   const broken: BrokenLink[] = [];
   const ambiguous: AmbiguousLink[] = [];
+  const redundantRelations = new Map<string, string[]>();
   const inboundCount = new Map<string, number>();
 
   for (const doc of published) {
@@ -220,9 +309,33 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     //
     // `offset`/`end` 对声明来的引用没有意义（它不在原文里），给 -1：
     // 图只用 `target` 与 `label`，而替换/报错定位只走 `parseWikiLinks` 的结果。
-    const refs: WikiLinkRef[] = [...parseWikiLinks(doc.body)];
+    //
+    // 两条通道在这里合并成**同一个数组**——所以解析、校验、计数只有一套逻辑。
+    // 但**来源要分开记**：只有这样才能知道某个目标是不是被声明了两次
+    // （见 `redundantRelations`）。
+    const bodyRefs = [...parseWikiLinks(doc.body)];
+    const refs: WikiLinkRef[] = [...bodyRefs];
     for (const target of doc.declaredRelations ?? []) {
       refs.push({ target, anchor: null, label: target, offset: -1, end: -1 });
+    }
+
+    // 同一目标被两条通道各写一次 = 多一处要同步的地方。改名时最容易漏。
+    // ⚠️ **按解析后的 slug 比，不按原始字符串比**——`related: [中文排版]`
+    // 与正文 `[[cjk-typography]]` 指的是同一页，也算重复。
+    const viaBody = new Set<string>();
+    for (const ref of bodyRefs) {
+      const resolved = lookup.get(normalizeTarget(ref.target));
+      if (resolved !== undefined) viaBody.add(resolved);
+    }
+    const duplicated: string[] = [];
+    for (const target of doc.declaredRelations ?? []) {
+      const resolved = lookup.get(normalizeTarget(target));
+      if (resolved !== undefined && viaBody.has(resolved) && !duplicated.includes(resolved)) {
+        duplicated.push(resolved);
+      }
+    }
+    if (duplicated.length > 0) {
+      redundantRelations.set(doc.slug, duplicated.sort());
     }
 
     for (const ref of refs) {
@@ -273,7 +386,17 @@ export function buildGraph(docs: readonly Doc[], options: GraphOptions = {}): Li
     .map((d) => d.slug)
     .sort();
 
-  return { bySlug, lookup, backlinks, outbound, broken, ambiguousTitles, ambiguous, orphans };
+  return {
+    bySlug,
+    lookup,
+    backlinks,
+    outbound,
+    broken,
+    ambiguousTitles,
+    ambiguous,
+    redundantRelations,
+    orphans,
+  };
 }
 
 /** 解析一个 wiki 链接目标，返回其 URL；无法解析时返回 null。 */
@@ -284,9 +407,4 @@ export function resolverFor(graph: LinkGraph): (target: string) => string | null
     const doc = graph.bySlug.get(slug);
     return doc ? urlOf(doc) : null;
   };
-}
-
-/** 某个文档的所有 wiki 链接引用，供页面渲染使用。 */
-export function refsOf(doc: Doc): WikiLinkRef[] {
-  return parseWikiLinks(doc.body);
 }

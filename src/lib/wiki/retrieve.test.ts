@@ -22,6 +22,7 @@ import {
   junctionsOf,
   rank,
   splitPassages,
+  termWeight,
   tokenize,
 } from './retrieve.js';
 
@@ -245,5 +246,50 @@ describe('文档频次', () => {
     // idf 就变成了「这页写了多少遍」而不是「多少页写了它」
     const ps = corpus({ a: '## 甲\n\n行宽\n\n## 乙\n\n行宽\n\n## 丙\n\n行宽', b: '## 丁\n\n行宽' });
     expect(documentFrequency(ps).get('行宽')).toBe(2);
+  });
+});
+
+// ── 单字母不该有权重 ──────────────────────────────────────────────────
+/**
+ * 实测出来的缺陷（2026-09-24）：把语料从「只有 wiki」扩到「wiki + posts」后，
+ * 金标里「怎么做 A/B 测试？」这一条翻绿了——检索器说 `reproducible-builds`
+ * 覆盖 44%，于是判定「有依据」。
+ *
+ * 去看它到底命中了什么：
+ *
+ *     命中词：['b', 'a']    覆盖：0.4436
+ *
+ * **`A/B` 被切成了 `a` 和 `b` 两个单字母**，而「测试」根本没进命中词。
+ * 根因在 `termWeight`：ASCII 词只要语料里出现过就按 IDF 给权重，
+ * 而 `a` / `b` 这种字母在任何含英文的文本里都大量出现——
+ * **它们几乎必然命中，于是必然贡献覆盖。**
+ *
+ * 后果很具体：一条期望「无依据」的问题被判成「有依据」，
+ * 而真正相关的「测试」一词压根没被算进去。
+ */
+describe('termWeight · 单字母 ASCII', () => {
+  const idfOf = (term: string) => termWeight(new Map([[term, 5]]), 10, term, 1);
+
+  it('单字母 ASCII 权重为 0——它们在任何英文文本里都会出现', () => {
+    expect(idfOf('a')).toBe(0);
+    expect(idfOf('b')).toBe(0);
+    expect(idfOf('x')).toBe(0);
+  });
+
+  it('两个字母的缩写仍有权重——那是真词（A/B、MVP、CI）', () => {
+    // 边界不能一起砍掉：`A/B 测试` 里的 `a`、`b` 是噪声，
+    // 而 `CI` 里的 `ci` 是货真价实的术语。**长度就是这条线。**
+    expect(idfOf('ci')).toBeGreaterThan(0);
+    expect(idfOf('ab')).toBeGreaterThan(0);
+  });
+
+  it('多字母 ASCII 词照常有权重', () => {
+    expect(idfOf('markdown')).toBeGreaterThan(0);
+  });
+
+  it('中文单字不受影响——「文」这类字不是这个问题', () => {
+    // 中文没有「单字母」这回事：切出来的是一个字，而字是有语义的。
+    // 砍 ASCII 单字母不能顺手把中文单字也砍掉。
+    expect(termWeight(new Map([['行', 1]]), 10, '行', 1)).toBeGreaterThan(0);
   });
 });

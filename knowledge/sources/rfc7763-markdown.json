@@ -1,0 +1,16 @@
+{
+  "_comment": "`text/markdown` 媒体类型的登记。与 rfc9110-accept 一起构成内容协商的两份一手依据。",
+  "id": "rfc7763-markdown",
+  "title": "RFC 7763: The text/markdown Media Type",
+  "kind": "web",
+  "url": "https://www.rfc-editor.org/rfc/rfc7763.html",
+  "revisions": [
+    {
+      "id": "rfc7763",
+      "capturedAt": "2026-09-24",
+      "locator": "全文",
+      "note": "2026-09-24 抓取 RFC 原文逐字核实。**它只做一件事：登记 `text/markdown` 这个媒体类型。**文章里关于内容协商的**判定规则**（q 值、具体程度优先、并列时怎么办）**全部来自 RFC 9110**，不是这一份——两者别混。",
+      "evidence": "This document registers the text/markdown media type for use with Markdown, a family of plain-text formatting syntaxes that optionally can be converted to formal markup languages such as HTML."
+    }
+  ]
+}

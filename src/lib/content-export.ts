@@ -6,7 +6,7 @@
  * 派生自 manifest 与真实 markdown 孪生文件，避免第三套元数据悄悄漂移。
  */
 import { createHash } from 'node:crypto';
-import type { ContentManifest, ContentManifestDocument } from './content-manifest.js';
+import type { ContentManifest, ContentManifestDocument } from './content-manifest.ts';
 
 export const CONTENT_EXPORT_FORMAT = 'letterpress-content-record';
 export const CONTENT_EXPORT_VERSION = 1;

@@ -45,7 +45,7 @@ Netlify 与 Vercel 的仓库配置都显式声明了这个 MIME，不依赖托�
 ```json
 {
   "format": "letterpress-content-record",
-  "version": 1,
+  "version": 1,   // 这是 NDJSON 记录的版本；清单的版本见 content-manifest.json
   "site": {
     "name": "示例站",
     "language": "zh-CN",
@@ -76,6 +76,35 @@ Netlify 与 Vercel 的仓库配置都显式声明了这个 MIME，不依赖托�
 
 知识库条目还会带 `wikiKind`；日期只有在 frontmatter 确实存在时才输出。`content.text`
 与对应 `.md` 端点逐字节一致，`bytes` 按 UTF-8 计算，`sha256` 可在写入索引前复核。
+
+### `provenance`：来源与复核状态（可选）
+
+登记了来源或复核过的条目会多一个 `provenance` 块：
+
+```json
+"provenance": {
+  "sources": [
+    { "sourceId": "css-values-4", "revision": "WD-20240312", "locator": "§5.1.1 长度单位 · ch" }
+  ],
+  "review": {
+    "status": "reviewed",
+    "checkedAt": "2026-09-24",
+    "contentDigest": "0e700777…"
+  }
+}
+```
+
+**两件事值得下游注意：**
+
+1. **整个 `provenance` 键在页面既没登记来源、也没标复核时是缺席的**，
+   不是空对象。空数组读起来像「查过了，没有来源」，
+   而缺席是「没标」——**这两种含义不能混**。
+2. **`review.status` 是 `stale` 时，这篇的结论已经不再被确认过。**
+   它仍然会出现在出口里（内容没有消失），但**不该被当成新鲜证据**。
+   `contentDigest` 是复核当时的正文摘要：它变了就说明正文在复核之后被改过。
+
+这个字段与 HTML 页面上显示的「来源与复核状态」是**同一份数据**——
+页面能看见的，订阅者也必须能看见，否则机器侧会比人侧更信任一篇过期内容。
 
 ## 最小导入示例
 

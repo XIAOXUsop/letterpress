@@ -124,6 +124,192 @@ try {
     } else {
       console.log('  ✓ 草稿没有进入内容清单');
     }
+
+    /*
+     * ── 字体体积 ──────────────────────────────────────────────────────
+     *
+     * ⚠️ **口径陷阱**：`du -sk` 按 4 KB 块算，得出 104；
+     * 而实际字节是 102164 = **99.8 KB**（README 写 100 KB 是对的）。
+     * **两个数都是「实测」，但只有一个对。** 所以这里一律用字节数。
+     *
+     * 字体是**不需要 gzip 预压缩**的资源（已经是 woff2），
+     * 所以直接加总字节即可。
+     */
+    const astroDir = join(dist, '_astro');
+    const fontFiles = (await readdir(astroDir)).filter((f) => f.endsWith('.woff2'));
+    if (fontFiles.length > 0) {
+      let fontBytes = 0;
+      for (const f of fontFiles) fontBytes += (await readFile(join(astroDir, f))).length;
+      const readmeText = await readFile(join(process.cwd(), 'README.md'), 'utf8');
+      const claimed = /字体 \| \*\*([\d.]+) KB/.exec(readmeText)?.[1];
+      const actual = Math.round(fontBytes / 1024);
+      if (claimed !== String(actual)) {
+        problems.push(
+          `README 写字体 ${claimed} KB，实际 ${actual} KB（${fontBytes} bytes）。` +
+            `⚠️ 口径：一律用字节数。\`du -sk\` 按 4 KB 块对齐，` +
+            `对同一批文件可能给出不同的 KB 数（有时凑巧相同、有时差几 KB）——` +
+            `两个数都是「实测」，但只有一个对。`,
+        );
+      } else {
+        console.log(`  ✓ README 里的字体体积与产物一致（${actual} KB / ${fontFiles.length} 个文件）`);
+      }
+    }
+
+    /*
+     * ── README 里的实测数字，必须等于产物里的实测值 ────────────────────
+     *
+     * 2026-09-24 实测抓到的漂移：README 写「CSS 单文件 23.7 KB / gzip 5.1 KB」，
+     * 而**内容改动之后实际是 24.1 KB / 5.1 KB**——
+     * gzip 那个还准，原始体积漂了，**而没有任何门禁发现**。
+     *
+     * 已被门禁守着的只有三类（测试条数、契约条数、token 节省率）。
+     * 体积、页数这些**同样会随内容漂**，只是没人比对。
+     *
+     * 口径写在这里是为了让下一个人不必重新推：
+     * - 体积按 **KB = bytes / 1024**，一位小数；
+     * - CSS 取 `dist/_astro/*.css` 的**第一个**（本项目只有一个）；
+     * - gzip 用 `zlib.gzipSync(buf, { level: 9 })`——
+     *   **不是** `gzip -c`（默认级别 6，数字会差几个字节）。
+     */
+    const { gzipSync } = await import('node:zlib');
+    const cssDir = join(dist, '_astro');
+    const cssFiles = (await readdir(cssDir)).filter((f) => f.endsWith('.css')).sort();
+    if (cssFiles.length > 0) {
+      /*
+       * ⚠️ **`_astro` 里只该有本站的 CSS。**
+       * Pagefind 也会产 CSS（`pagefind-ui.css` 等），但它们在 `dist/pagefind/`。
+       * 一旦哪天它把 CSS 也写进 `_astro`，`sort()[0]` 可能取到 Pagefind 的
+       * 那份——**而门禁照样会绿**（只要两个数字碰巧接近）。
+       * 所以这里断言「只有一份」，把那个前提钉住，而不是靠它成立。
+       */
+      if (cssFiles.length > 1) {
+        problems.push(
+          `dist/_astro/ 里有 ${cssFiles.length} 个 CSS：${cssFiles.join('、')}。` +
+            `本检查只认**本站那一份**——若 Pagefind 的 CSS 也进了这个目录，` +
+            `按文件名排序取第一个会取错，而门禁仍可能绿。`,
+        );
+      }
+      const cssBytes = (await readFile(join(cssDir, cssFiles[0]))).length;
+      const cssGzip = gzipSync(await readFile(join(cssDir, cssFiles[0])), { level: 9 }).length;
+      const readme = await readFile(join(process.cwd(), 'README.md'), 'utf8');
+      const claimedRaw = /CSS \| 单文件 \*\*([\d.]+) KB/.exec(readme)?.[1];
+      // ⚠️ **必须限定在 CSS 那一行。** 原先写 `/gzip ([\d.]+) KB/`（全 README
+      // 第一个匹配），结果 2026-09-24 在别处加了一句「gzip 93 KB」之后，
+      // 它匹到了那句、报「README 写 CSS gzip 93 KB，实际 5.1 KB」。
+      //
+      // **门禁自己也会被 innocuous 的改动绊倒**——而它的报错看起来
+      // 像是 README 写错了，**把人引向错误的改法**。
+      const cssLine = readme.split('\n').find((l) => l.includes('| CSS |')) ?? '';
+      const claimedGzip = /gzip ([\d.]+) KB/.exec(cssLine)?.[1];
+      const actualRaw = (cssBytes / 1024).toFixed(1);
+      const actualGzip = (cssGzip / 1024).toFixed(1);
+      if (claimedRaw !== actualRaw) {
+        problems.push(
+          `README 写 CSS 单文件 ${claimedRaw} KB，实际 ${actualRaw} KB` +
+            `（${cssBytes} bytes）。**内容改动会让它漂，而漂了没人提醒。**`,
+        );
+      }
+      if (claimedGzip !== actualGzip) {
+        problems.push(`README 写 CSS gzip ${claimedGzip} KB，实际 ${actualGzip} KB`);
+      }
+      if (claimedRaw === actualRaw && claimedGzip === actualGzip) {
+        console.log(`  ✓ README 里的 CSS 体积与产物一致（${actualRaw} KB / gzip ${actualGzip} KB）`);
+      }
+    }
+
+    /*
+     * ⚠️ **站内 JS 体积刻意不在这里查。**
+     *
+     * 我先加了这条，然后实测发现它**永远量到 0**：
+     * 本脚本第 84 行只跑 `runAstro(['build'])`，**不跑 `pagefind`**，
+     * 而站内 JS 全部来自 Pagefind 产物——所以门禁自己的构建产物里
+     * `dist` 连 `_astro` 之外都没有 js。
+     *
+     * > **一条量不到东西的门禁，比没有门禁更坏**：
+     * > 它绿着，而它绿的原因与它声称要守的东西无关。
+     * > 本轮已经吃过一次同族亏（迭代 R 的元检查），
+     * > 那次是自己写的，这次是自己刚加的。
+     *
+     * 所以它放在 `npm run measure` 里——**那个命令跑在完整 `npm run build`
+     * 之后**，口径与本文件一致（同一个 `Math.round(bytes / 1024)`）。
+     */
+
+    /*
+     * 来源与复核状态必须真的在产物里。
+     *
+     * 2026-09-24 加的字段，单测已经覆盖了 `buildContentManifest`——
+     * 但**单测过不等于产物里有**：中间还有一层「manifest 怎么被生成、
+     * 怎么被序列化」。这一条量的是**最终那个 JSON 文件**。
+     *
+     * 为什么值得单独断言：`stale` 内容不得在机器接口里被当成新鲜内容，
+     * 而 manifest 正是订阅者判断「这篇能不能信」的唯一依据。
+     * 字段一旦从产物里消失，订阅者不会报错——它只会安静地少一个判断依据。
+     */
+    /*
+     * 清单版本号必须与**文档里声明的期望版本**一致。
+     *
+     * ⚠️ 这里**不能**直接 import `content-manifest.ts` 来比常量：
+     * 那个文件内部用 `.js` 后缀 import（TS 惯例，bundler 能解析），
+     * 而这些脚本是**裸 Node** 跑的，解析不了——实测报
+     * `Cannot find module '.../wiki/graph.js'`。
+     * 仓库里其它脚本能 import 源码，是因为它们 import 的模块内部没有 `.js` 引用。
+     *
+     * 所以**读源码文本**取那个常量。
+     *
+     * ── 2026-09-24 修正：删掉了 `EXPECTED_MANIFEST_VERSION = 2` ──────
+     *
+     * 原先这里有两份：源码里的常量一份、这个期望值一份，
+     * 然后「两个数一起比」，并提示「改了字段形状要**同时**改两处」。
+     *
+     * > **那个提示本身就是缺陷的形状**：它承认了「会有两处」，
+     * > 于是把「记得改两处」当成流程的一部分。
+     * > 而这个约定**已经被违反过一次**——提交 `2518438` 把生产端升到 2，
+     * > 同步器与它的测试固件都没跟上，结果**同步器对着本站自己的清单必然报错，
+     * > 而 453 条测试全绿**（测试固件也写着 1，测的是一个已不存在的格式）。
+     *
+     * 现在只留一个真值：期望值**就是源码里那个常量**。
+     * `check-single-source.mjs` 保证没人再写第二份。
+     */
+    const declared = await readFile(
+      join(dist, '..', 'src', 'lib', 'content-manifest.ts'),
+      'utf8',
+    ).then((t) => /CONTENT_MANIFEST_VERSION\s*=\s*(\d+)/.exec(t)?.[1]);
+    if (!declared) {
+      problems.push('从 src/lib/content-manifest.ts 里读不出 CONTENT_MANIFEST_VERSION');
+    }
+    const expected = declared ? Number(declared) : null;
+    if (manifest.version !== expected) {
+      problems.push(
+        `产物里的 manifest version 是 ${manifest.version}，` +
+          `而源码声明的是 ${expected ?? '（读不出来）'}。` +
+          `**改了字段形状就要升版本**——同一份 version 对应两种形状，` +
+          `正是版本号要防的事。（同时确认 src/lib/content-manifest.ts 里的 ` +
+          `CONTENT_MANIFEST_VERSION 也改了）`,
+      );
+    } else {
+      console.log(`  ✓ 清单版本号符合预期（v${manifest.version}）`);
+    }
+
+    const withProvenance = manifest.documents.filter((doc) => doc.provenance);
+    const reviewedOnes = withProvenance.filter((doc) => doc.provenance.review?.status === 'reviewed');
+    const sourcedOnes = withProvenance.filter((doc) => (doc.provenance.sources ?? []).length > 0);
+    if (withProvenance.length > 0 && reviewedOnes.length === 0) {
+      problems.push('内容清单里有 provenance，却没有任何一条带 review 状态——字段多半是空的');
+    }
+    if (withProvenance.length > 0 && sourcedOnes.length === 0) {
+      problems.push('内容清单里有 provenance，却没有任何一条带 sources——同上');
+    }
+    if (withProvenance.length > 0) {
+      console.log(
+        `  ✓ 来源与复核状态进入了内容清单（${withProvenance.length} 篇有 provenance，` +
+          `${sourcedOnes.length} 篇带来源，${reviewedOnes.length} 篇带复核状态）`,
+      );
+    } else {
+      problems.push(
+        '内容清单里一篇 provenance 都没有——本站有登记来源的页面，' +
+          '这说明 provenance 没有进入产物（单测过不代表产物里有）',
+      );
+    }
   } catch (error) {
     problems.push(
       `内容清单不存在或无法解析：${error instanceof Error ? error.message : String(error)}`,

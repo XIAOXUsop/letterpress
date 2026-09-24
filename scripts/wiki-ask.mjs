@@ -6,7 +6,7 @@
  *
  * 「把整站塞给模型」有两个代价，第二个更要命：
  *
- *   1. **贵**——6 页还行，60 页就不行了。
+ *   1. **贵**——11 页（wiki + posts）还行，600 页就不行了。
  *   2. **说不清出处**——模型给出的每句话，你都不知道它读的是哪一版、
  *      那一页有没有被复核过、那个结论是不是已经被同一页的勘误推翻了。
  *
@@ -30,10 +30,13 @@
  *   node scripts/wiki-ask.mjs --all "…"      # 不截断，打全段
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
-import { splitPassages, assess, MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
+import { MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
+import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
+import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_USAGE } from '../src/lib/cli/exit-codes.mjs';
+import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
@@ -41,157 +44,99 @@ const full = args.includes('--all');
 const question = args.filter((a) => !a.startsWith('--')).join(' ').trim();
 
 if (question === '') {
-  console.error('\n给一个问题。例：node scripts/wiki-ask.mjs "为什么行宽用 em 不用 ch"\n');
-  process.exit(2);
+  failWithJson(asJson ? 'json' : 'text', EXIT_USAGE, '给一个问题。', {
+    hint: '例：node scripts/wiki-ask.mjs "为什么行宽用 em 不用 ch"',
+  });
 }
 
-const WIKI = join(process.cwd(), 'src', 'content', 'wiki');
+const ROOT = process.cwd();
 
-// ── 读知识层 ────────────────────────────────────────────────────────
+// ── 读内容 ──────────────────────────────────────────────────────────
 
-function bodyOf(source) {
-  const end = source.indexOf('\n---', 3);
-  if (end === -1) return '';
-  return source.slice(source.indexOf('\n', end + 1) + 1).trim();
-}
+/*
+ * 语料 = wiki **与 posts**。
+ *
+ * 2026-09-24 实测的缺口：这里只扫 wiki，于是问「七个 agent 里哪几个主动要
+ * markdown」得到「无依据」——而答案明明白白写在 markdown-for-agents.md 里
+ * （「七个里三个主动要」）。**报「无依据」比答错更坏**：它让调用方以为
+ * 知识库里没有这件事，而实际上有一整页在讲它。
+ *
+ * 这与迭代 I 修掉的 wiki:impact 缺口**完全同构**：只读 wiki，
+ * 于是 articles 层的证据在两个工具里都「不存在」。
+ *
+ * 解析一律走 `src/lib/wiki/read-page.ts`——原先这里自己抄了一份
+ * `parseRefs` / `parseReview` / `parseList`，而 check-impact 与 wiki-impact
+ * 各自还有一份。**四份拷贝里任何一份漏改，症状都是「工具之间答案不一致」，
+ * 而每个都跑、都绿。**
+ */
+const WIKI_DIR = join(ROOT, 'src', 'content', 'wiki');
+const POSTS_DIR = join(ROOT, 'src', 'content', 'posts');
 
-function parseList(raw) {
-  return (raw ?? '')
-    .replace(/^\[|\]$/g, '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function parseRefs(block) {
-  const refs = [];
-  let cur = null;
-  for (const line of block.split('\n')) {
-    const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
-    if (sid) {
-      if (cur) refs.push(cur);
-      cur = { sourceId: sid[1], revision: '', locator: '' };
-      continue;
+function loadCorpus() {
+  const pages = [];
+  for (const dir of [WIKI_DIR, POSTS_DIR]) {
+    let files;
+    try {
+      files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f)).sort();
+    } catch {
+      failWithJson(asJson ? 'json' : 'text', EXIT_ENVIRONMENT, `读不到 ${dir}。`, {
+        hint: '请在仓库根目录运行。',
+      });
     }
-    if (!cur) continue;
-    const rev = /^\s*revision:\s*(.+?)\s*$/.exec(line);
-    if (rev) cur.revision = rev[1];
-    const loc = /^\s*locator:\s*(.+?)\s*$/.exec(line);
-    if (loc) cur.locator = loc[1];
+    if (files.length === 0) {
+      failWithJson(asJson ? 'json' : 'text', EXIT_EMPTY_INPUT, `${dir} 里一个条目都没有。`, {
+        hint: '这个命令只能检索一半的内容——空的那一半会给出误导性的结果。',
+      });
+    }
+    for (const file of files) pages.push(readContentPage(dir, file));
   }
-  if (cur) refs.push(cur);
-  return refs;
+  return pages;
 }
 
-function parseReview(block) {
-  const m = /^review:\s*$([\s\S]*?)(?=\n\S|\s*$)/m.exec(block);
-  if (!m) return undefined;
-  const get = (k) => new RegExp(`^\\s+${k}:\\s*(.+?)\\s*$`, 'm').exec(m[1])?.[1];
-  const status = get('status');
-  if (!status) return undefined;
-  return { status, checkedAt: get('checkedAt') };
-}
-
-let files;
-try {
-  files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f)).sort();
-} catch {
-  console.error(`读不到 ${WIKI}——请在仓库根目录运行。`);
-  process.exit(1);
-}
-if (files.length === 0) {
-  console.error(`${WIKI} 里一个条目都没有——这个命令什么都没检索。`);
-  process.exit(1);
-}
-
-const docs = files.map((file) => {
-  const source = readFileSync(join(WIKI, file), 'utf8');
-  const end = source.indexOf('\n---', 3);
-  const block = source.slice(3, end);
-  return {
-    slug: file.replace(/\.mdx?$/, ''),
-    title: frontmatterField(source, 'title') ?? file,
-    kind: frontmatterField(source, 'kind') ?? '',
-    updated: frontmatterField(source, 'updated') ?? '',
-    related: parseList(frontmatterField(source, 'related')),
-    sources: parseRefs(block),
-    review: parseReview(block),
-    body: bodyOf(source),
-  };
-});
+const docs = loadCorpus();
 
 const bySlug = new Map(docs.map((d) => [d.slug, d]));
 
 // ── 检索 ────────────────────────────────────────────────────────────
 
-const passages = docs.flatMap((d) => splitPassages(d.slug, d.body));
-if (passages.length === 0) {
-  console.error('切不出任何段落——检索器会永远报「没有依据」，先查 splitPassages。');
-  process.exit(1);
-}
-
-const { passages: ranked, supported, reason } = assess(passages, question, {
+/*
+ * 计算交给 `src/lib/wiki/context-pack.ts`——那里有 15 条测试覆盖它，
+ * 包括路线图 §3 要求的五样（文档 ID、片段、来源版本、状态、关系路径）。
+ *
+ * **这份逻辑原先整个写在本文件顶层，且顶层就有 `process.exit`**，
+ * 所以它无法被 import，也就无法被单测——与迭代 G 之前的 wiki-impact
+ * 同一个处境。抽出之后两边共用一份实现：**复制一份到测试里再验一遍
+ * 等于验了个副本，而副本会漂。**
+ */
+const pack = buildContextPack(docs, question, {
   limit: full ? 20 : 6,
   perDoc: 2,
+  fullText: full,
 });
-
-// ── 关系路径 ────────────────────────────────────────────────────────
-//
-// 「这段和主命中是什么关系」——没有它，模型会以为捞回来的几页
-// 是彼此无关的碎片，从而漏掉它们之间的推论。
-
-const primary = ranked[0]?.docId;
-function relationTo(slug) {
-  if (slug === primary) return '主命中';
-  const a = bySlug.get(primary);
-  const b = bySlug.get(slug);
-  if (a?.related.includes(slug)) return `← ${primary} 声明`;
-  if (b?.related.includes(primary)) return `→ 声明了 ${primary}`;
-  // 正文互链（`[[…]]`）也算一条真实的关系
-  const linkRe = new RegExp(`\\[\\[\\s*${slug}\\s*\\]\\]`, 'i');
-  if (a && linkRe.test(a.body)) return `← ${primary} 正文`;
-  if (b && new RegExp(`\\[\\[\\s*${primary}\\s*\\]\\]`, 'i').test(b.body)) {
-    return `→ 正文引用了 ${primary}`;
-  }
-  return '无直接关系';
-}
-
-function snippet(text) {
-  if (full) return text;
-  const lines = text.split('\n').filter((l) => l.trim() !== '');
-  return lines.slice(0, 6).join('\n');
-}
+const { passages: ranked, supported, reason } = {
+  passages: pack.passages,
+  supported: pack.supported,
+  reason: pack.reason,
+};
 
 if (asJson) {
-  console.log(JSON.stringify({
-    question,
-    supported,
-    reason,
-    minCoverage: MIN_COVERAGE,
-    passages: ranked.map((r) => {
-      const doc = bySlug.get(r.docId);
-      return {
-        id: r.id,
-        docId: r.docId,
-        title: doc?.title ?? r.docId,
-        heading: r.heading,
-        score: Number(r.score.toFixed(4)),
-        coverage: Number(r.coverage.toFixed(4)),
-        matched: r.matched,
-        relation: relationTo(r.docId),
-        updated: doc?.updated ?? '',
-        review: doc?.review ?? null,
-        sources: doc?.sources ?? [],
-        text: snippet(r.text),
-      };
-    }),
-  }, null, 2));
+  /*
+   * ⚠️ **加 `ok` 是为了形状固定。**
+   * 消费方要能写「先 `JSON.parse`，再看 `ok`」——
+   * 而不必在解析之前先判断「这次是不是成功」
+   * （很多运行时会丢掉退出码，stdout 里的 JSON 总是拿得到的）。
+   *
+   * 而「无依据」是**成功不是失败**（`supported: false`），
+   * 所以它的 `ok` 仍是 true——**那是一条结论，不是一次错误**。
+   */
+  console.log(JSON.stringify(jsonOk(pack), null, 2));
   process.exit(0);
 }
 
 // ── 人读的输出 ──────────────────────────────────────────────────────
 
-console.log(`\n问题：${question}`);
+console.log(`
+问题：${question}`);
 console.log('─'.repeat(72));
 
 if (!supported) {
@@ -207,20 +152,19 @@ if (!supported) {
 }
 
 for (const [i, r] of ranked.entries()) {
-  const doc = bySlug.get(r.docId);
   const flags = [];
-  if (doc?.review) flags.push(`复核：${doc.review.status}${doc.review.checkedAt ? ` ${doc.review.checkedAt}` : ''}`);
-  if (doc?.updated) flags.push(`正文更新：${doc.updated}`);
-  if (doc?.sources?.length) {
-    flags.push(`来源：${doc.sources.map((s) => `${s.sourceId}@${s.revision}`).join('、')}`);
+  if (r.review) flags.push(`复核：${r.review.status}${r.review.checkedAt ? ` ${r.review.checkedAt}` : ''}`);
+  if (r.updated) flags.push(`正文更新：${r.updated}`);
+  if (r.sources.length > 0) {
+    flags.push(`来源：${r.sources.map((x) => `${x.sourceId}@${x.revision}`).join('、')}`);
   }
 
-  console.log(`\n${i + 1}. ${doc?.title ?? r.docId}  ·  ${r.docId}`);
+  console.log(`\n${i + 1}. ${r.title}  ·  ${r.docId}`);
   console.log(`   ${r.heading || '（正文开头）'}`);
-  console.log(`   覆盖 ${(r.coverage * 100).toFixed(0)}%  ·  ${relationTo(r.docId)}`
+  console.log(`   覆盖 ${(r.coverage * 100).toFixed(0)}%  ·  ${r.relation}`
     + (flags.length ? `  ·  ${flags.join('  ·  ')}` : ''));
   console.log(`   命中：${r.matched.slice(0, 8).join(' ')}`);
-  for (const line of snippet(r.text).split('\n')) console.log(`   │ ${line}`);
+  for (const line of r.text.split('\n')) console.log(`   │ ${line}`);
 }
 
 console.log('\n' + '─'.repeat(72));

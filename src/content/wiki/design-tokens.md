@@ -2,7 +2,22 @@
 title: 设计令牌
 summary: 三层 token 结构，命名描述用途而非外观。换配色时只动原始值，换暗色模式时只动语义映射。
 kind: concept
-related: [cjk-typography, letterpress]
+# 稳定身份：显式写死，改名后 ID 不变（见 lib/content-manifest.ts 的 manifestId）
+id: design-tokens
+# 原创实践记录：本页讲的是**本站自己的设计选择**（强调色取 #002FA7、
+# 三层 token 结构、命名描述用途而非外观）。外部规范里没有「本站为什么选这个色」，
+# 也没有规定 token 该分几层——**所以它没有可登记的外部来源**。
+# 不写这一段，「没有来源」就分不清是该补还是正常。
+original:
+  reason: 本站的设计选择与内部约定，外部规范没有对应条款
+# 已复核：这一页的内容与上面声明的「原创实践」一致，
+# 页面里引用的具体数字（色值、体积、页数）与产物一致。
+review:
+  status: reviewed
+  checkedAt: 2026-09-24
+  contentDigest: 148005aecd560399fb55ac65fe6e037f9216fb3cd4dc07b44e694b6b233e243b
+# related 整行删除：正文里的 [[中文排版]] 与 [[letterpress]] 已覆盖全部关系。
+# 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---
 
 `src/styles/tokens.css`。三层结构：

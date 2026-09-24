@@ -42,6 +42,35 @@ const posts = defineCollection({
     /** 显式指定 URL 片段。中文标题留空会自动生成中文 URL（合法，但复制出去很长） */
     slug: z.string().optional(),
     /**
+     * 稳定身份，**不随 slug 变化**。
+     *
+     * 可选。不写就退回 `kind:slug`——那样改一次文件名，下游按 ID 同步的
+     * 订阅者会把它当成一篇新文档（见 `lib/content-manifest.ts` 的 `manifestId`）。
+     * 真要改名时先补这个字段，之后再改 slug 也不影响身份。
+     *
+     * 一旦写下就不该再改：它是对外的承诺，不是给人看的标签。
+     */
+    id: z.string().min(1).optional(),
+    /**
+     * 本篇用到的来源。结构与 wiki 完全相同，校验也共用同一套
+     * （`lib/wiki/sources.ts` 的 `validateSourceRefs`）。
+     *
+     * 2026-09-24 补上。此前来源治理**只覆盖 wiki**，于是文章里那些
+     * 带版本的规范引用（`WD-css-values-4-20240312` 之类）在
+     * `wiki:impact` 眼里是「没人引用」——**不是漏报，是这一层压根没接线**。
+     *
+     * 同样只在**值得单独治理的结论**上标，不是每个链接都标。
+     */
+    sources: z
+      .array(
+        z.object({
+          sourceId: z.string().min(1),
+          revision: z.string().min(1),
+          locator: z.string().optional(),
+        }),
+      )
+      .default([]),
+    /**
      * 是否草稿。
      *
      * **这个字段必须有，不能靠 `content.ts` 里那个 `?? false` 兜底。**
@@ -104,6 +133,11 @@ const wiki = defineCollection({
     /** 相关条目。等价于在正文里写 [[...]]，但更显式，且不要求正文出现 */
     related: z.array(z.string()).default([]),
     /**
+     * 稳定身份，**不随 slug 变化**。与 posts 同一个理由，详见那里的注释。
+     * 知识条目被改名/合并的频率比文章高，所以这个字段对 wiki 更值得写。
+     */
+    id: z.string().min(1).optional(),
+    /**
      * 本页用到的来源。
      *
      * **可选**——老页面没有它照样构建。但一旦声明，就必须能解析到
@@ -121,6 +155,20 @@ const wiki = defineCollection({
         }),
       )
       .default([]),
+    /**
+     * 「这一页讲的是本站自己的实践，没有外部来源」。
+     *
+     * 与 `sources` 是**两种不同的依据**：一个是「外部规范/研究说了什么」，
+     * 一个是「本站做了什么选择」。缺了这个区分，「没登记来源」就分不清
+     * 是漏了还是正常——详见 `Doc.original` 的注释与路线图阶段 2 的退出条件。
+     *
+     * `reason` 必填：空理由等于没声明。
+     */
+    original: z
+      .object({
+        reason: z.string().min(1, '原创实践记录必须写明为什么没有外部来源'),
+      })
+      .optional(),
     /**
      * 复核记录。
      *

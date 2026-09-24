@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { ContentManifest, ContentManifestDocument } from './content-manifest.js';
+import {
+  CONTENT_MANIFEST_VERSION,
+  type ContentManifest,
+  type ContentManifestDocument,
+} from './content-manifest.js';
 import {
   buildContentExportRecords,
   CONTENT_EXPORT_FORMAT,
@@ -40,7 +44,7 @@ function document(id = 'post:hello', markdown = text): ContentManifestDocument {
 function manifest(documents: ContentManifestDocument[]): ContentManifest {
   return {
     format: 'letterpress-content-manifest',
-    version: 1,
+    version: CONTENT_MANIFEST_VERSION,
     site: { name: '示例站', language: 'zh-CN', home: 'https://example.com/' },
     documentCount: documents.length,
     edgeCount: 0,

@@ -22,7 +22,7 @@
  *
  * 用法：`npm test && npm run verify:testcount`
  */
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 
@@ -36,6 +36,66 @@ if (!existsSync(REPORT)) {
   console.log(`  ✗ 找不到 ${REPORT}`);
   console.log('      这个检查读的是 `npm test` 写出来的 JSON 报告。先跑 `npm test`。');
   console.log('      它**不会**因为读不到就当作通过——那正是"把检查拿掉就静默失效"。');
+  process.exit(1);
+}
+
+/*
+ * ⚠️ **「报告存在」不等于「报告是这次的」。**
+ *
+ * 2026-09-24 实测踩到：报告在、格式对、条数也对**上一次的**——
+ * 因为我用的是 `npx vitest run`，而只有 `npm test` 带上
+ * `--reporter=json --outputFile.json=…`（那是它写报告的唯一入口）。
+ *
+ * 症状：加完 6 条测试 → `npm test` 报 473 → `verify:testcount` 报「实测 467」。
+ * 两个数都对，**只是来自不同时刻**。
+ *
+ * > **对账的前提是「两边说的是同一件事」。**
+ * > 拿旧报告和新文档比，得到的红是**假的**——
+ * > 而「门禁报了红」很容易被当成「我漏改了某处」，于是去改本来正确的地方。
+ *
+ * 判据：**报告的 mtime 必须不早于 `src/` 里最新的被测源文件。**
+ * 拿「目录最新 mtime」比，够用且不需要列举规则
+ * （`src/`、`scripts/`、`knowledge/` 三个目录里取最新的那个）。
+ */
+const reportMtime = (await stat(REPORT)).mtimeMs;
+/*
+ * ⚠️ **只扫「会改变测试条数或测试结果」的文件**，不扫整个 `scripts/`。
+ *
+ * 第一版把 `scripts/` 整个算进去，于是**改这个文件本身就让报告过期**——
+ * 而它不产生任何测试。那是**假红**，而假红比没检查更糟。
+ *
+ * 会影响测试的：`src/` 下的 `.ts` 与 `.astro`（被测代码）。
+ * 不影响测试的：`scripts/`（只被 npm 调，不被 vitest 收）、
+ * `knowledge/` 下的 `.md`（金标数据在 check-* 里读，不在 vitest 里）。
+ *
+ * > ⚠️ **写这条注释时踩过一次**：`src/**\/*.ts` 里的 `**` 紧跟 `*`，
+ * > 在块注释内部构成 `*\/` —— **提前闭合了注释**，
+ * > 于是后面那行普通文本被当成代码解析，报 `SyntaxError: Unexpected token`。
+ * > 注释里**不要写 glob 模式**。
+ */
+const INPUT_GLOBS = [
+  { dir: 'src', match: /\.(ts|astro)$/ },
+];
+let newestInput = 0;
+let newestPath = '';
+for (const { dir, match } of INPUT_GLOBS) {
+  const full = join(process.cwd(), dir);
+  if (!existsSync(full)) continue;
+  for (const name of await readdir(full, { withFileTypes: true, recursive: true })) {
+    if (!name.isFile() || !match.test(name.name)) continue;
+    const p = join(name.parentPath ?? name.path, name.name);
+    const m = (await stat(p)).mtimeMs;
+    if (m > newestInput) {
+      newestInput = m;
+      newestPath = p;
+    }
+  }
+}
+if (newestInput > reportMtime + 1000) {
+  // 容忍 1 秒：文件系统时间戳精度与写入顺序都可能带来几十毫秒的抖动
+  console.log(`  ✗ 报告比输入旧：${newestPath.slice(process.cwd().length + 1)} 改于报告之后。`);
+  console.log('      **它量的是上一次的结果**——拿它对账会得到一个假的红。');
+  console.log('      重跑 `npm test`（不是 `npx vitest run`：只有前者会写这份报告）。');
   process.exit(1);
 }
 

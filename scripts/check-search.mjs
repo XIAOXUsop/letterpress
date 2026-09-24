@@ -117,6 +117,41 @@ if (langs.size === 0) {
 } else if (langs.size === 1 && missingLang.length === 0) {
   const [lang, count] = [...langs.entries()][0];
   console.log(`  ✓ ${count} 个页面都声明了 lang="${lang}"`);
+
+  /*
+   * ── 一致 ≠ 正确 ────────────────────────────────────────────────────
+   *
+   * 上面那条只保证**全站一致**。实测（2026-09-24）把 `<html lang>`
+   * 从 `zh-CN` 改成 `xx-YY`——一个根本不存在的语言——
+   * 这个检查仍然三项全绿：页面一致、索引语言一致、覆盖完整。
+   *
+   * 而后果恰恰是本项目最提防的那件事：Pagefind 按 lang 选分词器，
+   * `xx-YY` 选不出中文分词器，**搜「中文排版」会退化**，
+   * 页面还在、构建还绿、测试全过——只是用户再也搜不到那篇文章。
+   *
+   * 所以这里要比对**配置里声明的那个** lang。
+   * 读 `src/config.ts` 的文本而不是 import：那是 `.ts` 且内部有 `.js` 后缀
+   * import，裸 Node 加载不了（见 check-portability.mjs 里那个约束）。
+   */
+  const configText = await readFile(join(process.cwd(), 'src', 'config.ts'), 'utf8').catch(
+    () => null,
+  );
+  const declared = configText?.match(/\blang:\s*'([^']+)'/)?.[1];
+  if (!declared) {
+    problems.push(
+      '从 src/config.ts 里读不出 site.lang——' +
+        '**门禁失去了「一致但错」的唯一防线**，先查配置文件的写法。',
+    );
+  } else if (normalizeLang(lang) !== normalizeLang(declared)) {
+    problems.push(
+      `页面声明的 lang 是 "${lang}"，而 src/config.ts 里 site.lang 是 "${declared}"。` +
+        `**一致不等于正确**——Pagefind 按 lang 选分词器，` +
+        `一个不存在的语言标签会让中文分词静默失效：` +
+        `页面还在、构建还绿、测试全过，只是用户再也搜不到那篇文章。`,
+    );
+  } else {
+    console.log(`  ✓ 页面 lang 与 site.lang 一致（${declared}）`);
+  }
 } else if (langs.size > 1) {
   console.log(`  ✗ 页面语言不一致：${[...langs].map(([l, n]) => `${l}×${n}`).join('、')}`);
   problems.push('页面语言不一致——索引会按语言分片，中英混排的站需要显式处理');

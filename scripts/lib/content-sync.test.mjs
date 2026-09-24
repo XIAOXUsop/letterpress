@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,11 +45,31 @@ function document(id, text, overrides = {}) {
   };
 }
 
+/**
+ * 测试固件的 manifest 版本**从源码里读**，不写死。
+ *
+ * ⚠️ 2026-09-24 实测：这里原先写 `version: 1`，而生产端早已升到 2。
+ * 结果是**同步器对着本站自己的清单必然报「不支持的版本」**，
+ * 而 453 条测试全绿——**测试在测一个已经不存在的格式**。
+ *
+ * > 同一个事实被写了两遍（生产端一处、测试固件一处），
+ * > 两遍都没有对另一遍的检查。**版本号一改，坏的是测试而不是代码。**
+ *
+ * `content-manifest.ts` 内部用 `.js` 后缀 import，裸 Node 加载不了，
+ * 所以读文本——与 `content-sync.mjs` 里同一个做法一致。
+ */
+const MANIFEST_VERSION = (() => {
+  const file = new URL('../../src/lib/content-manifest.ts', import.meta.url);
+  const matched = /CONTENT_MANIFEST_VERSION\s*=\s*(\d+)/.exec(readFileSync(file, 'utf8'))?.[1];
+  if (!matched) throw new Error('从 content-manifest.ts 里读不出 CONTENT_MANIFEST_VERSION');
+  return Number(matched);
+})();
+
 function manifest(documents) {
   const sorted = [...documents].sort((a, b) => a.id.localeCompare(b.id));
   return {
     format: 'letterpress-content-manifest',
-    version: 1,
+    version: MANIFEST_VERSION,
     site: { name: '示例站', language: 'zh-CN', home: HOME },
     documentCount: sorted.length,
     edgeCount: 0,

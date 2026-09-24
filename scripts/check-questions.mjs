@@ -19,37 +19,44 @@
  *   node scripts/check-questions.mjs --verbose
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { splitPassages, assess } from '../src/lib/wiki/retrieve.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 
 const verbose = process.argv.includes('--verbose');
 const ROOT = process.cwd();
 const QUESTIONS = join(ROOT, 'knowledge', 'questions.md');
 const WIKI = join(ROOT, 'src', 'content', 'wiki');
+const POSTS = join(ROOT, 'src', 'content', 'posts');
 
 const problems = [];
 
 // ── 语料 ────────────────────────────────────────────────────────────
 
-function bodyOf(source) {
-  const end = source.indexOf('\n---', 3);
-  if (end === -1) return '';
-  return source.slice(source.indexOf('\n', end + 1) + 1).trim();
-}
-
-const files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f)).sort();
-if (files.length === 0) {
-  console.error(`${WIKI} 里一个条目都没有——这个检查什么都没量。`);
+/*
+ * 语料 = wiki **与 posts**，与 `scripts/wiki-ask.mjs` **完全一致**。
+ *
+ * 2026-09-24 实测：wiki-ask 修好之后能答「七个 agent 里哪几个主动要 markdown」，
+ * 而这个金标检查**仍然只量 6 页 wiki**——于是「金标全过」量的东西
+ * 与用户实际问到的语料**不是同一份**。
+ *
+ * > **一个量着 A、跑着 B 的金标，绿灯是没有意义的。**
+ * > 这次不是「金标漏了一条问题」，是**金标与被测对象脱节**——
+ * > 比漏一条更难发现，因为它连「条数」都显得正常。
+ *
+ * 解析走 `src/lib/wiki/read-page.ts`（与 wiki-ask、check-impact、wiki-impact 共用）。
+ */
+const { pages: corpus } = readContentDirs([WIKI, POSTS]);
+if (corpus.length === 0) {
+  console.error(`${WIKI} 与 ${POSTS} 里一个条目都没有——这个检查什么都没量。`);
   process.exit(1);
 }
-const passages = files.flatMap((f) =>
-  splitPassages(f.replace(/\.mdx?$/, ''), bodyOf(readFileSync(join(WIKI, f), 'utf8'))),
-);
-const known = new Set(files.map((f) => f.replace(/\.mdx?$/, '')));
+const passages = corpus.flatMap((d) => splitPassages(d.slug, d.body.trim()));
+const known = new Set(corpus.map((d) => d.slug));
 
-if (passages.length < files.length) {
-  console.error(`切出 ${passages.length} 段却读了 ${files.length} 页——切段逻辑有问题。`);
+if (passages.length < corpus.length) {
+  console.error(`切出 ${passages.length} 段却读了 ${corpus.length} 页——切段逻辑有问题。`);
   process.exit(1);
 }
 
@@ -216,7 +223,7 @@ const noAnswerCount = questions.filter((q) => q.noAnswer).length;
 console.log('\n' + '─'.repeat(72));
 console.log(
   `  ${questions.length} 条问题（其中 ${noAnswerCount} 条期望「没有依据」）` +
-    ` · 语料 ${files.length} 页 / ${passages.length} 段`,
+    ` · 语料 ${corpus.length} 页 / ${passages.length} 段`,
 );
 
 if (knownLimits.length > 0) {
