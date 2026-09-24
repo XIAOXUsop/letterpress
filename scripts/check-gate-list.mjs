@@ -42,6 +42,7 @@ const EXPECTED = [
   ['npm run verify:questions', '检索金标（23 条，其中 3 条登记为已知局限）'],
   ['npm run verify:impact', '影响分析金标（9 条）'],
   ['npm run verify:answers', '**答案能定位到证据**（阶段 3 退出条件 ③）'],
+  ['npm run verify:review', '**wiki:review 说的复核状态与 frontmatter 一致**（它原先全报「未复核」）'],
   ['npm run verify:portability', '核心模块可加载性 + 可选链形状'],
   ['npm run check:site-agnostic', '**站点事实可由调用方覆盖**（阶段 4 第 6 项）'],
   ['npm run verify:site-mutations', '上一道门禁的负向验证（把它依次弄坏四次，每次都必须真红）'],
@@ -164,30 +165,105 @@ for (const name of Object.keys(scripts)) {
   );
 }
 
-// ── 5. docs/cli.md 里那份逐条顺序列表与实际一致 ────────────────────
+// ── 5. 文档里转述的步骤数与实际一致 ────────────────────────────
 /*
- * `docs/cli.md` 用一行把 19 步全列了出来。那是**转述**，而转述会漂——
- * 本仓库已经有过同一个「几道门禁」的数字在 AGENTS.md / docs / README 各处
- * 写法不一的历史（10、11、13、17 都出现过）。
+ * **两份文档，不是一份。**
  *
- * > **只核对 `package.json` 与 `EXPECTED` 是不够的**：
- * > 文档里那份列表错了，读者会照着它排查，而没有任何门禁会提。
+ * 第一版只查 `docs/cli.md`，于是 `README.md` 的「实测数据」表里
+ * 「**19 步**」一直没人管——而它早就是 23 步了。
  *
- * 判据：从 cli.md 的 `verify:all` 那一行里按 `→` 切出步骤名，
- * 与 `EXPECTED` 的步骤名逐位比对。**多、少、换位都算错。**
+ * > **加了检查却只覆盖一个文件，等于给「另一处会漂」发了通行证。**
+ *
+ * 两份的写法不同，所以判据分两种：
+ *   - `docs/cli.md`：逐条列出步骤 → 逐位比对名字与顺序；
+ *   - `README.md`：只写「N 步」 → 比对那个数。
+ * 两种都**必须核**：数字会漂，而读者正是照它判断「我该跑多少道检查」。
  */
-const cliPath = join(ROOT, 'docs/cli.md');
-/** 期望里的步骤名（去掉 `npm run ` / `npm ` 前缀），用来从文档行里挑出真步骤。 */
 const knownNames = new Set(EXPECTED.map(([e]) => e.replace(/^npm run /, '').replace(/^npm /, '')));
-if (existsSync(cliPath)) {
-  const cli = readFileSync(cliPath, 'utf8');
-  const line = cli.split('\n').find((l) => l.includes('`npm run verify:all`') && l.includes('→'));
-  if (!line) {
-    problems.push(
-      `docs/cli.md 里找不到 \`npm run verify:all\` 那一行的步骤列表。\n` +
-        `    本检查靠它核对文档有没有跟上编排——**找不到就当没写这一段**。`,
-    );
-  } else {
+const README = 'README.md';
+const DOCS_WITH_STEP_COUNT = ['docs/cli.md', README];
+
+for (const docPath of DOCS_WITH_STEP_COUNT) {
+  const full = join(ROOT, docPath);
+  if (!existsSync(full)) {
+    problems.push(`${docPath} 不存在——它转述了 verify:all 的步数，缺了就无法核对`);
+    continue;
+  }
+  const text = readFileSync(full, 'utf8');
+  const line = text.split('\n').find((l) => l.includes('`npm run verify:all`') && l.includes('→'));
+
+  if (docPath === README) {
+    // README 不逐条列步骤，只写「N 步」与「其中 M 道是负向验证」——那两个数都要核。
+    // ⚠️ 2026-09-24 实测：加了本检查后，README 的「19 步」立刻被抓出来
+    //（实际已是 23），而同一行里的「两道负向验证」**也**是错的（实际三道）——
+    // **只核一个数，另一个照样漂。**
+    const count = /\*\*(\d+)\s*步\*\*/.exec(text);
+    if (!count) {
+      problems.push(
+        `${docPath} 里找不到「N 步」这个说法。\n` +
+          `    本检查靠它核对文档有没有跟上编排——**找不到就当没写这一段**。`,
+      );
+    } else if (Number(count[1]) !== steps.length) {
+      problems.push(
+        `${docPath} 里写「**${count[1]} 步**」，而 verify:all 实际是 ${steps.length} 步。\n` +
+          `    **转述的数字会漂**，而读者照它判断该跑多少道检查。`,
+      );
+    }
+
+    /*
+     * 负向验证有几道：**显式枚举**，不从名字猜。
+     *
+     * ⚠️ 第一版想用「脚本名里含 mutation」来数——**那是字面量判据**，
+     * 结果只数出 1 道（`verify:site-mutations`），
+     * 而另外两道叫 `verify:exit-codes` 与 `verify:migrate`，名字里没有那个词。
+     * **和本轮前几次一样的病：用能看见的那部分去推全貌。**
+     *
+     * 判据的正则也写错过一次：README 那句是
+     * 「**会先弄坏自己再证明能报红**」，而我只写了前半句 → 永远不匹配 → 静默放过。
+     * **断言要匹配真实输出，而不是匹配你记得的那句话。**
+     */
+    const NEGATIVE_VERIFICATIONS = [
+      'verify:site-mutations',
+      'verify:exit-codes',
+      'verify:migrate',
+    ];
+    const missing = NEGATIVE_VERIFICATIONS.filter((n) => typeof scripts[n] !== 'string');
+    if (missing.length > 0) {
+      problems.push(
+        `本检查以为存在这些负向验证，但 package.json 里没有：${missing.join('、')}。\n` +
+          `    **要么补上，要么从这里删掉**——两者都要有个明确决定，` +
+          `否则「有几道负向验证」这个数会从一个没人维护的清单里来。`,
+      );
+    }
+    /*
+     * ⚠️ **第二个错：文档里写的是中文数字。**
+     *
+     * 第一版用 `/其中(\d+)道是…/`，而 README 那句是「其中**三**道」——
+     * `\d` 只匹配 0-9，**「三」是汉字（U+4E09）**，于是永远不匹配，
+     * 判据静默放过了所有漂移。
+     *
+     * > 写断言时该做的是**先看一眼那行现在到底写了什么**，
+     * > 而不是写一个「它大概会那样写」的正则。
+     * > 这次是先做了变异（改成「九道」）却没报，才回头查的——
+     * > **变异验证又一次抓到了正向跑不出来的错。**
+     */
+    const CN_DIGITS = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+    const claimed = /其中([一二三四五六七八九])道是\*\*会先弄坏自己/.exec(text);
+    if (!claimed) {
+      // 没写就不报：这一句是可选的说明，不该因为它没写就红
+    } else {
+      const said = CN_DIGITS[claimed[1]];
+      if (said !== NEGATIVE_VERIFICATIONS.length) {
+        problems.push(
+          `${docPath} 里写「其中 ${said} 道是负向验证」，而清单里是 ${NEGATIVE_VERIFICATIONS.length} 道。\n` +
+            `    判据来自本文件的 NEGATIVE_VERIFICATIONS 清单，不来自文档自身。`,
+        );
+      }
+    }
+    continue;
+  }
+
+  {
     /*
      * 只取**反引号里**的步骤名。
      * ⚠️ 第一版按 `→` 切整行，于是表格行首尾（`| npm run verify:all | **19 步**…`）
@@ -201,7 +277,7 @@ if (existsSync(cliPath)) {
     const expectedNames = EXPECTED.map(([e]) => e.replace(/^npm run /, '').replace(/^npm /, ''));
     if (names.length !== expectedNames.length || names.some((n, i) => n !== expectedNames[i])) {
       problems.push(
-        `docs/cli.md 里列的 verify:all 步骤与实际不一致。\n` +
+        `${docPath} 里列的 verify:all 步骤与实际不一致。\n` +
           `    文档写：${names.join(' → ')}\n` +
           `    实际是：${expectedNames.join(' → ')}`,
       );
@@ -216,4 +292,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(`  ✓ ${steps.length} 步齐全、顺序正确、脚本都存在`);
-console.log('  ✓ 没有「定义了却不在编排里」的门禁\n');
+console.log('  ✓ 没有「定义了却不在编排里」的门禁');
+console.log(`  ✓ ${DOCS_WITH_STEP_COUNT.join(' 与 ')} 转述的步数与实际一致\n`);

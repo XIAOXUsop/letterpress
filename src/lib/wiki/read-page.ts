@@ -34,6 +34,24 @@ export interface PageSourceRef {
 export interface PageReview {
   readonly status: string;
   readonly checkedAt?: string;
+  /**
+   * 复核当时的正文摘要。
+   *
+   * ⚠️ **2026-09-24 补上**：原先 `parseReview` 只抓 `status` 与 `checkedAt`，
+   * 而 frontmatter 里明明还写着 `contentDigest`。
+   * 后果不是报错，是**静默少一个字段**——于是「拿 `readContentPage` 的 review
+   * 去比摘要」这件事根本做不了（`undefined` 被 `?? null` 变成「没写」，
+   * 6 个知识页全被跳过，而门禁输出的是一排「跳过」和一句「全部一致」）。
+   *
+   * > **一个检查静默跳过全部被测对象，然后报告通过**——
+   * > 这是断言盲区里最危险的一种（「被测集合是空的」）。
+   * > 这次是靠它**输出里那 6 行「跳过」**被看见的，
+   * > 而不是靠退出码。
+   *
+   * 构建侧走 Astro 的 `content.config.ts`（那里 `contentDigest` 有定义），
+   * 所以产物一直是对的——**只有读源码这条路径拿不到**。
+   */
+  readonly contentDigest?: string;
 }
 
 /** 读一页内容，取出检索与影响分析共需要的字段。 */
@@ -58,13 +76,32 @@ export function readContentPage(dir: string, file: string): {
   readonly sources: readonly PageSourceRef[];
   readonly review?: PageReview;
   readonly related: readonly string[];
-  /** frontmatter 之后的正文（不含 frontmatter）。 */
+  /** frontmatter 之后的正文（不含 frontmatter）。**已 trim，与 Astro 的 `entry.body` 同口径。** */
   readonly body: string;
 } {
   const source = readFileSync(join(dir, file), 'utf8');
   const end = source.indexOf('\n---', 3);
   const block = source.slice(3, end === -1 ? undefined : end);
-  const body = end === -1 ? source : source.slice(source.indexOf('\n', end + 1) + 1);
+  /*
+   * ⚠️ **`trim()` 不是可选的。**
+   *
+   * 2026-09-24 实测：不 trim 时正文以一个空行开头，
+   * 而 `scripts/wiki-review.mjs` 用它算 `contentDigest`——
+   * **三个知识页算出的摘要与 frontmatter 里写的完全不同**，
+   * 于是 `--list` 会把它们全报成 stale，看起来像「机制坏了」。
+   *
+   * 差异不止首尾：frontmatter 的 `---` 之后往往紧跟一个空行，
+   * 切出来就是 `\n` + 正文。
+   *
+   * > 这个 `trim()` 的必要性原先只写在 `wiki-review.mjs` 的注释里
+   * > （那份实现连同注释一起被删掉，换成了调用本模块）。
+   * > **约定写在调用方而不是被调用方，换实现时就丢了**——
+   * > 而丢失之后症状是「静默算错」，不是报错。
+   *
+   * 口径依据：实测 Astro 打印的 `entry.body` 长度 2166，
+   * 而直接从文件切出来是 2168（前后各一个换行）。
+   */
+  const body = end === -1 ? source : source.slice(source.indexOf('\n', end + 1) + 1).trim();
 
   // sources 是块状数组，逐条抓 sourceId / revision / locator
   const refs: PageSourceRef[] = [];
@@ -112,29 +149,80 @@ export function readContentPage(dir: string, file: string): {
 /**
  * 解析 frontmatter 里的 `review:` 块。
  *
- * ⚠️ **这里的正则原先有个静默 bug**（2026-09-24 发现）：
- * 它用 `(?=\n\S|\s*$)` 表示「直到下一个顶层字段或块尾」，
- * 而在**多行模式**下 `\s*` 能匹配**零个字符**，`$` 又立刻成立——
- * 于是它在 `review:` 后面当场截断，**捕获组恒为空字符串**，
- * `get('status')` 永远取不到值，**函数恒返回 `undefined`**。
+ * ⚠️ **这个函数犯过两次同型的错，第二次只修了一半。**
  *
+ * **第一次**（2026-09-24 迭代 I 发现）：它用 `(?=\n\S|\s*$)`，
+ * 而在**多行模式**下 `\s*` 能匹配**零个字符**、`$` 立刻成立——
+ * 于是它在 `review:` 后面当场截断，**捕获组恒为空**，函数恒返回 `undefined`。
  * 症状是「复核状态读不到」，而**没有任何报错**。
- * 之所以藏了这么久：`check-questions.mjs` 只需要 `body`，
- * 从不读 review；而 `context-pack.ts` 那时还没接上（迭代 L）。
- * **两个缺陷各自都成立，合起来才暴露。**
  *
- * 修法：明确用 `(?=\n[^\s])`（下一个**顶层**字段）或 `(?=\n?$)`（块尾），
- * **不用 `\s*$`**——那个组合在多行模式下恒真。
+ * **第二次**（2026-09-24 迭代 AO 发现）：改成 `(?=\n[^\s]|\r?\n?$)`，
+ * 空字符串的问题解决了（`status` 能读到），
+ * 但**捕获组仍然只有第一行**——
+ * 实测 `review:` 块有 `status` / `checkedAt` / `contentDigest` 三行，
+ * 拿到的 `m[1]` 是 `"  status: reviewed"`。
+ *
+ * 根因：**`\r?\n?$` 里的 `\n?` 是可选的**，
+ * 而多行模式下 `$` 匹配**每一行**的行尾 ——
+ * 于是它在第一行末零消耗地成立，根本没等 `\r?\n` 那个分支。
+ *
+ * > **「修好了」和「修对了」不是一回事**：第一次的验收标准是
+ * > 「能读到 status」，通过了；而「能读到全部三行」从没被测过。
+ * > **判据只覆盖了故障的一个切面**——而那次修复是被另一个症状逼出来的，
+ * > 不是被「完整的行为」逼出来的。
+ *
+ * 现在的判据是行为本身：**捕获组必须含块里全部缩进行**。
+ * `verify` 侧有专门一条对账（`check-review-status.mjs` 逐页比摘要），
+ * 它在第二次修好之前一直是「6 个全部跳过」——
+ * **一个静默跳过全部被测对象的检查，等于没有检查。**
  */
 function parseReview(block: string): PageReview | undefined {
-  const m = /^review:[ \t]*\r?\n([\s\S]*?)(?=\n[^\s]|\r?\n?$)/m.exec(block);
-  if (!m) return undefined;
+  /*
+   * 块 = 「从 review: 后到下一个**顶层**字段之前」的所有**缩进**行，
+   * **外加夹在它们之间的空行**。
+   *
+   * ⚠️ **这里试过三次正则，三次都不对。**
+   *
+   * ① `(?=\n[^\s]|\r?\n?$)` —— `\r?\n?` 的 `\n?` 可选，
+   *    多行模式下 `$` 匹配每行行尾，于是在 `status` 行末**零消耗**成立，
+   *    捕获组只有第一行。
+   * ② `(?:^[ \t]+.*\r?\n?)+` —— 能吃全部缩进行，但**遇到空行就停**：
+   *    `review:` 块里夹一个空行（YAML 里完全合法），
+   *    后面的 `contentDigest` **静默丢失**。
+   * ③ 在 ② 后面补一个「吃空行」的组 —— **仍然不对**：
+   *    两组都要求「行」在前，而空行恰好把它们卡在中间。
+   *
+   * > 根因是**同一个**：用正则同时表达「缩进」与「直到下一个顶层字段」
+   * > 这两件事，就得处理它们在空行处交错的情形——
+   * > 而 `\r?\n?` 这种**可选量词**正是让边界悄悄提前成立的元凶。
+   *
+   * 现在**不用正则**：逐行扫，规则一句话说完——**缩进行属于块，空行忽略，
+   * 任何非缩进的非空行结束块**。可读性换来的正确性，在这个场景更划算。
+   */
+  const lines = block.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^review:[ \t]*$/.test(l));
+  if (start === -1) return undefined;
+
+  const fields: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (line.trim() === '') continue; // 空行不终止块
+    if (!/^[ \t]/.test(line)) break; // 下一个顶层字段 → 块结束
+    fields.push(line);
+  }
+  if (fields.length === 0) return undefined;
+
   const get = (k: string) =>
-    new RegExp(`^[ \\t]+${k}:[ \\t]*(.+?)[ \\t]*$`, 'm').exec(m[1] ?? '')?.[1];
+    new RegExp(`^[ \\t]+${k}:[ \\t]*(.+?)[ \\t]*$`, 'm').exec(fields.join('\n'))?.[1];
   const status = get('status');
   if (!status) return undefined;
   const checkedAt = get('checkedAt');
-  return checkedAt ? { status, checkedAt } : { status };
+  const contentDigest = get('contentDigest');
+  return {
+    status,
+    ...(checkedAt ? { checkedAt } : {}),
+    ...(contentDigest ? { contentDigest } : {}),
+  };
 }
 
 /**

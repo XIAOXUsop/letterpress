@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-453%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-467%20项-2C5E2E)
 
 </div>
 
@@ -45,7 +45,7 @@
   choices* say so explicitly instead of pretending to cite something.
   → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 453 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 467 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -185,9 +185,9 @@ review:
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **453 项**，全部离线，无网络依赖 |
+| 单元测试 | **467 项**，全部离线，无网络依赖 |
 | 端到端契约 | **200 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
-| 门禁编排 | **19 步**，`check-gates` 逐条核对「声明了什么、顺序对不对、脚本存不存在、有没有定义了却不在编排里的」。其中两道是**会先弄坏自己再证明能报红**的负向验证 |
+| 门禁编排 | **24 步**，`check-gates` 逐条核对「声明了什么、顺序对不对、脚本存不存在、有没有定义了却不在编排里的」。其中三道是**会先弄坏自己再证明能报红**的负向验证 |
 | 抽象边界 | 核心模块不硬编码本站结构（知识库 URL 前缀、根层保留路由表均可注入），且**有四次变异的负向验证**证明这道检查是尺子而非装饰。但「接入新站点不用改核心」这一步**仍缺一个真实第二站点**（合成语料证不了） |
 | 搜索检查 | 页面语言、索引语言、索引覆盖面 3 条产物级断言。真实浏览器里的实测基线见 `scripts/check-search.mjs` 的注释 |
 | 检索金标 | **23 条**问题（精确事实 / 跨文档组合 / 冲突 / 过期 / **无答案**），跑 `npm run verify:questions`。其中 **3 条显式登记为已知局限**、不计为失败——它们的局限被打印出来，而不是被一条绿线盖过去。五道闸每道都有一条**专属**用例，关掉它只有那条会红（见 `docs/retrieval.md`） |

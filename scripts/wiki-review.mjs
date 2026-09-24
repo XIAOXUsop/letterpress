@@ -24,12 +24,29 @@
  *   node scripts/wiki-review.mjs --list          # 列出所有知识页与状态
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// **直接 import TS 源**，不在这里重写一份算法。
-// Node 22.12+ 能剥掉类型标注直接跑；重写一份的代价是"两处不一致时
-// 这条命令会一本正经地说谎"，而它存在的全部意义就是给出正确的值。
+/*
+ * ⚠️ **这里原来写着「直接 import TS 源，不在这里重写一份算法」——
+ * 而下面紧接着就重写了 `frontmatterField` 与 `bodyOf`。**
+ * 那是本轮第五次「注释承诺了而代码没做」（见 knowledge/log.md 迭代 AN）。
+ *
+ * 重写的代价不是「多几行代码」，是**它会一本正经地说谎**：
+ * `frontmatterField(source, 'status')` 用 `^status:` 匹配**行首**，
+ * 而状态写在 `review:` 块里、**缩进两格** —— 于是读出 `null`，
+ * `--list` 把 6 个知识页**全报成未复核**，而它们的 frontmatter 明明白白写着
+ * `review: status: reviewed`。
+ *
+ * > 同一份解析在 `read-page.ts` 里**是对的**。两份实现漂开了，
+ * > 而没有任何检查比对过它们。
+ * > 症状之所以能活这么久：它报的是「未复核」——
+ * > **一个听起来很合理的默认值**，没人会去质疑。
+ *
+ * 修法不是补 `  status:` 的正则，是**删掉这份实现**，用 `readContentPage`。
+ */
 import { contentDigest } from '../src/lib/wiki/digest.ts';
+import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
 
 const args = process.argv.slice(2);
@@ -39,74 +56,54 @@ const listOnly = args.includes('--list');
 
 const WIKI = join(process.cwd(), 'src', 'content', 'wiki');
 
-// ── 与 remark-wikilink.ts 同源的取值方式（这份是脚本，不能 import TS）──────
-function frontmatterField(source, field) {
-  if (!source.startsWith('---')) return null;
-  const end = source.indexOf('\n---', 3);
-  if (end === -1) return null;
-  const block = source.slice(3, end);
-  const m = new RegExp(`^${field}:[ \\t]*(.*)$`, 'm').exec(block);
-  if (!m) return null;
-  const raw = (m[1] ?? '').trim();
-  if (raw === '') return null;
-  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
-    return raw.slice(1, -1);
-  }
-  return raw;
-}
-
 /**
- * 取出正文。
- *
- * ⚠️ **必须 `trim()`**——Astro 的 `entry.body` 是**去过首尾空白**的。
- *
- * 这条是靠实测定下来的，不是看文档看来的：让构建打印它实际看到的 body，
- * 长度 2166；而直接从文件切出来是 2168（前后各一个换行）。
- * 差两个字符，摘要就完全对不上——**症状是"所有已复核页面都报 stale"**，
- * 看起来像机制坏了，其实只是取值口径差一个 trim。
- *
- * 另一处同源的口径差异：`kind`。`Doc.kind` 是**文档类型**（恒为 wiki），
- * 而 frontmatter 的 `kind` 是**知识类型**（concept/…）。摘要要的是后者。
- * 两个都写错的话，摘要永远对不上，而**看代码看不出来**。
+ * 摘要用的 `Doc`。**只填参与摘要的字段**——
+ * `slug` / `draft` / `explicitSlug` 不参与计算（见 `digestInput`）。
  */
-function bodyOf(source) {
-  const end = source.indexOf('\n---', 3);
-  if (end === -1) return '';
-  return source.slice(source.indexOf('\n', end + 1) + 1).trim();
+function digestDoc(page, summary) {
+  return {
+    kind: 'wiki',
+    wikiKind: page.kind,
+    slug: page.slug,
+    title: page.title,
+    summary,
+    // ⚠️ `readContentPage` 的 `body` **已经 trim 过**，
+    // 与 Astro 的 `entry.body` 口径一致（差一个 trim 摘要就永远对不上）。
+    body: page.body,
+    // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
+    // 传错键的话 `?? []` 会静静兜成空数组——摘要照样算得出，
+    // 只是永远对不上，而症状是「所有已复核页面都报 stale」，
+    // 看起来像机制坏了。这个坑我踩过一次，写在这里。
+    declaredRelations: page.related,
+    explicitSlug: false,
+    draft: false,
+  };
 }
 
+/*
+ * ── 为什么是**两个**模块，不是一个 ──────────────────────────────────
+ *
+ * 第一版只用了 `readContentPage`，崩在 `toLf(undefined)`：
+ * 它**不返回 `summary`**——它是给检索用的，检索不需要摘要。
+ * 于是改用 `frontmatterField` 补上，而那份只认**顶层**字段
+ * （它的注释明说「忽略缩进，避免取到 tags 之类的子项」），
+ * 读 `status` 依然读不到。
+ *
+ * > 所以分工是：`frontmatter.ts` 取顶层标量（title / summary），
+ * > `read-page.ts` 取嵌套块（`review:` / `sources:` / `related:`）。
+ * > **两个都要，一个都不够。** 而这正是原先那份手写实现想糊过去的复杂度。
+ */
 function parse(file) {
+  const page = readContentPage(WIKI, file);
   const source = readFileSync(join(WIKI, file), 'utf8');
-  const kind = frontmatterField(source, 'kind') ?? 'concept';
-  const title = frontmatterField(source, 'title') ?? '';
   const summary = frontmatterField(source, 'summary') ?? '';
-  const relatedRaw = frontmatterField(source, 'related') ?? '';
-  const related = relatedRaw
-    .replace(/^\[|\]$/g, '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
   return {
     file,
-    slug: file.replace(/\.mdx?$/, ''),
-    title,
-    status: frontmatterField(source, 'status') ?? null,
-    // 传一个够 digest 用的最小 Doc——slug/draft/explicitSlug 不参与摘要计算
-    digest: contentDigest({
-      kind: 'wiki',
-      wikiKind: kind,
-      slug: file.replace(/\.mdx?$/, ''),
-      title,
-      summary,
-      body: bodyOf(source),
-      // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
-      // 传错键的话 `?? []` 会静静兜成空数组——摘要照样算得出，
-      // 只是永远对不上，而症状是"所有已复核页面都报 stale"，
-      // 看起来像机制坏了。这个坑我踩过一次，写在这里。
-      declaredRelations: related,
-      explicitSlug: false,
-      draft: false,
-    }),
+    slug: page.slug,
+    title: page.title,
+    // ✅ 从 `review` 块里读（read-page 解析嵌套块），不是从行首的 `status:`。
+    status: page.review?.status ?? null,
+    digest: contentDigest(digestDoc(page, summary)),
   };
 }
 
