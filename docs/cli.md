@@ -6,7 +6,7 @@
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
 | `npm test` | **481 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
-| `npm run verify` | 端到端：对着**真实构建产物**验证 200 项契约（条数由脚本自己打印） |
+| `npm run verify` | 端到端：对着**真实构建产物**验证 201 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
 | `npm run verify:formats` | 内容发布探针：真的放入 `.md`、`.mdx`、草稿和占用 `/about/` 的文章，验证格式产出、草稿隔离与系统路由冲突 |
 | `npm run verify:search` | 搜索可用性：页面语言一致性、索引语言，以及**内容清单里的每一条都真的标了 `data-pagefind-body` 并进了索引**。**不查结果**——查询行为只能在浏览器里测，原因见脚本注释 |

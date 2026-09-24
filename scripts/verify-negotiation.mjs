@@ -1083,8 +1083,41 @@ check(
  * 这个文件的注释里记着更早的两回：契约数 177 → 180、`docs/content-negotiation.md`
  * 里的 4728 / 5416 / 3055 漂过都没出声。前者早就补上了，后者这次一并补。
  */
-const reconciliationChecks = 2;
-const finalTotal = assertions + reconciliationChecks;
+/*
+ * ⚠️ **2026-09-24：我又踩了注释里警告过的那个坑。**
+ *
+ * 上面那段注释写着「再加一条就会错位」——而我**正好又加了一条**
+ * （`docsMentions.length > 0`），`reconciliationChecks` 仍是 2，
+ * 于是 `finalTotal` 报 200 而实际是 201，**门禁自己报错了自己的数字**。
+ *
+ * 两次都是同一类：**一个「后面还有 N 条」的计数靠手写**。
+ * 而它一旦与实际不符，报出来的红是**假的**——
+ * 我第一反应真的是「我漏改了某处文档」，去改了两处本来正确的地方。
+ *
+ * 所以改成**不手写**：先跑完那几条，再数。
+ * 代价是 `finalTotal` 要在那之后才算得出——而它只被那几条用，所以顺序正好。
+ */
+/*
+ * ⚠️⚠️ **这里试错了两次，而两次的症状都是「门禁报错了自己的数字」。**
+ *
+ * ① 手写 `reconciliationChecks = 2`：我加了一条对账检查，它仍是 2 → 少算。
+ *    ——而这段注释**早就警告过「再加一条就会错位」**，我正好又加了一条。
+ * ② 改成「每次调用自增」：第二次比较时 `assertions` **已经包含了第一次对账
+ *    自己产生的 check** → 多算（202 而实际 201）。
+ *
+ * > **「边跑边数」必然自我污染**：被数的那个计数器，
+ * > 会在数的过程中因为「数它的那次操作」而增加。
+ *
+ * 所以：**在跑任何对账之前把「会产生的对账条数」写死成一个常量**，
+ * 且那个常量**由下方实际出现的 `check(` 调用数决定**——
+ * 我加了新的一条，就必须把它同步。
+ *
+ * > 这与 `check-single-source` 那个教训同源：**同一个事实写两遍就会漂**。
+ * > 差别是这一次「两份」是「一个常量与一串调用」，而我**至少让它错在明处**
+ * > （改错时门禁立刻报假红，而不是静默放过）。
+ */
+const RECONCILIATION_CHECKS = 3; // 下方三处 check：README 一致、docs 非空、docs 一致
+const finalTotal = assertions + RECONCILIATION_CHECKS;
 
 const claimed = [
   ...readme.matchAll(/(\d+)\s*end-to-end contracts/g),
@@ -1104,12 +1137,29 @@ for (const name of (await readdir('docs')).sort()) {
     docsMentions.push(`${name} 写 ${m[1]}`);
   }
 }
+/*
+ * ⚠️ **「docs 里一处都没提」是一个独立失败，而它原先被当成 `check` 的 detail。**
+ *
+ * `check(ok, label, detail)` 的第三参是**失败时的详情**——
+ * 而这里传的是「若 `docsMentions` 为空就提醒我别让它静默失效」。
+ * 于是 `docsMentions` 为空时 `every` **恒真** → `ok = true` →
+ * **那句提醒永远不会显示**。
+ *
+ * > 注释写着「别让它静默失效」，而**它正是那个静默失效**。
+ * > 「被测集合是空的」这个盲区，本轮第四次以不同形态出现
+ * > （前三次：只认字面数字 / 只查一个方向 / 「若报必是」在 0 条时恒真）。
+ *
+ * 所以**必须单独判一次**：
+ */
 check(
-  docsMentions.every((d) => Number(d.split('写 ')[1]) === finalTotal),
+  docsMentions.length > 0,
+  'docs/ 里至少有一处提到契约条数（否则这条检查覆盖不到任何东西）',
+  'docs/ 里一处都没提到「N 项契约」——请确认是措辞变了，还是这条检查本来就该覆盖别的文件',
+);
+check(
+  docsMentions.length > 0 && docsMentions.every((d) => Number(d.split('写 ')[1]) === finalTotal),
   'docs/ 里写到的契约条数与实际一致',
-  docsMentions.length === 0
-    ? '（docs/ 里一处都没提到——若本来是有的，说明这条检查没覆盖到，别让它静默失效）'
-    : `${docsMentions.join('；')}，实际 ${finalTotal}`,
+  `${docsMentions.join('；')}，实际 ${finalTotal}`,
 );
 
 /**
