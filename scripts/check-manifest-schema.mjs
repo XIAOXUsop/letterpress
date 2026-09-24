@@ -172,6 +172,37 @@ if (emptyProv.length > 0) {
   ok(`${withProv.length} 条文档的 provenance 都不是空对象`);
 }
 
+/*
+ * ── 文档里转述的「N 篇有 provenance」必须与产物一致 ────────────────
+ *
+ * `docs/content-manifest.md` 里写着「本仓库的 v2 里 8 篇有 `provenance`、3 篇没有」。
+ * 那个数**会随内容增删而漂**，而本仓库反复记着同一件事：
+ * **文档里的实测数字没人守着，就一定会漂**（契约条数、单测条数、
+ * 「几道门禁」都漂过）。
+ *
+ * > 那 3 篇不是缺陷，是**诚实的结果**——
+ * > 「没有来源也没有复核状态」如实写出来，而不是补一个 `pending` 假装填过。
+ * > 正因如此它值得被核对：**它是治理覆盖率的直接读数。**
+ */
+const withoutProv = manifest.documents.length - withProv.length;
+if (existsSync(DOC)) {
+  const docText = readFileSync(DOC, 'utf8');
+  const claimed = /(\d+)\s*篇有\s*`?provenance`?[、，]\s*(\d+)\s*篇没有/.exec(docText);
+  if (claimed) {
+    const saidWith = Number(claimed[1]);
+    const saidWithout = Number(claimed[2]);
+    if (saidWith !== withProv.length || saidWithout !== withoutProv) {
+      bad(
+        `文档里写「${saidWith} 篇有 provenance、${saidWithout} 篇没有」，` +
+          `而产物是 ${withProv.length} / ${withoutProv}。\n` +
+          '    那是**治理覆盖率的直接读数**——它漂了没人知道，直到有人拿它当依据。',
+      );
+    } else {
+      ok(`文档转述的 provenance 覆盖数与产物一致（${withProv.length} / ${withoutProv}）`);
+    }
+  }
+}
+
 const stale = manifest.documents.filter((d) => d.provenance?.review?.status === 'stale');
 console.log('');
 console.log(`  ℹ 产物里有 ${stale.length} 条 stale——那是「已不可信但仍在出口里」的文档。`);
@@ -212,4 +243,4 @@ if (problems.length > 0) {
   console.log(`\n${problems.length} 处问题。\n`);
   process.exit(1);
 }
-console.log('\n产物符合 schema；源码常量 / 产物 / schema 三处 version 一致；文档指路。\n');
+console.log('\n产物符合 schema；源码 / 产物 / schema 三处 version 一致；文档指路，且转述的 provenance 覆盖数与产物一致。\n');
