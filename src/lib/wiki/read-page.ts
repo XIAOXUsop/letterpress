@@ -22,6 +22,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { frontmatterField } from './frontmatter.ts';
+import { resolveSlug } from './slug.ts';
 
 /** 页面上一处来源引用。与 `Doc.sources` 同形。 */
 export interface PageSourceRef {
@@ -126,7 +127,36 @@ export function readContentPage(dir: string, file: string): {
   const review = parseReview(block);
 
   return {
-    slug: file.replace(/\.mdx?$/, ''),
+    /*
+     * ⚠️ **2026-09-24 改：这里原先是 `file.replace(/\.mdx?$/, '')`——直接用文件名。**
+     *
+     * 那样做与**构建侧不一致**，而那个不一致有用户可见后果。
+     * 构建侧（`src/lib/content.ts:80`）走的是：
+     *
+     *     resolveSlug(data.title, data.slug, entry.id)
+     *
+     * 即 **显式 `slug:` > 文件名（经 `slugify`）> 标题**。
+     * 而这里既**不读显式 `slug:`**，也**不跑 `slugify`**。
+     *
+     * 实测（`knowledge/fixtures/second-site/Export Notes.md`）：
+     *
+     *     read-page  → 「Export Notes」
+     *     构建侧     → 「导出说明」（因为 frontmatter 写了 `slug: 导出说明`）
+     *
+     * **后果不是「URL 不好看」**——是 `wiki:ask` 回答里的 `docId` 与
+     * `content-manifest.json` 里的 `wiki:导出说明` **对不上**，
+     * 而订阅者正是靠那个 id 做增量同步的。
+     *
+     * > 为什么这么久没人发现：**本站 0 篇写了 `slug:`**，
+     * > 而文件名全是小写连字符（`slugify` 对它们是恒等的）。
+     * > **一个在本站永远不触发的分支，就是没有守卫的分支。**
+     * > 它是在异构 fixture 上第一次暴露的（迭代 AR）。
+     */
+    slug: resolveSlug(
+      frontmatterField(source, 'title') ?? file.replace(/\.mdx?$/, ''),
+      frontmatterField(source, 'slug'),
+      file.replace(/\.mdx?$/, ''),
+    ),
     title: frontmatterField(source, 'title') ?? file,
     // post 没有 kind 字段，wiki 才有——**别与 Doc.kind 搞混**（那个是 post/wiki）
     kind: frontmatterField(source, 'kind') ?? '',

@@ -84,7 +84,10 @@ const MUTATIONS = [
      */
     name: '③ 文件名改成 ASCII（中文 slug 那条路径不再被覆盖）',
     renameTo: (f) => f.replace(/[一-龥]/g, '').replace(/^-+|-+$/g, '') + '.md',
-    expect: /中文 slug 原样保留/,
+    // ⚠️ 断言名在迭代 AS 改过（「原样保留」→「被保留，且每个都与 resolveSlug 一致」）。
+    //    写死旧名会让「红了但不是预期那条」——那正是本脚本要防的情况。
+    //    **判据用断言名的稳定片段**，而不是整句（整句一改就会漂）。
+    expect: /中文 slug/,
     apply: () => '', // 用改名实现，不用内容变形
   },
   {
@@ -105,6 +108,21 @@ const MUTATIONS = [
     file: '导出-总览.md',
     expect: /引用打向歧义标题/,
     apply: (t) => t.replace('在正文里写 [[导出]] 时', '在正文里写「导出」两个字时'),
+  },
+  {
+    /*
+     * ⑧ 去掉 `Export Notes.md` 的显式 `slug:`——
+     *    于是 read-page 该退回「文件名经 slugify」。
+     *
+     * > 这一条对着迭代 AS 修的那个缺口：
+     * > 修之前它会让 `slug 走 resolveSlug` 与「中文 slug」两条都红。
+     * > 修之后**不该**红——因为没有显式 slug 时两侧本来就该一致。
+     * > **「不该红」也是一条判据**：它证明修复没有把显式分支一起废掉。
+     */
+    name: '⑧ 去掉显式 slug（应当仍绿——证明修复保留了默认分支）',
+    file: 'Export Notes.md',
+    expectRed: false,
+    apply: (t) => t.replace(/^slug: .*$/m, 'title: 导出说明'),
   },
   {
     name: '⑦ 两篇同名标题改成不同名（歧义那条路径不再被覆盖）',
@@ -194,6 +212,23 @@ for (const m of MUTATIONS) {
 
   const { red, out } = runGate();
   restore();
+
+  /*
+   * `expectRed: false` 表示**「不该红」也是一条判据**。
+   * 那用来验证「修复没有顺手废掉另一条分支」——
+   * 只验「该红时红了」会漏掉「把整个机制删了也能通过」。
+   */
+  if (m.expectRed === false) {
+    if (red) {
+      console.log(`  ✗ ${m.name} → **变红了**，而它不该红（说明修复动错了分支）`);
+      const lines = out.split('\n').filter((l) => l.includes('✗')).join(' / ');
+      console.log(`      报的是：${lines.slice(0, 200)}`);
+      allGood = false;
+    } else {
+      console.log(`  ✓ ${m.name} → 仍然绿（预期如此）`);
+    }
+    continue;
+  }
 
   if (!red) {
     console.log(`  ✗ ${m.name} → **仍然绿**，这条断言测不到那个机制`);

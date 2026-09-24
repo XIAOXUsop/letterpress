@@ -7,6 +7,92 @@
 
 ---
 
+## 2026-09-24 · 迭代 AS：修 `read-page` 的 slug 口径，并给「对账读到旧报告」加防护
+
+阶段 4 收口时登记的**真缺口**：`readContentPage` 只按文件名给 slug。
+
+### 后果比「URL 不好看」严重
+
+构建侧走 `resolveSlug(data.title, data.slug, entry.id)`
+（**显式 slug > 文件名（经 slugify）> 标题**），
+而 `read-page` 既不读显式 `slug:` 也不跑 `slugify`。
+
+在异构 fixture 上造了一篇 `Export Notes.md`（frontmatter 写 `slug: 导出说明`）：
+
+```
+read-page  → 「Export Notes」
+构建侧     → 「导出说明」
+```
+
+**后果**：`wiki:ask` 回答里的 `docId` 与 `content-manifest.json` 里的
+`wiki:导出说明` **对不上**，而订阅者正是靠那个 id 做增量同步的。
+
+> 为什么长期没人发现：**本站 0 篇写了 `slug:`**，文件名也全是小写连字符
+> （`slugify` 对它们是恒等的）。
+> **一个在本站永远不触发的分支，就是没有守卫的分支。**
+> 它是在异构 fixture 上第一次暴露的——这是那份 fixture 的第一笔实际收益。
+
+已修 + 补 **6 条** slug 测试（该模块此前**没有** slug 的测试——那正是它能长期漂开的原因）。
+测试 467 → **473**。
+
+### ⚠️ 顺带发现：`verify:testcount` 会拿**旧报告**对账
+
+我加完测试后：
+
+```
+npm test            → Tests  473 passed
+npm run verify:testcount → ✗ 4 处…与实测（**467**）对不上
+```
+
+**两个数都对，只是来自不同时刻。** 真因：
+
+- 只有 `npm test` 带 `--reporter=json --outputFile.json=…`，**它是写报告的唯一入口**；
+- 我一直用 `npx vitest run`（不带 json reporter）→ 报告停在 11:49 的那一次。
+
+> **对账的前提是「两边说的是同一件事」。**
+> 拿旧报告比新文档，得到的是**假红**——
+> 而「门禁报了红」很容易被当成「我漏改了某处」，于是去改本来正确的地方。
+
+已加防护：**报告的 mtime 必须不早于 `src/` 里最新的源文件**。
+
+⚠️ 判据**刻意只扫 `src/`**：第一版把 `scripts/` 与 `knowledge/` 也算进去，
+于是**改 `check-test-count.mjs` 本身就让报告过期**——而它不产生任何测试。
+**那是假红，而假红比没检查更糟。**
+
+变异验证三种情况都对：`touch src/*.ts` → 红；`touch scripts/*` / `knowledge/*.md` → 绿。
+
+### 两个小坑
+
+1. **注释里写 glob 会提前闭合注释**：`src/**/*.ts` 里的 `**` 紧跟 `*`，
+   在块注释内部构成 `*/` → 后面的普通文本被当代码解析，
+   报 `SyntaxError: Unexpected token`。**注释里不要写 glob 模式。**
+2. **我自己的实验没清干净**：变异①的 `touch` 残留让②③也红，
+   我一度以为判据写错了。**又一次「量出来不对的第一反应应该是尺子不对」——
+   而这次尺子是对的，是我的实验脏了。**
+
+### ⚠️ 又一次「注释里写了而代码没实现」？
+
+写断言时我第一版写的是：
+
+```js
+typeof expected === 'string'     // 恒真
+```
+
+**测不到任何东西。** 变异验证之前根本发现不了。
+换成「fixture 里放一个文件名 ≠ slugify 结果的样本，两侧各算一遍再比」。
+
+### 变更
+
+| 文件 | 说明 |
+|---|---|
+| `src/lib/wiki/read-page.ts` | slug 改走 `resolveSlug(title, slug, filename)` |
+| `src/lib/wiki/read-page.test.ts` | **+6 条** slug 用例（此前一条都没有） |
+| `knowledge/fixtures/second-site/Export Notes.md` | 唯一能让不一致显形的样本 |
+| `scripts/check-second-site-real.mjs` | slug 探针 + 改断言为契约式 |
+| `scripts/check-test-count.mjs` | 报告过期防护（只扫 `src/`） |
+
+---
+
 ## 2026-09-24 · 阶段 4 收口核对：1 条达成、2 条部分、1 条未达成
 
 六项工作全部推进完之后，**逐条核对退出条件**——

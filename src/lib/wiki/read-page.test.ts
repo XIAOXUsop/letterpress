@@ -145,6 +145,57 @@ describe('readContentPage', () => {
     });
   });
 
+  /*
+   * ── slug：与构建侧同口径 ────────────────────────────────────────
+   *
+   * ⚠️ **这组用例对着一个 2026-09-24 实测的真缺口。**
+   *
+   * `readContentPage` 原先给的是 `file.replace(/\.mdx?$/, '')`——**直接用文件名**：
+   * 既不读显式 `slug:`，也不跑 `slugify`。
+   * 而构建侧（`src/lib/content.ts:80`）走的是
+   * `resolveSlug(data.title, data.slug, entry.id)`，即
+   * **显式 slug > 文件名（经 slugify）> 标题**。
+   *
+   * **后果不是「URL 不好看」**：CLI / 检索给出的 `docId`
+   * 与 `content-manifest.json` 里的 id 对不上，而订阅者靠那个 id 做增量同步。
+   *
+   * 为什么这个模块能长期与构建侧漂开：**它此前没有 slug 的测试**——
+   * 与「没有守卫的分支」的同型。
+   */
+  describe('slug 与构建侧同口径', () => {
+    it('没有显式 slug 时走 slugify(文件名)，不是文件名原样', () => {
+      // 大写 + 空格：slugify 会转小写、空格转连字符
+      write('Export Notes.md', '---\ntitle: 导出说明\n---\n\n正文。\n');
+      expect(readContentPage(dir, 'Export Notes.md').slug).toBe('export-notes');
+    });
+
+    it('显式 slug 优先于文件名', () => {
+      write('some-file.md', '---\ntitle: 甲\nslug: 真正的-slug\n---\n\n正文。\n');
+      expect(readContentPage(dir, 'some-file.md').slug).toBe('真正的-slug');
+    });
+
+    it('显式 slug 也经过 slugify', () => {
+      write('a.md', '---\ntitle: 甲\nslug: Some Thing\n---\n\n正文。\n');
+      expect(readContentPage(dir, 'a.md').slug).toBe('some-thing');
+    });
+
+    it('文件名给不出有效 slug 时退回标题', () => {
+      // `!!!` 会被 slugify 掏空
+      write('!!!.md', '---\ntitle: 从标题来\n---\n\n正文。\n');
+      expect(readContentPage(dir, '!!!.md').slug).toBe('从标题来');
+    });
+
+    it('文件名 slugify 为空、且显式 slug 也为空时退回标题', () => {
+      write('!!!.md', '---\ntitle: 只能靠标题\nslug: "   "\n---\n\n正文。\n');
+      expect(readContentPage(dir, '!!!.md').slug).toBe('只能靠标题');
+    });
+
+    it('中文文件名原样保留（slugify 对 CJK 是恒等的）', () => {
+      write('数据留存.md', '---\ntitle: 数据留存\n---\n\n正文。\n');
+      expect(readContentPage(dir, '数据留存.md').slug).toBe('数据留存');
+    });
+  });
+
   describe('body', () => {
     it('与 Astro 的 entry.body 同口径：首尾都 trim 过', () => {
       // ⚠️ **这条正对着「trim 只写在调用方注释里」的坑**：

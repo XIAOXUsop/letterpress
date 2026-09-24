@@ -56,6 +56,7 @@ import { lint } from '../src/lib/wiki/lint.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
+import { resolveSlug } from '../src/lib/wiki/slug.ts';
 import { splitPassages, rank } from '../src/lib/wiki/retrieve.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 
@@ -150,6 +151,62 @@ const pack = buildContextPack(
 const byRule = (rule) => issues.filter((i) => i.rule === rule);
 
 /*
+ * ── slug 探针 ──────────────────────────────────────────────────────
+ *
+ * fixture 里有一篇 `Export Notes.md`：**文件名 ≠ slugify(文件名)**。
+ * 它是唯一一个能让「read-page 与构建侧的 slug 不一致」显形的样本。
+ *
+ * 判据是**两侧各自算一遍再比**：
+ *   - 左边：`readContentPage` 实际返回的 slug；
+ *   - 右边：`resolveSlug(title, slug 字段, 文件名)`——构建侧用的就是它。
+ *
+ * > 直接断言「slug 是字符串」是**恒真**的，测不到任何东西。
+ * > 那是我第一版的写法——变异验证之前根本发现不了。
+ */
+const SLUG_PROBE_FILE = 'Export Notes.md';
+const SLUG_PROBE = (() => {
+  if (!files.includes(SLUG_PROBE_FILE)) {
+    return { ok: false, why: `fixture 里没有 ${SLUG_PROBE_FILE}——这条断言测不到东西` };
+  }
+  const page = readContentPage(DIR, SLUG_PROBE_FILE);
+  const source = readFileSync(join(DIR, SLUG_PROBE_FILE), 'utf8');
+  const title = frontmatterField(source, 'title') ?? '';
+  const explicit = frontmatterField(source, 'slug');
+  const expected = resolveSlug(title, explicit, SLUG_PROBE_FILE.replace(/\.mdx?$/, ''));
+  return {
+    ok: page.slug === expected,
+    got: page.slug,
+    expected,
+  };
+})();
+/**
+ * 某篇文档的 slug 是否与**构建侧算法**一致。
+ *
+ * ⚠️ **不能用「slug 反查文件名」**——显式 `slug:` 存在时两者本就不同，
+ * 那正是这个缺口本身。必须**拿自己的文件名**去算。
+ */
+function SLUG_MATCHES_BUILD(doc) {
+  const file = files.find((f) => {
+    const src = readFileSync(join(DIR, f), 'utf8');
+    const expected = resolveSlug(
+      frontmatterField(src, 'title') ?? '',
+      frontmatterField(src, 'slug'),
+      f.replace(/\.mdx?$/, ''),
+    );
+    return expected === doc.slug;
+  });
+  return file !== undefined;
+}
+
+if (!SLUG_PROBE.ok) {
+  console.log(
+    `  ⚠ slug 探针：read-page 给出「${SLUG_PROBE.got}」，构建侧会给出「${SLUG_PROBE.expected}」` +
+      `
+    （${SLUG_PROBE.why ?? '两者不一致——CLI / 检索的 docId 会与 manifest 对不上'}）`,
+  );
+}
+
+/*
  * ── 断言 ──────────────────────────────────────────────────────────
  *
  * 每条都对着 fixture README 里声明的那个异构点，
@@ -184,11 +241,42 @@ const checks = [
    * > 改任意一篇都绿。改成「slug 与文件名逐字相同且含中文」之后，
    * > 它的含义才真的是「中文文件名被原样保留下来」。
    */
-  ['中文 slug 原样保留：slug 就是文件名本身，且多数含中文',
-    docs.every((d) => {
-      const file = files.find((f) => f.replace(/\.mdx?$/, '') === d.slug);
-      return file !== undefined; // 按文件名给 slug —— 与 read-page 的实际行为一致
-    }) && docs.filter((d) => /[一-龥]/.test(d.slug)).length >= 4],
+  /*
+   * ⚠️ **这条对着一个 2026-09-24 实测的真缺口。**
+   *
+   * `readContentPage` **只按文件名给 slug、不走 `resolveSlug`**，
+   * 而构建侧（`src/lib/content.ts:80`）走的是
+   * `resolveSlug(data.title, data.slug, entry.id)`。
+   *
+   * 实测：`Export Notes.md` 在 `read-page` 里是 `Export Notes`，
+   * 而构建侧是 `export-notes`（`slugify` 转小写、空格转连字符）。
+   *
+   * **后果**：CLI / 检索给出的 `docId` 与 `content-manifest.json` 里的 id 对不上，
+   * 而订阅者正是靠那个 id 做增量同步的。
+   *
+   * 本仓库 0 篇写了 `slug:`，文件名也全是小写连字符——
+   * 所以**这个缺口在本站至今没有用户可见后果**，它是在异构 fixture 上暴露的。
+   *
+   * 判据：**fixture 里放一个「文件名 ≠ slugify(文件名)」的样本**，
+   * 然后断言 `readContentPage` 给的 slug 与 `resolveSlug` 一致。
+   * 不这样判的话，下面那条 `typeof === 'string'` 恒真——**它测不到任何东西**。
+   */
+  ['slug 走 resolveSlug：文件名与 slugify 结果不同的样本上两侧一致',
+    SLUG_PROBE.ok],
+
+  /*
+   * ⚠️ **判据随 `read-page` 的修复而变——这本身值得记。**
+   *
+   * 修复前这条写的是「slug 就是文件名本身」（`read-page` 直接用文件名），
+   * 修好之后（走 `resolveSlug`）它必然红——**而那正是修复生效的证据**。
+   *
+   * 现在测两件事，都不依赖具体实现：
+   *   ① **多数 slug 是中文**（异构点还在）；
+   *   ② **每个 slug 都等于 `resolveSlug` 的结果**（口径与构建侧一致）。
+   */
+  ['中文 slug 被保留，且每个 slug 都与 resolveSlug 一致',
+    docs.filter((d) => /[一-龥]/.test(d.slug)).length >= 4 &&
+    docs.every((d) => SLUG_MATCHES_BUILD(d))],
 
   /*
    * ⚠️ 第一版是 `passages.some(p => p.heading.includes('§'))`——

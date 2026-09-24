@@ -6,6 +6,8 @@
 
 由 `npm run verify:second-site-real` 读取。
 
+**它抓到的第一个真缺口就是 `read-page` 的 slug 口径**（见下文）。
+
 ## 为什么需要它（而 `check-second-site.mjs` 不够）
 
 `check-second-site.mjs` 用**硬编码的合成 docs 数组**，测的是
@@ -26,12 +28,12 @@
 | 维度 | 本站 `src/content/wiki/` | 这里 | 会咬人的地方 |
 |---|---|---|---|
 | slug 语言 | 全 ASCII | **中文** | `slugify` / `containsCjk` 的 CJK 分支 |
-| slug 来源 | 多数靠文件名推导 | **部分显式写 `slug:`** | ⚠️ `read-page` **不读它**（见下文那一节）——这个异构点**没有真的被覆盖** |
+| slug 来源 | 多数靠文件名推导 | **部分显式写 `slug:`** + 一个文件名 ≠ slugify 结果的样本 | **这个异构点抓到了一个真缺口**（见下文），已修 |
 | 章节标题 | 手写小节名 | **`## §1` 编号** | 段落切分与 `heading` 提取 |
 | 关系字段 | `related:` | **`audience:`** | 核心只认 `related`，**适配层必须翻译** |
 | 知识类型 | 5 concept / 1 entity | **2 synthesis / 3 concept / 1 entity** | `wikiKind` 的分布 |
 | 同名标题 | 无 | **两篇都叫「导出」** | `ambiguousTitles` + `ambiguous-wikilink` |
-| 孤儿页 | 无 | **2 篇**（两篇互不引用的「导出」）+ 1 篇刻意的 | `orphan-page` 规则 |
+| 孤儿页 | 无 | **若干**（互不引用的「导出」+ 刻意那篇） | `orphan-page` 规则 |
 
 ## 探针的负向验证抓出：**四条断言测的是巧合**
 
@@ -52,21 +54,30 @@
 > 而「变红」与「测不到机制」在输出里**长得一样**——
 > 所以负向验证必须断言**报的是哪一条**，不能只看有没有红。
 
-## 顺带发现一个真的缺口：`read-page` 不读显式 `slug`
+## `read-page` 的 slug 口径：已修（迭代 AS）
 
-探针实测：**`readContentPage` 只按文件名给 slug、不读 `slug:` 字段**，
-而 Astro 侧（`src/lib/content.ts:80`）用的是
+`readContentPage` **曾**只按文件名给 slug、不读 `slug:` 字段、也不跑 `slugify`；
+而构建侧（`src/lib/content.ts:80`）走的是
 `resolveSlug(data.title, data.slug, entry.id)`。
 
-**后果**：显式 slug 与文件名不同的文档，
-**在 CLI / 检索里看到的 slug 与构建产物里的 id 不一致**——
-而 `wiki:ask` / `wiki:impact` 都走 `read-page` 那条路。
+**实测后果**（fixture 里的 `Export Notes.md`，frontmatter 写 `slug: 导出说明`）：
 
-fixture 里 `数据留存.md` 刻意声明了 `slug: 数据留存`（**与文件名相同**），
-所以这条差异在探针里不触发。**已登记为缺口，本轮不修**——
-修它要先决定「`read-page` 认不认显式 slug」（会影响现有四个调用方）。
+```
+read-page  → 「Export Notes」
+构建侧     → 「导出说明」
+```
 
-## 这套语料第一次跑就暴露的五件事
+`wiki:ask` 回答里的 `docId` 与 `content-manifest.json` 里的 id 对不上，
+而订阅者正是靠那个 id 做增量同步的。
+
+> 为什么长期没人发现：**letterpress 本仓库 0 篇写了 `slug:`**，
+> 文件名也全是小写连字符（`slugify` 对它们是恒等的）。
+> **一个在本站永远不触发的分支，就是没有守卫的分支。**
+
+**已修**（`read-page` 改走 `resolveSlug`），并补了 6 条 slug 测试——
+该模块此前**一条 slug 测试都没有**，那正是它能长期与构建侧漂开的原因。
+
+## 这套语料第一次跑就暴露的五件事## 这套语料第一次跑就暴露的五件事
 
 | # | 现象 | 是谁的错 |
 |---|---|---|
