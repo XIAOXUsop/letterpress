@@ -39,10 +39,12 @@ const EXPECTED = [
   ['npm run verify', '端到端契约（打在真实产物上）'],
   ['npm run verify:testcount', '测试条数对账'],
   ['npm run verify:search', '搜索可用性前提'],
-  ['npm run verify:questions', '检索金标（22 条）'],
+  ['npm run verify:questions', '检索金标（23 条，其中 3 条登记为已知局限）'],
   ['npm run verify:impact', '影响分析金标（9 条）'],
   ['npm run verify:answers', '**答案能定位到证据**（阶段 3 退出条件 ③）'],
   ['npm run verify:portability', '核心模块可加载性 + 可选链形状'],
+  ['npm run check:site-agnostic', '**站点事实可由调用方覆盖**（阶段 4 第 6 项）'],
+  ['npm run verify:site-mutations', '上一道门禁的负向验证（把它依次弄坏四次，每次都必须真红）'],
   ['npm run verify:second-site', '第二份异构内容集'],
   ['npm run verify:anchors', '锚点契约'],
   ['npm run verify:reproducible', '跨时区可复现构建'],
@@ -132,13 +134,70 @@ const NOT_IN_ALL = new Map([
   ['list:overclaims', '列出可被证伪的声称供人工核对，**退出码恒为 0**'],
 ]);
 for (const name of Object.keys(scripts)) {
-  if (!/^(verify|wiki):/.test(name)) continue;
+  /*
+   * ⚠️ **前缀必须包含 `check:`。**
+   *
+   * 2026-09-24 实测：这里原本写 `/^(verify|wiki):/`，
+   * 于是 `check:site-agnostic` 与 `verify:site-mutations` **两者都扫不到**——
+   * 前者因为前缀不匹配，后者因为名字里没有 `check`…
+   * 而实际上后者有 `verify:` 前缀，是能扫到的。**真正漏的是 `check:*` 这一族。**
+   *
+   * 也就是说：这道检查**宣称**能抓「定义了却不在编排里的门禁」，
+   * 却对以 `check:` 命名的门禁失明。
+   * 判据本身没问题（前缀写窄了），但**宣称与能力不符**比没有更糟。
+   */
+  if (!/^(verify|wiki|check):/.test(name)) continue;
   if (inAll.has(name) || NOT_IN_ALL.has(name)) continue;
   problems.push(
     `门禁「${name}」存在但**不在 verify:all 里**。` +
       `若它是人工触发的（例如 verify:online），请把它加进 NOT_IN_ALL 并写明理由——` +
       `否则「忘了加进编排」和「故意不加」在输出里长得一样。`,
   );
+}
+
+// ── 5. docs/cli.md 里那份逐条顺序列表与实际一致 ────────────────────
+/*
+ * `docs/cli.md` 用一行把 19 步全列了出来。那是**转述**，而转述会漂——
+ * 本仓库已经有过同一个「几道门禁」的数字在 AGENTS.md / docs / README 各处
+ * 写法不一的历史（10、11、13、17 都出现过）。
+ *
+ * > **只核对 `package.json` 与 `EXPECTED` 是不够的**：
+ * > 文档里那份列表错了，读者会照着它排查，而没有任何门禁会提。
+ *
+ * 判据：从 cli.md 的 `verify:all` 那一行里按 `→` 切出步骤名，
+ * 与 `EXPECTED` 的步骤名逐位比对。**多、少、换位都算错。**
+ */
+const cliPath = join(ROOT, 'docs/cli.md');
+/** 期望里的步骤名（去掉 `npm run ` / `npm ` 前缀），用来从文档行里挑出真步骤。 */
+const knownNames = new Set(EXPECTED.map(([e]) => e.replace(/^npm run /, '').replace(/^npm /, '')));
+if (existsSync(cliPath)) {
+  const cli = readFileSync(cliPath, 'utf8');
+  const line = cli.split('\n').find((l) => l.includes('`npm run verify:all`') && l.includes('→'));
+  if (!line) {
+    problems.push(
+      `docs/cli.md 里找不到 \`npm run verify:all\` 那一行的步骤列表。\n` +
+        `    本检查靠它核对文档有没有跟上编排——**找不到就当没写这一段**。`,
+    );
+  } else {
+    /*
+     * 只取**反引号里**的步骤名。
+     * ⚠️ 第一版按 `→` 切整行，于是表格行首尾（`| npm run verify:all | **19 步**…`）
+     * 也被算成一步——**切分范围不对，判据就废了**。
+     */
+    const names = [...line.matchAll(/`([\w:.-]+)`/g)]
+      .map((m) => m[1])
+      .filter((n) => n === 'npm' || /^(verify|wiki|check):/.test(n) || knownNames.has(n))
+      .map((n) => n.replace(/^npm run /, '').replace(/^npm /, ''))
+      .filter((n) => knownNames.has(n));
+    const expectedNames = EXPECTED.map(([e]) => e.replace(/^npm run /, '').replace(/^npm /, ''));
+    if (names.length !== expectedNames.length || names.some((n, i) => n !== expectedNames[i])) {
+      problems.push(
+        `docs/cli.md 里列的 verify:all 步骤与实际不一致。\n` +
+          `    文档写：${names.join(' → ')}\n` +
+          `    实际是：${expectedNames.join(' → ')}`,
+      );
+    }
+  }
 }
 
 if (problems.length > 0) {

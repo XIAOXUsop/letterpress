@@ -198,8 +198,15 @@ original:
 npm run build     # 会跑体检，有错误会中止
 npm test          # 单元测试
 npm run verify    # 端到端验证（含 wiki 链接在产物里真的被渲染）
-npm run verify:all   # 上面全部 + 11 道门禁（这是提交前该跑的）
+npm run verify:all   # 提交前跑这个（它自己会逐步打印每一步）
 ```
+
+> ⚠️ **别手写「几道门禁」这个数。** 它随门禁增删变化，而本文件里这个数
+> **漂过不止一次**（曾写 10、11、13、17）。
+> 权威名单是 `scripts/check-gate-list.mjs` 里的 `EXPECTED`——
+> 门禁增删时**它会红**（`verify:gates` 是 `verify:all` 的第 2 步，
+> 一有差异就立刻报「多出来的：…」与「期望 N 步」）。
+> 本文件这一行是转述，**红了就照 `EXPECTED` 改它**。
 
 ### 要更新 README 里的实测数字时
 

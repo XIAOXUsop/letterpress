@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { containsCjk, resolveSlug, slugify } from './slug.js';
 import { findCodeSpans, parseWikiLinks, renderWikiLinks } from './wikilink.js';
-import { buildGraph, type Doc } from './graph.js';
+import { buildGraph, urlFor, urlOf, type Doc } from './graph.js';
 import { formatIssues, hasErrors, lint } from './lint.js';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -443,6 +443,45 @@ describe('lint', () => {
     );
   });
 
+  /*
+   * ── 2026-09-24：保留路由表改为可注入 ──────────────────────────────
+   *
+   * 这三条对着路线图阶段 4 第 6 项「剥离仅属于当前站点的展示逻辑」写。
+   * 之前那 7 条是模块级常量、函数签名里没有注入口——
+   * 第二个站点（如只有 `about` 与 `search`）要用它就得改核心源码。
+   */
+
+  it('保留路由表可以由调用方换成另一个站点的', () => {
+    const docs = [doc({ slug: 'notes', kind: 'post' })];
+    // 默认（本站）不认识 `notes`，所以不报
+    expect(lint(docs, buildGraph(docs)).some((i) => i.rule === 'reserved-post-slug')).toBe(false);
+
+    // 换一张表：`notes` 成了那个站点自己的路由，立刻要报
+    const withTable = new Map([['notes', '文章列表']]);
+    const issue = lint(docs, buildGraph(docs), { reservedPostRoutes: withTable }).find(
+      (i) => i.rule === 'reserved-post-slug',
+    );
+    expect(issue?.level).toBe('error');
+    expect(issue?.message).toContain('/notes/');
+    expect(issue?.message).toContain('文章列表');
+  });
+
+  it('注入的表**取代**默认表，而不是与之合并', () => {
+    // 若实现写成「两张表都查」，`about` 在注入表里不存在也仍会报——那就等于没注入
+    const docs = [doc({ slug: 'about', kind: 'post' })];
+    const issue = lint(docs, buildGraph(docs), { reservedPostRoutes: new Map([['notes', 'x']]) }).find(
+      (i) => i.rule === 'reserved-post-slug',
+    );
+    expect(issue).toBeUndefined();
+  });
+
+  it('空表意味着「这个站点没有保留路由」，而不是「退回默认」', () => {
+    const docs = [doc({ slug: 'about', kind: 'post' })];
+    const issue = lint(docs, buildGraph(docs), { reservedPostRoutes: new Map() }).find(
+      (i) => i.rule === 'reserved-post-slug',
+    );
+    expect(issue).toBeUndefined();
+  });
   it('孤儿页是警告级', () => {
     const docs = [doc({ slug: 'lonely', title: '没人引用我' })];
     const issues = lint(docs, buildGraph(docs));
@@ -671,5 +710,50 @@ describe('redundantRelations', () => {
     const graph = buildGraph([a, b]);
     expect([...graph.outbound.get('a')!]).toEqual(['b']);
     expect(graph.backlinks.get('b')?.length).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// urlFor / urlOf —— URL 规则（2026-09-24：路径前缀改为可注入）
+// ─────────────────────────────────────────────────────────────────────
+
+describe('urlFor / urlOf', () => {
+  /*
+   * 这组对着路线图阶段 4 第 6 项写：「剥离仅属于当前站点的展示逻辑」。
+   *
+   * 此前 `urlFor` 写死 `kind === 'wiki' ? '/wiki/' + slug + '/' : '/' + slug + '/'`，
+   * 而 `/wiki/` 是**本站的目录选择**——第二个站点可能叫 `/notes/`。
+   * 写死就等于让第二个站点改核心。
+   */
+
+  it('默认行为与 2026-09 之前逐字相同（加参数不该悄悄改产物）', () => {
+    expect(urlFor('wiki', 'abc')).toBe('/wiki/abc/');
+    expect(urlFor('post', 'abc')).toBe('/abc/');
+    expect(urlOf(doc({ slug: 'abc', kind: 'wiki' }))).toBe('/wiki/abc/');
+    expect(urlOf(doc({ slug: 'abc', kind: 'post' }))).toBe('/abc/');
+  });
+
+  it('第二个站点传自己的前缀即可，不必改核心', () => {
+    expect(urlFor('wiki', 'abc', { wiki: '/notes' })).toBe('/notes/abc/');
+    expect(urlFor('wiki', 'abc', { wiki: '' })).toBe('/abc/');
+    expect(urlOf(doc({ slug: 'abc', kind: 'wiki' }), { wiki: '/kb' })).toBe('/kb/abc/');
+  });
+
+  it('前缀只影响知识库条目——文章路径不该跟着变', () => {
+    // 若实现写成「一律套前缀」，文章会变成 /notes/abc/，第二站点的文章全错
+    expect(urlFor('post', 'abc', { wiki: '/notes' })).toBe('/abc/');
+  });
+
+  it('前缀带不带结尾斜杠都给出正确结果', () => {
+    // 传入 '/notes/' 若不规范化，拼接会得到 '/notes//abc/'：
+    // 双斜杠在浏览器里通常还能跳转，但内容清单里的路径对不上、
+    // 站内链接校验会失效，而且第二站点接入时才发现——**晚了**。
+    //
+    // > 这条测试**先写成钉住 bug 的版本**（`expect(...).toBe('/notes//abc/')`），
+    // > 想了两秒才改过来：**把缺陷写成断言，等于让它从此合法**。
+    // > 和「会误报的门禁」同族——一个把 bug 合法化的测试比没有测试更糟。
+    expect(urlFor('wiki', 'abc', { wiki: '/notes/' })).toBe('/notes/abc/');
+    expect(urlFor('wiki', 'abc', { wiki: '/notes///' })).toBe('/notes/abc/');
+    expect(urlFor('wiki', 'abc', { wiki: '' })).toBe('/abc/');
   });
 });

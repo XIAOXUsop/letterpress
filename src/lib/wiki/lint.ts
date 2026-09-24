@@ -66,6 +66,23 @@ export interface LintOptions {
   readonly checkWikilinks?: boolean;
   /** 是否检查孤儿页（同样依赖知识层） */
   readonly checkOrphans?: boolean;
+  /**
+   * 根层被静态路由占用的 slug 及其**中文说明**。
+   *
+   * ── 2026-09-24：从模块级常量改为注入 ──────────────────────────────
+   *
+   * 此前是 `RESERVED_POST_ROUTES` 这个模块级 `Map`，函数签名里**没有注入口**：
+   * `checkReservedPostRoutes(docs)` 一个参数都不接。
+   * 而那 7 条（`404` / `about` / `archive` / `posts` / `search` / `tags` / `wiki`）
+   * 是**本站在 `src/pages/` 下实际有哪些路由**——纯站点事实。
+   * 第二个站点（比如只有 `about` 与 `search`）要用这个 lint，
+   * 就得**改核心源码**才能避免误报，那正是路线图阶段 4 第 6 项要消除的。
+   *
+   * > **默认值不是「站点知识」，是「不配置时的兜底」。**
+   * > 留原值是为了让既有行为与产物逐字不变；
+   * > 真正的剥离点是「它变成了一个参数」——那才是第二站点能覆盖的地方。
+   */
+  readonly reservedPostRoutes?: ReadonlyMap<string, string>;
 }
 
 const DEFAULTS = {
@@ -76,11 +93,21 @@ const DEFAULTS = {
 } as const;
 
 /**
- * 根层文章路由不能占用的系统路径。
+ * 根层文章路由不能占用的系统路径。**本项目的实际路由**。
  *
  * 文章输出在 `/<slug>/`，而这些路径已经由 `src/pages` 的静态路由占用。
  * Astro 遇到冲突只打印 warning、仍以 0 退出：文章 HTML 消失，但 `.md`、RSS、
  * 列表与内容清单仍保留它，造成同一条内容在不同出口指向不同页面。
+ *
+ * ── 2026-09-24 ────────────────────────────────────────────────────
+ *
+ * 它现在是**兜底默认值**，不是唯一来源：实际生效的表来自
+ * `LintOptions.reservedPostRoutes`（见那里的说明），
+ * 本站由 `src/config.ts` 传入同一份内容——**留在这里是为了不传时行为不变**。
+ *
+ * 名单**不是凭印象列的**：2026-09-24 按 `src/pages/` 实测得出
+ * （`404.astro` / `about.astro` / `archive.astro` / `search.astro`
+ * + `posts/` / `tags/` / `wiki/` 三个目录），与本表逐项一致。
  */
 export const RESERVED_POST_SLUGS = [
   '404',
@@ -92,7 +119,8 @@ export const RESERVED_POST_SLUGS = [
   'wiki',
 ] as const;
 
-const RESERVED_POST_ROUTES: ReadonlyMap<string, string> = new Map([
+/** 同 {@link RESERVED_POST_SLUGS}，带中文说明。**兜底默认值**，可被 `LintOptions` 覆盖。 */
+export const DEFAULT_RESERVED_POST_ROUTES: ReadonlyMap<string, string> = new Map([
   ['404', '404 页面'],
   ['about', '关于页'],
   ['archive', '归档页'],
@@ -113,7 +141,9 @@ export function lint(docs: readonly Doc[], graph: LinkGraph, options: LintOption
   const issues: Issue[] = [];
 
   issues.push(...checkDuplicateSlugs(docs));
-  issues.push(...checkReservedPostRoutes(docs));
+  issues.push(
+    ...checkReservedPostRoutes(docs, opts.reservedPostRoutes ?? DEFAULT_RESERVED_POST_ROUTES),
+  );
   // 断链与孤儿页都依赖知识层存在才有意义，关掉时不检查
   if (opts.checkWikilinks) issues.push(...checkBrokenLinks(graph));
   if (opts.checkWikilinks) issues.push(...checkAmbiguousTitles(graph));
@@ -159,11 +189,16 @@ function checkRedundantRelations(graph: LinkGraph): Issue[] {
   return issues;
 }
 
-/** 文章 slug 与静态系统路由冲突。知识库位于 `/wiki/<slug>/`，不受此限制。 */
-function checkReservedPostRoutes(docs: readonly Doc[]): Issue[] {
+/**
+ * 文章 slug 与静态系统路由冲突。知识库位于 `/wiki/<slug>/`，不受此限制。
+ *
+ * `routes` 由 `LintOptions.reservedPostRoutes` 传入；不传则用
+ * {@link DEFAULT_RESERVED_POST_ROUTES}（即本项目 2026-09-24 之前的实际路由）。
+ */
+function checkReservedPostRoutes(docs: readonly Doc[], routes: ReadonlyMap<string, string>): Issue[] {
   return docs.flatMap((doc) => {
     if (doc.draft || doc.kind !== 'post') return [];
-    const owner = RESERVED_POST_ROUTES.get(doc.slug);
+    const owner = routes.get(doc.slug);
     if (!owner) return [];
 
     return [

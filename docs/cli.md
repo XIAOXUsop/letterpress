@@ -4,7 +4,7 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **446 项**单元测试，全部离线 |
+| `npm test` | **453 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 200 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
@@ -19,7 +19,9 @@
 | `npm run wiki:ask -- "问题"` | 把一个自然语言问题编译成**带元数据的 context pack**：文档 ID、小节、来源版本、复核状态、与主命中的关系路径。**只挑材料，不下结论**——选错了能对照金标查出来，结论错了只能靠人读，混在一起就没法自动验证。`--json` 给机器读，`--all` 不截断 |
 | `npm run verify:questions` | 拿 `knowledge/questions.md` 当尺子量检索：23 条问题覆盖精确事实、跨文档组合、冲突、过期、无答案五类。**「无答案」那一类（8 条）是关键**——一个永远给得出答案的检索器只会在它们上面失败。失败时退出码 1 |
 | 构建加载期自动跑，无独立命令 | 知识页 frontmatter 里的 **`verify:` 可证伪声明**在构建加载期核对：每条声明查两件事——那句话**还在不在页面上**、以及它对应的**文件在不在**。它管的是 lint 管不到的那一层：**页与仓库之间**。llm-wiki 页原先有三行写着「计划中，尚未实现」而它们全都已落地，没有任何检查会发现 |
-| `npm run verify:all` | 十道依次跑一遍（`check` + `test` + `verify` + `verify:testcount` + `verify:search` + `verify:questions` + `verify:anchors` + `verify:reproducible` + `verify:base` + `verify:formats`），**不含** `verify:online` |
+| `npm run check:site-agnostic` | **核心模块不硬编码本站结构**：知识库 URL 前缀与根层保留路由表必须能由调用方覆盖。判据是**查签名与调用链**（`urlFor` 收不收前缀参数、`lint()` 真的用没用 `opts.reservedPostRoutes`），不是查字面量——因为**写死与「可覆盖的兜底默认值」在字面上完全一样**。对应路线图阶段 4 第 6 项 |
+| `npm run verify:site-mutations` | 上一道门禁的**负向验证**：把它依次弄坏四次（删参数、删透传、删注入口、**声明了能力却没接线**），每次都必须真的变红，恢复后必须回绿。**门禁自己绿不算数——它得能被证明是尺子。** |
+| `npm run verify:all` | **19 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:impact` → `verify:answers` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `verify:second-site` → `verify:anchors` → `verify:reproducible` → `verify:base` → `verify:formats` → `check:anchors` → `check:refs`），**不含** `verify:online`（需要外部环境）与三个交互式命令 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 
@@ -47,6 +49,22 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 
 而且 `verify:base` 只跑 `astro build`、**不生成 Pagefind 索引**——
 它留下的那份产物是**没有搜索**的。若此时部署或本地预览，搜索会静默缺失。
+
+### 哪一道验证会改写**源码**
+
+`verify:site-mutations` 会**真的改掉** `src/lib/wiki/graph.ts` 与 `lint.ts`
+再改回来——它靠这个证明门禁不是装饰。
+
+- 它在 `verify:all` 里排在 `verify:portability` 之后，**串行**，不会并发踩到彼此；
+- 跑完必然还原，且脚本末尾会**再跑一次门禁确认已回绿**——
+  没回绿就退出码 1，明说「本轮结论不作数」；
+- 还原失败（比如中途 `Ctrl-C`）会留下被改坏的源码。
+  这种情况下 `git checkout -- src/lib/wiki/graph.ts src/lib/wiki/lint.ts` 即可，
+  本轮只改这两份文件。
+
+> 写成一次不报错、什么都不变的操作，是因为此前把这个脚本放在 `.verify/` 里——
+> 而那个目录**被 `.gitignore` 忽略、也被 `npm run clean` 清掉**，
+> 于是它既进不了版本库、CI 上也跑不到。**一个跑不到的门禁等于没有。**
 
 ---
 

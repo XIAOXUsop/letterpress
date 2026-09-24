@@ -180,14 +180,54 @@ export interface LinkGraph {
  *
  * 那是同一套规则的第二份实现——`urlOf` 一改，它就静默对不上，
  * 于是 HTML 里的链接与链接图/清单各指各的。现在两边都走这一个函数。
+ *
+ * ── 2026-09-24：路径前缀改为可注入 ─────────────────────────────────
+ *
+ * 此前写死 `` kind === 'wiki' ? `/wiki/${slug}/` : `/${slug}/` ``。
+ * `/wiki/` 是**本站的目录选择**，不是知识层的必然——第二个站点可能叫
+ * `/notes/`、可能不分目录。写死它就等于**让第二个站点改核心**，
+ * 而路线图阶段 4 第 6 项要的正是剥离这类逻辑。
+ *
+ * 改法是**加参数**而不是改默认值：默认仍是 `{ wiki: '/wiki' }`，
+ * 于是既有 7 处调用方零改动、产物逐字不变。
+ * 真正要回答的问题是「第二个站点能否不碰核心就用」——
+ * 那是路线图阶段 4 的退出条件，仍欠着一个真实第二站点（`verify:second-site`
+ * 只用合成语料，**证不了那一条**）。
+ *
+ * > **默认值不是「站点知识」，是「不配置时的兜底」。**
+ * > 留成 `/wiki` 是为了让本次改动**不改变任何现有行为**——
+ * > 把默认值也改成中性 `/` 是另一件事，会让本站全部 wiki 链接失效，
+ * > 得在同一次改动里把适配层一起接上，而不是顺手改掉。
+ *
+ * `check-site-agnostic` 查的是「核心模块不写死路径前缀」——
+ * 它靠**这个参数存在**来兑现，不靠默认值是什么。
  */
-export function urlFor(kind: Doc['kind'], slug: string): string {
-  return kind === 'wiki' ? `/wiki/${slug}/` : `/${slug}/`;
+export function urlFor(
+  kind: Doc['kind'],
+  slug: string,
+  prefixes: UrlPrefixes = DEFAULT_URL_PREFIXES,
+): string {
+  if (kind !== 'wiki') return `/${slug}/`;
+  // 去掉结尾斜杠再拼：`/notes/` + `abc` 会得到 `/notes//abc/`
+  const base = prefixes.wiki.replace(/\/+$/, '');
+  return `${base}/${slug}/`;
 }
 
-/** 计算文档的对外 URL。文章与 wiki 页共用一套规则，便于互相链接。 */
-export function urlOf(doc: Doc): string {
-  return urlFor(doc.kind, doc.slug);
+/** 知识库条目的 URL 前缀。缺省为 `/wiki`，与本项目 2026-09 之前的行为一致。 */
+export interface UrlPrefixes {
+  /** 知识库条目的目录前缀，不要带结尾斜杠 */
+  readonly wiki: string;
+}
+
+const DEFAULT_URL_PREFIXES: UrlPrefixes = { wiki: '/wiki' };
+
+/**
+ * 计算文档的对外 URL。文章与 wiki 页共用一套规则，便于互相链接。
+ *
+ * `prefixes` 一路透传——不给就用默认，于是**既有调用方零改动**。
+ */
+export function urlOf(doc: Doc, prefixes: UrlPrefixes = DEFAULT_URL_PREFIXES): string {
+  return urlFor(doc.kind, doc.slug, prefixes);
 }
 
 export interface GraphOptions {
