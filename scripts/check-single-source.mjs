@@ -186,3 +186,74 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log('  ✓ 没有任何地方把 manifest 版本号写死\n');
+
+// ── 3. 文档里转述的版本号 ─────────────────────────────────────────
+/*
+ * ⚠️ **代码与文档是两个都写同一个数字的地方，而代码那侧本检查已经管了。**
+ *
+ * 2026-09-24 实测：`docs/content-manifest.md` 的「边界」一节写着
+ * 「这是版本为 1 的项目格式」——**而实际是 2**（manifest 早就升了）。
+ * 那句话就在我新写的「IR 版本号就是 version」那段下面，**自相矛盾**。
+ *
+ * > 它能活这么久，是因为**没有任何东西核对文档里的版本号**——
+ * > 而 `check-single-source` 此前只扫代码。
+ * > **加了检查却只覆盖一半，和没加一样。**
+ *
+ * 判据：文档里出现「版本为 N」且 N ≠ 真值就红。
+ *
+ * ⚠️ **故意不扫 `knowledge/log.md`**——那里记的是**历史事实**
+ * （迭代 K 那次确实还是 1），改它等于篡改记录。
+ * 「全仓无一处旧数字」不是目标，**「声称现状的地方没有旧数字」**才是。
+ */
+const DOCS_WITH_VERSION_CLAIM = [
+  'README.md',
+  'AGENTS.md',
+  'docs/content-manifest.md',
+  'docs/content-sync.md',
+  'docs/content-export.md',
+  'docs/cli.md',
+];
+console.log('');
+console.log('文档里转述的版本号');
+console.log('─'.repeat(64));
+
+const docProblems = [];
+for (const doc of DOCS_WITH_VERSION_CLAIM) {
+  const full = join(ROOT, doc);
+  if (!existsSync(full)) continue;
+  const text = readFileSync(full, 'utf8');
+  for (const m of text.matchAll(/版本为\s*`?(\d+)`?/g)) {
+    if (Number(m[1]) !== TRUTH) {
+      docProblems.push(
+        `${doc} 里写「版本为 ${m[1]}」，而真值是 ${TRUTH}。\n` +
+          `    文档里的版本号此前没人核对——2026-09-24 实测到一处「版本为 1」的陈旧说法。`,
+      );
+    }
+  }
+}
+if (docProblems.length > 0) {
+  for (const p of docProblems) console.log(`  ✗ ${p}`);
+  problems.push(...docProblems);
+} else {
+  console.log(`  ✓ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里转述的版本号与真值一致`);
+}
+
+/*
+ * ⚠️ **退出判断必须放在最后。**
+ *
+ * 2026-09-24 实测踩了：加文档检查时把代码插在**退出判断之前**，
+ * 于是 `problems` 里有东西、输出里也打印了 `✗`，而**退出码仍是 0**——
+ * 门禁在 `verify:all` 里等于不存在。
+ *
+ * > 症状极具欺骗性：**「它报了」与「它判了」是两件事**。
+ * > 而本轮已经因为同一类错误付过两次代价
+ * > （JSON-LD 的 `note` 分支、check-site-agnostic 的放行规则）。
+ *
+ * 判据本身（`problems` 非空就红）早就在，
+ * 缺的只是**把新检查的结果接进那个已经存在的通道**。
+ */
+if (problems.length > 0) {
+  console.log(`\n${problems.length} 处问题。\n`);
+  process.exit(1);
+}
+console.log('\n版本号只有一处真值，且文档转述与它一致。\n');
