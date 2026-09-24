@@ -58,6 +58,7 @@ const EXPECTED = [
   ['npm run verify:anchors', '锚点契约'],
   ['npm run verify:reproducible', '跨时区可复现构建'],
   ['npm run verify:base', '子路径部署'],
+  ['npm run check:manifest-schema', '**产物符合 JSON Schema，且三处 version 一致**（自己先 build：不依赖前面步骤的副作用）'],
   ['npm run verify:formats', '内容发布探针 + 产物级断言'],
   ['npm run check:anchors', '**文档里的锚点链接点得到**（slug 规则与 GitHub 一致）'],
   ['npm run check:refs', '**文档里提到的路径都存在**（放最后：verify:formats 会清 dist，本检查要 dist 才判产物）'],
