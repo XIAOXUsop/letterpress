@@ -132,6 +132,28 @@ console.log(`  JS 文件          ${jsFiles.length}`);
 if (jsFiles.length > 0) {
   const jsBytes = await totalBytes(jsFiles);
   console.log(`  JS 未压缩合计    ${Math.round(jsBytes / 1024)} KB`);
+  /*
+   * ⚠️ **gzip 那一行是 2026-09-24 补的**，而它补的原因是：
+   * 文档里流传着三个不同的 gzip 数（93 / 105 / 146 KB），
+   * **没有一个是任何命令能产出的**——所以它们只能靠手抄，也就只能漂。
+   *
+   * > 146 KB 那个尤其糟：README 已经写明「在当前环境**已无法复现**」，
+   * > 而 `design-notes.md` 里它还以「实测」的身份活着（已改）。
+   *
+   * 口径与 CSS / 字体那两行一致：`gzipSync(bytes, { level: 9 })`
+   * ——**不是 `gzip -c`**（那个的口径不同，见文件里 CSS 那行的注释）。
+   *
+   * ⚠️ **它是「全部 js 文件」的合计**，而「访问者真正会加载哪几个」
+   * 取决于 `pagefind.js` 内部按需加载哪些 UI 组件——
+   * **那要浏览器网络面板才能确认，Node 里测不出来**。
+   * 所以 README 里那个更窄的数字（5 个 js / 93 KB）在本命令里**对不上**是正常的，
+   * 本行给的是**可复现的上界**。
+   */
+  let gzipBytes = 0;
+  for (const file of jsFiles) {
+    gzipBytes += gzipSync(await readFile(file), { level: 9 }).length;
+  }
+  console.log(`  JS gzip 合计     ${Math.round(gzipBytes / 1024)} KB（全部 ${jsFiles.length} 个，可复现上界）`);
 }
 
 console.log('\n  这几个数与 README「实测数据」表里的对应项可以直接比对。');
