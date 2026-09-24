@@ -5,8 +5,8 @@
  * 可验证的问题：让同步器先比较 hash，只抓取真正变化的 markdown 孪生文件。
  */
 import { createHash } from 'node:crypto';
-import type { Doc, LinkGraph } from './wiki/graph.js';
-import { urlOf } from './wiki/graph.js';
+import type { Doc, LinkGraph } from './wiki/graph.ts';
+import { urlOf } from './wiki/graph.ts';
 
 export const CONTENT_MANIFEST_FORMAT = 'letterpress-content-manifest';
 

@@ -213,6 +213,21 @@ review:
   其余 4 字符 1 token），不是模型真实用量；真实词表下的对照见 `docs/content-negotiation.md`。
   （对着 Demo 跑 `npm run verify:online` 会在协商那几项上报红——**那是这条限制本身，
   不是部署事故**；同一个脚本会同时证明 Pages 能做到的部分是好的。）
+
+  > **2026-09-24 实测：那 8 项红的完整清单**（此前 README 只提了其中 2 项）。
+  > `Vary: Accept` 缺失（实际是 `Vary: Accept-Encoding`）、
+  > `Content-Location` 缺失、`Link: rel="alternate"` 缺失——
+  > **三项都没登记过**，而它们与协商是**同一件事**（响应头不可改）。
+  >
+  > 还有第 7 项值得单独说：**线上 `content-manifest.json` 仍是 `version: 1`**，
+  > 而本地已是 v2。**Demo 的订阅者至今拿不到 `provenance`**——
+  > 迭代 AN 做的 v1→v2 迁移器正是为此准备的，**但主分支还没合并**。
+  > 在 `test` 分支合入 main 并重新部署之前，这一条不会变。
+  >
+  > 顺带一提：**`verify:online` 此前根本跑不起来**（第 0 步就崩），
+  > 而它在门禁编排里挂着的理由是「基线本身就是红的」——
+  > **那句「基线是红的」从来没被实测过**。它连跑都跑不起来。
+  > 修好之后才有上面这份清单。
 - **同一个限制还影响 `/content.ndjson` 的 Content-Type。** 源码里设的是
   `application/x-ndjson`，三个平台的配置也都声明了它，但 **Pages 上下不来**——
   2026-09-20 实测线上 Demo 返回的是 `application/octet-stream`

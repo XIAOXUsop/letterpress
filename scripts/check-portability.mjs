@@ -144,6 +144,70 @@ for (const file of CORE) {
   }
 }
 
+/*
+ * ── 第二条：脚本用到的模块也必须能加载 ────────────────────────────────
+ *
+ * ⚠️ **2026-09-24 实测：`verify:online` 一直跑不起来，而那不是「基线红」。**
+ *
+ * 它 `import { CONTENT_MANIFEST_VERSION } from '../src/lib/content-manifest.ts'`，
+ * 而那个文件内部写着 `import { urlOf } from './wiki/graph.js'`——
+ * **裸 Node 解析不了 `.js` 后缀**（迭代 AL 改 `graph.ts` 内部 import 时漏了它）。
+ *
+ * 结果：脚本在第 0 步就 `ERR_MODULE_NOT_FOUND`，
+ * 而 `check-gate-list.mjs` 的 `NOT_IN_ALL` 里写着
+ * 「Pages 跑不了内容协商，**基线本身就是红的**」——
+ * **那句「基线是红的」从来没被实测过，它连跑都跑不起来。**
+ *
+ * > **「假定它红」与「知道它红」不是一回事**：
+ * > 前者让一个从没跑过的脚本在编排里挂着一个说得通的理由。
+ *
+ * 所以这里加第二条：**从 `scripts/` 实际 import 的模块**逐个试加载。
+ * 名单**从源码推导**而不是手写——手写的名单会漏（这正是本轮那次漏）。
+ */
+const scriptDeps = (() => {
+  const found = new Set();
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) walk(p);
+      else if (entry.name.endsWith('.mjs')) {
+        for (const m of readFileSync(p, 'utf8').matchAll(/from '(\.\.\/src\/[^']+)'/g)) {
+          found.add(m[1].replace('../', ''));
+        }
+      }
+    }
+  };
+  walk(join(ROOT, 'scripts'));
+  return [...found].sort();
+})();
+
+console.log('');
+console.log('scripts 用到的模块能否被裸 Node 加载');
+console.log('─'.repeat(64));
+
+for (const rel of scriptDeps) {
+  const full = join(ROOT, rel);
+  try {
+    await import(pathToFileURL(full).href);
+    console.log(`  ✓ ${rel}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    problems.push(
+      `${rel} **不能被裸 Node 加载**：${msg}
+` +
+        `    它被 scripts/ 下的脚本 import，所以那些脚本在裸 Node 下会直接崩。
+` +
+        `    内部用 '.js' 后缀 import 的话，bundler 能解析而裸 Node 不能——` +
+        `改成 '.ts' 后缀即可（无后缀不行）。
+` +
+        `    **实测踩过** \`verify:online\` 因此一直跑不起来，` +
+        `而它在 NOT_IN_ALL 里的理由写的是「基线本身就是红的」——` +
+        `那句从来没被验证过。`,
+    );
+    console.log(`  ✗ ${rel}`);
+  }
+}
+
 // ── 可选链漏保护 ──────────────────────────────────────────────────────
 
 const files = [];

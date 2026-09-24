@@ -34,7 +34,7 @@
  * 用法：`npm run check:refs`（有 dist 时最准；没有也能跑，产物类会跳过）
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, extname, relative } from 'node:path';
+import { join, extname, relative, sep } from 'node:path';
 
 const ROOT = process.cwd();
 const DIST = join(ROOT, 'dist');
@@ -236,4 +236,37 @@ if (runtimePaths.length > 0) {
   for (const r of runtimePaths) console.log(`      ${r}`);
   console.log('    静态无法核实，已归类跳过——不判比误判好。');
 }
-console.log('  ✓ 文档里提到的每一处路径都能找到对应文件（或被明确归为运行时路径）\n');
+console.log('  ✓ 文档里提到的每一处路径都能找到对应文件（或被明确归为运行时路径）');
+
+/*
+ * ── 顺手查一件极轻的事：文档里有没有乱码 ──────────────────────────
+ *
+ * U+FFFD（`�`）是**编码替换字符**——某次写入时源文本不是合法 UTF-8，
+ * 解码器把它换成了这个字符，而**它不会报错，只是静静地留在那里**。
+ *
+ * > 2026-09-24 实测：`knowledge/log.md` 里有一处「第一���」
+ * > （提交 `b4f44ec`，几天前的一次 Python 写入留下的）。
+ * > 它活到今天是因为**没有任何检查看这个**——
+ * > 而一个「第一���」在读者眼里就是「这里坏了，但我不知道坏在哪」。
+ *
+ * 判据：扫全部文档，出现即红并指出位置。
+ * **成本是一次正则扫描**，而它抓到的东西读者一眼就看得见。
+ */
+const mojibake = [];
+for (const f of docs) {
+  const rel = relative(ROOT, f).split(sep).join('/');
+  readFileSync(f, 'utf8')
+    .split('\n')
+    .forEach((line, i) => {
+      if (line.includes('�')) mojibake.push(`${rel}:${i + 1}`);
+    });
+}
+if (mojibake.length > 0) {
+  console.log('');
+  console.log(`  ✗ 文档里有 ${mojibake.length} 处编码替换字符（U+FFFD）：`);
+  for (const where of mojibake) console.log(`      ${where}`);
+  console.log('    它是**某次写入时源文本不是合法 UTF-8**留下的，替换器不认识就换成了它。');
+  console.log('    不报错、不崩，只是在读者眼里变成「这里坏了」。');
+  process.exit(1);
+}
+console.log('  ✓ 文档里没有编码替换字符（U+FFFD）\n');

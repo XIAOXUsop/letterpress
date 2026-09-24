@@ -7,6 +7,82 @@
 
 ---
 
+## 2026-09-24 · 迭代 AV：`verify:online` 第一次真跑起来——它此前**连跑都跑不起来**
+
+去核对 `NOT_IN_ALL` 里那条「Pages 跑不了内容协商，**基线本身就是红的**」。
+
+**它跑不起来**：`import { CONTENT_MANIFEST_VERSION } from '…/content-manifest.ts'`，
+而那个文件内部写着 `import { urlOf } from './wiki/graph.js'`——
+**裸 Node 解析不了 `.js` 后缀**（迭代 AL 改 `graph.ts` 内部 import 时漏了它）。
+
+> **「假定它红」与「知道它红」不是一回事**：
+> 前者让一个**从没跑过的**脚本在编排里挂着一个说得通的理由，
+> 而那条理由本身从没被验证过。
+
+### 修完才拿到那份清单：8 项红，其中 3 项 README 没登记过
+
+| # | 项 | 之前登记过？ |
+|---|---|---|
+| 1 | `Accept: text/markdown` 不返回 markdown | ✅ |
+| 2 | 两种 Accept 拿到相同 Content-Type | ✅ |
+| 3 | HTML 缺 `Vary: Accept`（实际 `Accept-Encoding`） | ❌ **新** |
+| 4 | Markdown 缺 `Vary: Accept` | ❌ **新** |
+| 5 | 缺 `Content-Location` | ❌ **新** |
+| 6 | 缺 `Link: rel="alternate"` | ❌ **新** |
+| 7 | **线上 manifest 仍是 `version: 1`** | ❌ **新** |
+| 8 | NDJSON 的 Content-Type | ✅ |
+
+第 3-6 项与协商**是同一件事**（Pages 响应头不可改），
+**而第 7 项最要紧**：迭代 AN 做的 v1→v2 迁移器正是为此准备的，
+**而线上那份还没升级**——Demo 的订阅者至今拿不到 `provenance`。
+`test` 分支合入 main 并重新部署之前，这一项不会变。已写进 README。
+
+### 门禁补上第二条：脚本用到的模块也必须能加载
+
+`check-portability` 原先只查「**核心模块**」（`src/lib/wiki/` 那几个），
+而 `content-manifest.ts` / `edge.ts` 是**被脚本消费的非核心模块**——
+**它管不到，而那正是漏的地方**。
+
+现在那条名单**从 `scripts/` 的 import 语句里推导**（17 个），逐个试加载。
+手写的名单会漏——**这正是本轮那次漏**。
+
+加上之后立刻又抓出第二处：`edge.ts` 里的 `accept.js`。
+两处都改成 `.ts` 后缀（**无后缀不行**，实测过）。
+
+### 顺带：文档里的乱码活了好几天
+
+`knowledge/log.md` 里有一处「第一���」——**提交 `b4f44ec`（几天前）**留下的，
+是某次 Python 写入时源文本不是合法 UTF-8，替换器换成了 U+FFFD。
+
+它**不报错、不崩**，只是在读者眼里变成「这里坏了」。
+活到今天是因为**没有任何检查看这个**。
+
+已在 `check-doc-refs` 末尾加一条：扫全部文档，出现 U+FFFD 即红并指出行号。
+变异验证：注入一处 → 红（指到 `README.md:1`），还原 → 绿。
+
+### 又一次「注释里的约束没实现」
+
+`parseReview` 那边记着「三次正则都不对，改成逐行扫描」。
+而我在同一天又写了**第四种**——这次不是正则，是 `slice(i-10, …)`：
+`i` 是字符串匹配的位置，**小于 10 时 `slice` 的负索引从末尾算**，
+于是探针返回空字符串，而我据此以为文件坏了。
+
+> **负索引是 `slice` 与 `substring` 的经典差异**，而它出现的场合
+> 恰恰是我「已经很确定那段内容是什么」的时候——**越确信越不会去查**。
+
+### 变更
+
+| 文件 | 说明 |
+|---|---|
+| `src/lib/content-manifest.ts` | 2 处 `.js` → `.ts` |
+| `src/lib/content-export.ts` | 1 处 |
+| `src/lib/negotiate/edge.ts` | 1 处 |
+| `scripts/check-portability.mjs` | 新增第二条：脚本依赖的模块也必须可加载（名单从源码推导） |
+| `scripts/check-doc-refs.mjs` | 新增：文档里不许有 U+FFFD |
+| `README.md` | 补 8 项实测差异 + 线上 manifest 仍是 v1 |
+
+---
+
 ## 2026-09-24 · 迭代 AU：给内容清单一份 JSON Schema——阶段 4 第 3 条那「只做了一半」的一半
 
 核对阶段 4 退出条件第 3 条「schema、CLI 和输出契约都有**兼容性测试**」时发现：
@@ -1851,7 +1927,7 @@ check-impact → 金标全过 + 两条新检查
 ## 2026-09-24 · 迭代 AC：让「无来源」的两种含义可区分——阶段 2 收口
 
 前面几轮都在检查与文档上打转，本轮回到内容层，核对路线图阶段 2 的退出条件。
-第一���：「100% 的 reviewed Wiki 页面至少能解析到一个有效来源版本
+第一项：「100% 的 reviewed Wiki 页面至少能解析到一个有效来源版本
 **或明确的「原创实践记录」**」。
 
 ### 「原创实践记录」这个概念此前根本不存在

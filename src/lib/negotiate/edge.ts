@@ -26,7 +26,7 @@
  * 而平台垫片是不需要测试的胶水。把两者混在一起会让测试被迫依赖某个平台的运行时。
  */
 
-import { markdownResponseHeaders, prefersMarkdown } from './accept.js';
+import { markdownResponseHeaders, prefersMarkdown } from './accept.ts';
 
 export interface NegotiateOptions {
   /** 取静态资源。返回 null 表示「没有这个文件」 */
