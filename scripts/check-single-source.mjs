@@ -180,6 +180,17 @@ console.log('─'.repeat(64));
 console.log(`  真值：src/lib/content-manifest.ts 的 CONTENT_MANIFEST_VERSION = ${TRUTH}`);
 console.log(`  扫了 ${scanned} 个文件\n`);
 
+/*
+ * ⚠️ **扫到 0 个文件时必须红。**
+ * 与 `check-portability` 同一条纪律（本轮第四次撞上「空集合通过」）：
+ * **「扫了 0 个、没有写死版本号」与「扫了 N 个、没有写死」不是一回事**——
+ * 前者只说明什么都没检。
+ */
+if (scanned === 0) {
+  bad('版本号检查扫到 0 个文件——`src` / `scripts` 的路径可能变了，没有检到任何东西');
+  console.log('  ✗ 扫到 0 个文件——不能算「没有写死版本号」');
+}
+
 if (problems.length > 0) {
   for (const p of problems) console.log(`  ✗ ${p}`);
   console.log(`\n${problems.length} 处把版本号写死了。\n`);
@@ -233,7 +244,29 @@ if (docProblems.length > 0) {
   for (const p of docProblems) console.log(`  ✗ ${p}`);
   problems.push(...docProblems);
 } else {
-  console.log(`  ✓ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里转述的版本号与真值一致`);
+  /*
+   * ⚠️ **「扫了 N 份都没问题」与「N 份里一处都没扫到」在输出里原本长得一样。**
+   *
+   * 2026-09-24 实测：这六份文档里**一处「版本为 N」都没有**——
+   * 于是这段判据什么都没检，而它打印的是「6 份文档里转述的版本号与真值一致」。
+   *
+   * > 判据要问两件事：**被扫到几处？期望几处？**
+   * > 「0 处匹配、0 处不符」与「6 处匹配、6 处都对」在结果上无法区分，
+   * > 除非**把匹配数一起报出来**。
+   */
+  const hits = DOCS_WITH_VERSION_CLAIM.reduce(
+    (n, doc) => n + [...readFileSync(join(ROOT, doc), 'utf8').matchAll(/版本为\s*`?(\d+)`?/g)].length,
+    0,
+  );
+  if (hits === 0) {
+    console.log(
+      `  ℹ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里**一处「版本为 N」都没有**——` +
+        '这条判据此刻没检到任何东西。\n' +
+        '    （2026-09-24 曾有一处「版本为 1」的陈旧说法，已被修正。）',
+    );
+  } else {
+    console.log(`  ✓ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里扫到 ${hits} 处版本声明，都与真值一致`);
+  }
 }
 
 /*
