@@ -61,12 +61,62 @@ try {
 
 const stagedFiles = staged.split('\n').filter(Boolean);
 
+/*
+ * ── 报告类的输出统一放这里，两个分支都调 ──────────────────────────
+ *
+ * ⚠️ **2026-09-24 犯过两次同型的错**：
+ * 第一次是「报未跟踪文件」那段被放在「暂存区为空就 return」之后
+ * （迭代 BE 修掉了）；第二次是「领先几个提交」那段**又**放在后面。
+ *
+ * > **每加一段报告就记得挪一次位置，第二次一定会忘。**
+ * > 所以这里把「报告」收进一个函数，由两个分支统一调用——
+ * > **新增报告时只改这一个函数，不存在「放哪」的选择。**
+ */
+function reportAll() {
+  reportUntracked();
+  /*
+   * 顺带报一下「这次提交会让分支领先 main 多少个」。
+   *
+   * ⚠️ **起因是我自己连续说错**：那几条总结里我写
+   * 「领先 main 48 / 52 / 54 / 58 / 61 / **63** 个提交」，而实测是 **59**。
+   * **每一个都是凭印象加 1 报出来的**——
+   * 而每次变化只 +1，于是「凭上次数 +1」看起来很合理，直到有一次我跳了一轮。
+   *
+   * > **这类数字不该由人（或 agent）心算**：让命令报，不要让人报。
+   * > **不判定**（领先多少不是对错问题），只**显示**。
+   */
+  console.log('');
+  try {
+    const base = git('rev-parse', '--verify', 'origin/main').trim();
+    const count = Number(git('rev-list', '--count', `${base}..HEAD`).trim());
+    const shortBase = git('rev-parse', '--short', base).trim();
+    /*
+     * ⚠️ **两个数，不是一个。**
+     * 第一版写「这次提交之后，本分支领先 N 个」——
+     * 而**暂存区为空时根本没有这次提交**（`reportAll` 在那个分支里也跑）。
+     * 报一个不存在的提交之后的数，比不报更糟。
+     */
+    console.log(`  ℹ 当前 HEAD 领先 origin/main ${count} 个提交（基线 ${shortBase}）`);
+    if (stagedFiles.length > 0) {
+      console.log(`    这次提交之后会是 ${count + 1} 个。`);
+    } else {
+      console.log('    暂存区是空的，所以**现在不会有新提交**。');
+    }
+    if (count === 0) {
+      console.log('    ⚠️ 领先 0 个——若你预期有一批改动没进去，回去看上面的一致性检查。');
+    }
+  } catch {
+    // 没有 origin/main（首次 clone、或远端还没建这个分支）——不是错误
+    console.log('  ℹ 拿不到 origin/main，跳过「领先几个提交」的显示。');
+  }
+}
+
 if (stagedFiles.length === 0) {
   console.log('  – 暂存区是空的（还没 `git add`）——**这一步要在 add 之后、commit 之前跑**');
   console.log('');
   console.log('  本检查只在「已经 add 过」时才有意义：');
   console.log('    git add -A && npm run check:staged');
-  reportUntracked();
+  reportAll();
   console.log('');
   process.exit(0);
 }
@@ -117,7 +167,7 @@ function reportUntracked() {
   console.log('    这不是错误——**但如果你刚新增了文件，它可能没进去**。');
 }
 
-reportUntracked();
+reportAll();
 
 console.log('');
 if (problems > 0) {
