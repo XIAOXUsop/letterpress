@@ -24,17 +24,14 @@
  * ② **schema 的 `version` 约束与产物、与源码常量一致**（三处不能各说各话）
  * ③ **docs 里有指路**（消费方找得到它）
  *
- * ⚠️ **本检查不引入 JSON Schema 校验库**——
- * 理由与迁移器不引依赖同源：本项目主张「零依赖、离线可跑」，
- * 而一份 schema 的核心用途是**给人与工具读的规格**，
- * 不是在 CI 里当验证器。① 用手写的不变量实现——
- * **它比通用校验器更能表达「这个项目在意什么」**
- * （例如「documentCount 必须等于 documents.length」）。
+ * 使用 JSON Schema 校验器核对完整字段形状；手写检查保留业务不变量，
+ * 例如 documentCount 必须等于 documents.length。
  *
  * 用法：`npm run check:manifest-schema`
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 const ROOT = process.cwd();
 const SCHEMA = join(ROOT, 'public', 'content-manifest.schema.json');
@@ -64,6 +61,31 @@ ok('schema 与产物都在');
 
 const schema = JSON.parse(readFileSync(SCHEMA, 'utf8'));
 const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+
+const ajv = new Ajv2020({ allErrors: true, strict: false });
+ajv.addFormat('uri', (value) => {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+});
+ajv.addFormat('date-time', (value) =>
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+  && !Number.isNaN(Date.parse(value)));
+try {
+  const validate = ajv.compile(schema);
+  if (!validate(manifest)) {
+    for (const error of validate.errors ?? []) {
+      bad(`JSON Schema: ${error.instancePath || '/'} ${error.message}`);
+    }
+  } else {
+    ok('完整 JSON Schema 校验通过');
+  }
+} catch (error) {
+  bad(`JSON Schema 无法编译：${error instanceof Error ? error.message : String(error)}`);
+}
 
 // ── ① 产物符合 schema 里声明的不变量 ────────────────────────────────
 const declared = schema.properties.version;

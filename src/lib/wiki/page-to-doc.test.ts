@@ -62,6 +62,12 @@ describe('pageToDoc', () => {
     expect(pageToDoc(page, { draft: true }).draft).toBe(true);
   });
 
+  it('保留 slug 是否由作者显式指定的信息', () => {
+    expect(pageToDoc(page).explicitSlug).toBe(false);
+    expect(pageToDoc({ ...page, explicitSlug: true }).explicitSlug).toBe(true);
+    expect(pageToDoc({ ...page, explicitSlug: true }, { explicitSlug: false }).explicitSlug).toBe(false);
+  });
+
   /**
    * `id` **不在**这个函数里。
    *

@@ -34,6 +34,7 @@
 /** 一个「读到的页面」。与 `readContentPage` 的返回值同形（只取需要的字段）。 */
 export interface ReadPage {
   readonly slug: string;
+  readonly explicitSlug?: boolean;
   readonly title: string;
   /** 知识类型（concept / entity / synthesis）。**不是** `Doc.kind`。 */
   readonly kind: string;
@@ -79,7 +80,7 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
     // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
     // 传错键会被 `?? []` 静静兜成空数组——摘要照样算得出，只是永远对不上。
     declaredRelations: options.relations ?? page.related,
-    explicitSlug: options.explicitSlug ?? true,
+    explicitSlug: options.explicitSlug ?? page.explicitSlug ?? false,
     draft: options.draft ?? false,
   };
 }

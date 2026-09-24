@@ -164,7 +164,7 @@ for (const doc of docs) {
       // **37 处全误报**，而 `src/config.ts` 明明就在仓库根下面。
       //
       // 也就是说：我在这份脚本的注释里写了「第一版有误报」，
-      // 然后**自己又犯了同一类**。教训见 log.md 那条「尺子本身有 bug」。
+      // 然后**自己又犯了同一类**：在自己写下的判据旁边，换了实现却没换判据。
       const norm = (p) => p.replace(/\\/g, '/');
       const inRepo = index.has(base) &&
         index.get(base).some((p) => {

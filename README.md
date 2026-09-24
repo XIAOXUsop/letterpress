@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-481%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-482%20项-2C5E2E)
 
 </div>
 
@@ -42,7 +42,7 @@
   pages are no longer trustworthy — and pages that are *this project's own
   choices* say so explicitly instead of pretending to cite something.
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 481 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 482 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -181,7 +181,7 @@ review:
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **481 项**，全部离线，无网络依赖 |
+| 单元测试 | **482 项**，全部离线，无网络依赖 |
 | 内容清单 schema | `/content-manifest.schema.json`（JSON Schema 2020-12，与产物同源发布），`additionalProperties: false` 让「悄悄加字段」变成一次显式决定。门禁核**三处 version 一致**（源码常量 / 产物 / schema）——它们各自都能独立改，而只有两处改了就没人发现 |
 | 端到端契约 | **201 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 门禁编排 | **32 步**，`check-gates` 逐条核对「声明了什么、顺序对不对、脚本存不存在、有没有定义了却不在编排里的」。其中六道是**会先弄坏自己再证明能报红**的负向验证 |

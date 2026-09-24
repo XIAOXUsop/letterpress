@@ -58,6 +58,7 @@ export interface PageReview {
 /** 读一页内容，取出检索与影响分析共需要的字段。 */
 export function readContentPage(dir: string, file: string): {
   readonly slug: string;
+  readonly explicitSlug: boolean;
   readonly title: string;
   readonly kind: string;
   readonly updated: string;
@@ -127,6 +128,7 @@ export function readContentPage(dir: string, file: string): {
   const review = parseReview(block);
 
   return {
+    explicitSlug: Boolean(frontmatterField(source, 'slug')?.trim()),
     /*
      * ⚠️ **2026-09-24 改：这里原先是 `file.replace(/\.mdx?$/, '')`——直接用文件名。**
      *
