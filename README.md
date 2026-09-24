@@ -31,10 +31,8 @@
   Estimated saving: **61.5% / 61.1%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `34em` measure
   (≈34 Chinese chars ≈ 68 Latin), native `text-autospace`, no synthetic italics.
-  → [details](docs/cjk-typography.md)
 - **A knowledge layer whose lint fails the build.** `[[wiki links]]` with
   backlinks; a broken link stops the build instead of rotting silently.
-  → [details](docs/features.md)
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
   search page on-demand loads same-origin Pagefind. · 379 unit tests · MIT
 
@@ -80,7 +78,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **61.5% / 61.1%** 的 token——**这是估算不是真实分词器**（用真实词表 `o200k_base` 复算是 65.0% / 63.9%）。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **61.5% / 61.1%** 的 token。这不是模型真实用量；页面内容变化后需重新测量。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -130,7 +128,6 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 它等于**渲染所用字体**里「0」字形的宽度，换个字体这个数就变
 （粗估一个汉字约 2 `ch`，66ch ≈ 33 字，是估算不是换算）。
 
-→ [取值理由、字体栈顺序、怎么验证](docs/cjk-typography.md)
 
 ### 三、知识层，断链会让构建失败
 
@@ -171,7 +168,7 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 - **Demo 部署在 GitHub Pages 上，因此跑不了内容协商**（Pages 的响应头不可改）。
   其余功能都可在线验证；内容协商需要 Cloudflare Pages / Netlify / Vercel，
   本地可用 `npm run verify` 复算——它打印的是**启发式估算**（CJK 1 字 1 token、
-  其余 4 字符 1 token），不是模型真实用量；真实词表下的对照见 `docs/content-negotiation.md`。
+  其余 4 字符 1 token），不是模型真实用量。
   （对着 Demo 跑 `npm run verify:online` 会在协商那几项上报红——**那是这条限制本身，
   不是部署事故**；同一个脚本会同时证明 Pages 能做到的部分是好的。）
 - **同一个限制还影响 `/content.ndjson` 的 Content-Type。** 源码里设的是
@@ -230,7 +227,7 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
   （后者全球覆盖约 72%）。属渐进增强，不支持时版式不坏。
 - **搜索的加载器要求 CSP 允许 `unsafe-eval`**，原因见
   [命令行](docs/cli.md#搜索的加载器为什么要求-csp-允许-unsafe-eval)。
-- **没有数学公式、流程图、多语言、图片灯箱、评论。** 见[竞品对照](docs/compare.md)。
+- **没有数学公式、流程图、多语言、图片灯箱、评论。**
 
 ---
 
@@ -238,16 +235,12 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 
 | | |
 |---|---|
-| [竞品对照](docs/compare.md) | vs AstroPaper / Fuwari / PaperMod，以及本项目缺什么 |
-| [功能清单](docs/features.md) | 完整功能表、没有做的、为什么删掉「定时发布」 |
 | [内容协商](docs/content-negotiation.md) | 原理、七个 agent、会静默失败的三个地方、收益率 |
 | [内容清单](docs/content-manifest.md) | Agent / RAG 如何按 SHA-256 增量同步，以及格式的真实边界 |
 | [内容镜像同步](docs/content-sync.md) | 可运行的首次导入、增量更新、删除传播、损坏修复与失败回滚 |
 | [全量导出](docs/content-export.md) | NDJSON 首次导入、逐行格式、校验与适用边界 |
-| [中文排版取值](docs/cjk-typography.md) | 行高 / 字重 / 行宽 / 原生属性 / 字体栈 |
 | [部署](docs/deploy.md) | 四个平台、子路径、`Vary: Accept`、安全头 |
 | [命令行](docs/cli.md) | 每个脚本做什么、两个会咬人的地方 |
-| [设计取舍](docs/design-notes.md) | 为什么不用 Tailwind、为什么配色避开米色衬线 |
 | [AGENTS.md](AGENTS.md) | 给 AI agent 读的项目约定（知识层怎么写、检查怎么加） |
 
 ---

@@ -212,18 +212,8 @@ if (entry) {
 
 // ── 4. JS 体积：文档写着「文章页 0 个 JS 文件」，这里把它钉住 ──────────
 //
-// 这一节的由来（2026-09-22）：`docs/compare.md` 那一行原先写作
-// 「外部 JS | **0 个文件** | 少量 + Pagefind | Swup + Svelte | 少量 + Fuse.js」。
-// 那句话**不算错**——「外部」= 第三方域名，确实是 0——**但读起来会得出错误结论**：
-// 对照列里那三家列的都是**自己站内的脚本**，同一行两端口径不同，
-// 读出来的就是「本项目不加载 JS，它们加载」。而实测搜索页要取 183 KB（gzip）。
-//
-// 而且这件事**用 `<script src>` 是扫不出来的**：Pagefind 由内联加载器 + 动态
-// `import()` 拉取，全站任何一个 HTML 里的 `src=` 计数都是 0。
-// 换句话说，一个只会数 `src=` 的检查**永远给不出这个数**——
-// 这已经不是「检查没写」，是「用错了尺子」。
-//
-// 所以这里分三条钉，每条对应文档里一句可以被验证的话：
+// Pagefind 由内联加载器动态导入，单查 <script src> 会漏掉它。
+// 这里分别验证脚本来源、搜索页加载器和产物文件：
 //   a. 全站 `<script src>` 为 0（无论外链还是站内脚本文件）——「外链 JS 0 个」
 //   b. 恰好一个页面（搜索页）内联加载 `pagefind/pagefind.js`——「只有搜索页加载」
 //   c. 那个 loader 要取的脚本与 wasm 在产物里真的存在
@@ -255,7 +245,7 @@ if (pagesWithSrc.length === 0) {
   console.log(`  ✗ ${pagesWithSrc.length} 个页面用 <script src> 引了脚本文件：`);
   for (const p of pagesWithSrc.slice(0, 3)) console.log(`      ${p}`);
   problems.push(`文章页不再是「0 个 JS 文件」（${pagesWithSrc.length} 个页面引了脚本文件）：`
-    + pagesWithSrc[0] + '——若这是有意为之，README 与 docs/compare.md 的数字要一起改');
+    + pagesWithSrc[0] + '——若这是有意为之，请同步更新 README 的数字');
 }
 
 if (searchPages.length === 1) {

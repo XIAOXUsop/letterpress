@@ -215,4 +215,4 @@ font-family: 'Archivo', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-se
   原写作乘以 2 得 130），连带「远超舒适区」的结论也不成立；字重一节把伪合成
   归因到字重数值上，而开关其实是 `font-synthesis-weight`，且在关掉合成的实现里
   写 500 会让中文落到 400。两处的**结论都保持不变**（用 `em`、标题用 600），
-  改的是论证与依据。同步修订了 [[中文排版]] 与 `docs/cjk-typography.md`。
+  改的是论证与依据。同步修订了 [[中文排版]]。
