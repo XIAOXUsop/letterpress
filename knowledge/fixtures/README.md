@@ -1,6 +1,6 @@
 # 第二份真实内容集
 
-`second-site/` 里的 6 篇 markdown 是**给「第二个站点」这件事用的测试语料**。
+`second-site/` 里的 markdown 是**给「第二个站点」这件事用的测试语料**（8 篇 + `Export Notes.md`）。
 它们**不进 `src/content/`**，因此不会出现在构建产物里、不会被 lint 拦下、
 也不会进 `content-manifest.json`。
 
@@ -32,8 +32,22 @@
 | 章节标题 | 手写小节名 | **`## §1` 编号** | 段落切分与 `heading` 提取 |
 | 关系字段 | `related:` | **`audience:`** | 核心只认 `related`，**适配层必须翻译** |
 | 知识类型 | 5 concept / 1 entity | **2 synthesis / 3 concept / 1 entity** | `wikiKind` 的分布 |
-| 同名标题 | 无 | **两篇都叫「导出」** | `ambiguousTitles` + `ambiguous-wikilink` |
+| 同名标题 | 无 | **两篇「导出」+ 两篇「附录」** | `ambiguousTitles`；「导出」**被引用** → `ambiguous-wikilink`（error），「附录」**无人引用** → `ambiguous-title`（warn）。**两条规则分工不同，都要覆盖** |
 | 孤儿页 | 无 | **若干**（互不引用的「导出」+ 刻意那篇） | `orphan-page` 规则 |
+
+## 两条歧义规则的分工（此前只覆盖了一条）
+
+| 规则 | 级别 | 触发条件 |
+|---|---|---|
+| `ambiguous-wikilink` | **error** | **有人写了**那个歧义标题（引用无法解析） |
+| `ambiguous-title` | **warn** | 同名标题存在，**但还没人引用它**（预防性提醒） |
+
+⚠️ **本 fixture 此前只触发前者**——两篇「导出」一个被 `[[导出]]` 引用、
+一个被 `audience:` 声明，于是 warn 那条**恰好不触发**。
+
+> **「恰好不触发」与「没有这条规则」在输出里长得一样**
+> （本轮第三次撞上这个形状）。已加两篇 `附录-A/B`（同名、无人引用），
+> 判据从「若报必是 warn」变成「**必报，且是 warn 级**」。
 
 ## 探针的负向验证抓出：**四条断言测的是巧合**
 

@@ -127,17 +127,28 @@ const passages = docs.flatMap((d) => splitPassages(d.slug, d.body));
  * 与 `computeImpact(pages, sourceId)` 正好相反——**同仓库两个 API 顺序不同**。
  */
 const ranked = rank(passages, '谁能看到机密内容');
+/*
+ * ⚠️ **字段名必须与 `PackDoc` 逐字一致**——它要的是 `slug`，**不是** `docId`。
+ *
+ * 我第一版传了 `docId`（那是 `Passage` 的字段名），于是 `docId` 全是 undefined，
+ * **而断言照样通过**——因为它查的是 `sources`/`review`，
+ * 那两个走的是 `PageSourceRef` / `PageReview`，与 `docId` 无关。
+ *
+ * > **同一个字段名在三个地方叫三个样**（`Doc.slug` / `Page.slug` / `Passage.docId`），
+ * > 传错不会报错、只会静默丢值——**与迭代 AO 那次完全同型**，
+ * > 而那次是 `refs` vs `sources` 导致证据全丢。
+ *
+ * 判据因此加了「每篇都有非空 docId」，见下面那条断言。
+ */
 const pack = buildContextPack(
-  pages.map(({ page, summary }) => ({
-    docId: page.slug,
+  pages.map(({ page }) => ({
+    slug: page.slug,
     title: page.title,
-    kind: page.kind,
     updated: page.updated,
     sources: page.sources,
     review: page.review,
     related: page.related,
     body: page.body,
-    summary,
   })),
   '谁能看到机密内容',
 );
@@ -362,10 +373,38 @@ const checks = [
    * > lint 的 `ambiguous-wikilink`（**引用**打到了歧义标题）是两件事；
    * > 只有当正文里真写了那个标题时，后者才触发。
    * > **又一个「读错字段/规则名，症状与实现坏了完全一样」。**
+   *
+   * ⚠️ **2026-09-24 修正这条注释本身**：它原先写「规则名是 `ambiguous-wikilink`，
+   * **不是** `ambiguous-title`」——**那是错的，两条规则都存在**：
+   *
+   * | 规则 | 级别 | 何时触发 |
+   * |---|---|---|
+   * | `ambiguous-wikilink` | **error** | **有人写**了那个歧义标题（必须有人决定指哪篇） |
+   * | `ambiguous-title` | **warn** | 同名标题存在，**但还没人用它**（预防性提醒） |
+   *
+   * 断言当时改对了（用 `ambiguous-wikilink`），**只有注释说错了**——
+   * 而那句错话后来被我抄进了 `knowledge/log.md`，差点变成「事实」。
+   *
+   * > **注释里的错误陈述比没有注释更糟**：
+   * > 读代码的人会拿它当依据，而它看起来和正确的陈述一模一样。
    */
-  ['lint 报出 ambiguous-wikilink，且是 error 级',
+  ['lint 报出 ambiguous-wikilink，且是 error 级（有人引用了歧义标题）',
     byRule('ambiguous-wikilink').length === 1 &&
     byRule('ambiguous-wikilink')[0].level === 'error'],
+
+  /*
+   * 另一条：同名标题存在但**没人引用**时的 warn 级提醒。
+   *
+   * ⚠️ **这一条原先是「若报必是 warn」——而它当时 0 条，于是等于没测。**
+   * 「恰好不触发」与「没有这条规则」在输出里**长得一样**
+   * （本轮第三次撞上这个形状）。
+   *
+   * 已加两篇 `附录-A/B`（同名、无人引用）让它**真的触发**，
+   * 判据随之从「若报」变成「**必报，且是 warn 级**」。
+   */
+  ['ambiguous-title（未被引用的同名标题）报出 1 条 warn',
+    byRule('ambiguous-title').length === 1 &&
+    byRule('ambiguous-title')[0].level === 'warn'],
 
   ['error 只来自那一条歧义引用（没有别的意外）',
     issues.filter((i) => i.level === 'error').length === 1],
@@ -382,6 +421,19 @@ const checks = [
   ['context pack 拿得到证据（含来源版本或复核状态）',
     pack.passages.length > 0 &&
       pack.passages.some((p) => (p.sources?.length ?? 0) > 0 || p.review?.status !== undefined)],
+
+  /*
+   * ⚠️ **这一条对着「字段名传错但断言照样过」那个坑。**
+   *
+   * 我第一版给 `buildContextPack` 传了 `docId`（而它要 `slug`），
+   * 于是每篇的 docId 都是 undefined——**而上一条断言照样通过**，
+   * 因为它查的是 `sources` / `review`，那两个与 docId 无关。
+   *
+   * > **一个通过但测不到机制的断言比没有更糟**：
+   * > 它让人以为那个机制被覆盖了。
+   */
+  ['context pack 的每个 passage 都有非空 docId（字段名没传错）',
+    pack.passages.length > 0 && pack.passages.every((p) => typeof p.docId === 'string' && p.docId !== '')],
 ];
 
 let bad = 0;
