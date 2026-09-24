@@ -66,6 +66,7 @@ if (stagedFiles.length === 0) {
   console.log('');
   console.log('  本检查只在「已经 add 过」时才有意义：');
   console.log('    git add -A && npm run check:staged');
+  reportUntracked();
   console.log('');
   process.exit(0);
 }
@@ -90,21 +91,33 @@ if (unstaged.length > 0) {
 /*
  * ⚠️ `git add -A` 会把它们加进来，**但 `git add <具体文件>` 不会**——
  * 而「我改了 A 忘了 add B」正是上一轮那类丢东西的另一个方向。
+ *
+ * ⚠️ **2026-09-24 第一版把它放在了「暂存区为空就 return」之后。**
+ * 后果是：**暂存区空的时候这段永远不执行**——
+ * 而「我 `git add` 了 A、忘了 `git add` 刚建的 B」这个场景，
+ * **恰恰发生在暂存区非空时**（A 进去了），所以那版还能报；
+ * 真正报不到的是「B 存在但一个都没 add」。
+ *
+ * > **同一段代码放在两个分支里，就会在其中一个分支里失效**——
+ * > 而「它在那条路径上会不会执行」正是最容易忘核的东西。
  */
-let untracked = '';
-try {
-  untracked = git('ls-files', '--others', '--exclude-standard');
-} catch {
-  untracked = '';
-}
-const untrackedFiles = untracked.split('\n').filter(Boolean);
-if (untrackedFiles.length > 0) {
+function reportUntracked() {
+  let untracked = '';
+  try {
+    untracked = git('ls-files', '--others', '--exclude-standard');
+  } catch {
+    untracked = '';
+  }
+  const untrackedFiles = untracked.split('\n').filter(Boolean);
+  if (untrackedFiles.length === 0) return;
   console.log('');
   console.log(`  ℹ 有 ${untrackedFiles.length} 个未跟踪的文件（没被 add）：`);
   for (const f of untrackedFiles.slice(0, 8)) console.log(`      ${f}`);
   if (untrackedFiles.length > 8) console.log(`      …还有 ${untrackedFiles.length - 8} 个`);
   console.log('    这不是错误——**但如果你刚新增了文件，它可能没进去**。');
 }
+
+reportUntracked();
 
 console.log('');
 if (problems > 0) {
