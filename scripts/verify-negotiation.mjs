@@ -1056,14 +1056,31 @@ check(
 );
 
 /** README 摘要那行的 `**X% / Y%**` 对应实测的前两页。 */
-const claimedSavings = (readme.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
+/*
+ * ⚠️ **2026-09-24 修正**：原判据要求 README 里**每一组** `X% / Y%`
+ * 都等于本次实测的**估算**节省率。
+ *
+ * 而 README 现在合法地有两组数：估算（每次构建都重打，门禁该管）
+ * 与**真实词表** `o200k_base` 复算（60.6 / 57.9，那不是估算）。
+ * 于是加了第二组之后这条判据红了——**而它红得不对**。
+ *
+ * > **一个判据把两类东西当成一类，就会逼人把真数据删掉。**
+ *
+ * 现在只取**紧跟在 `**` 之后、且后面不接「真实词表」字样的那组**——
+ * 也就是摘要里的估算值。真实词表那组由 `docs/content-negotiation.md`
+ * 里的表负责（那张表量的是当次构建的产物，**刻意不进门禁**）。
+ */
+const estimatedOnly = readme.replace(/用真实词表[^）]*?（估算在 HTML 侧稳定偏低[^）]*?）[。.]?/g, '');
+const claimedSavings = (estimatedOnly.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
   [...s.matchAll(/([\d.]+)%/g)].map((m) => m[1]),
 );
 const expectedSavings = measured.slice(0, 2).map((r) => r.saved);
 check(
   claimedSavings.length > 0 && claimedSavings.every(([a, b]) => a === expectedSavings[0] && b === expectedSavings[1]),
-  'README 摘要那行的 token 节省率与实测一致',
-  `README 写 ${claimedSavings.map((p) => p.join('/')).join(' ') || '（没有）'}，实测前两页 ${expectedSavings.join(' / ')}%`,
+  'README 摘要那行的 token 节省率（估算）与实测一致',
+  `README 写 ${claimedSavings.map((p) => p.join('/')).join(' ') || '（没有）'}，实测前两页 ${expectedSavings.join(' / ')}%
+` +
+    '    **真实词表那组（60.6 / 57.9）刻意不归这条判据管**——它不是估算。',
 );
 
 /**
