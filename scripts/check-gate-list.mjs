@@ -45,6 +45,8 @@ const EXPECTED = [
   ['npm run verify:portability', '核心模块可加载性 + 可选链形状'],
   ['npm run check:site-agnostic', '**站点事实可由调用方覆盖**（阶段 4 第 6 项）'],
   ['npm run verify:site-mutations', '上一道门禁的负向验证（把它依次弄坏四次，每次都必须真红）'],
+  ['npm run check:exit-codes', '**CLI 错误码都已归类**（阶段 4 第 3 项）'],
+  ['npm run verify:exit-codes', '上一道门禁的负向验证（三种漏法：字面 1、拼错常量名、未登记的数字）'],
   ['npm run verify:second-site', '第二份异构内容集'],
   ['npm run verify:anchors', '锚点契约'],
   ['npm run verify:reproducible', '跨时区可复现构建'],

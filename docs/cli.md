@@ -21,7 +21,9 @@
 | 构建加载期自动跑，无独立命令 | 知识页 frontmatter 里的 **`verify:` 可证伪声明**在构建加载期核对：每条声明查两件事——那句话**还在不在页面上**、以及它对应的**文件在不在**。它管的是 lint 管不到的那一层：**页与仓库之间**。llm-wiki 页原先有三行写着「计划中，尚未实现」而它们全都已落地，没有任何检查会发现 |
 | `npm run check:site-agnostic` | **核心模块不硬编码本站结构**：知识库 URL 前缀与根层保留路由表必须能由调用方覆盖。判据是**查签名与调用链**（`urlFor` 收不收前缀参数、`lint()` 真的用没用 `opts.reservedPostRoutes`），不是查字面量——因为**写死与「可覆盖的兜底默认值」在字面上完全一样**。对应路线图阶段 4 第 6 项 |
 | `npm run verify:site-mutations` | 上一道门禁的**负向验证**：把它依次弄坏四次（删参数、删透传、删注入口、**声明了能力却没接线**），每次都必须真的变红，恢复后必须回绿。**门禁自己绿不算数——它得能被证明是尺子。** |
-| `npm run verify:all` | **19 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:impact` → `verify:answers` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `verify:second-site` → `verify:anchors` → `verify:reproducible` → `verify:base` → `verify:formats` → `check:anchors` → `check:refs`），**不含** `verify:online`（需要外部环境）与三个交互式命令 |
+| `npm run check:exit-codes` | **CLI 错误码都已归类**（阶段 4 第 3 项）。码表在 `src/lib/cli/exit-codes.mjs`：`2` 用法错、`3` 环境错、`4` 语料为空、`5` 查无此项、`6` **内部不变式被破坏**（本工具的 bug，不是用法问题）。`exit(1)` 被明确留给「未归类」，而门禁禁止主动用它——于是**漏归类会表现为退化成 1，可被发现**。门禁脚本的 `exit(1)` 不在管辖内：它们是二元的（红/绿），细分语义只对读输出的人有意义 |
+| `npm run verify:exit-codes` | 上一道门禁的**负向验证**：注入三种漏法（字面 `exit(1)`、拼错的常量名、**语法合法但未登记的数字**），每次都必须真红。第三种最要紧——它不会自己暴露 |
+| `npm run verify:all` | **21 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:impact` → `verify:answers` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:second-site` → `verify:anchors` → `verify:reproducible` → `verify:base` → `verify:formats` → `check:anchors` → `check:refs`），**不含** `verify:online`（需要外部环境）与三个交互式命令 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 

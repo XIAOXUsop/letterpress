@@ -35,6 +35,7 @@ import { join } from 'node:path';
 import { MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
+import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_USAGE } from '../src/lib/cli/exit-codes.mjs';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
@@ -43,7 +44,7 @@ const question = args.filter((a) => !a.startsWith('--')).join(' ').trim();
 
 if (question === '') {
   console.error('\n给一个问题。例：node scripts/wiki-ask.mjs "为什么行宽用 em 不用 ch"\n');
-  process.exit(2);
+  process.exit(EXIT_USAGE);
 }
 
 const ROOT = process.cwd();
@@ -77,11 +78,11 @@ function loadCorpus() {
       files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f)).sort();
     } catch {
       console.error(`读不到 ${dir}——请在仓库根目录运行。`);
-      process.exit(1);
+      process.exit(EXIT_ENVIRONMENT);
     }
     if (files.length === 0) {
       console.error(`${dir} 里一个条目都没有——这个命令只能检索一半的内容。`);
-      process.exit(1);
+      process.exit(EXIT_EMPTY_INPUT);
     }
     for (const file of files) pages.push(readContentPage(dir, file));
   }

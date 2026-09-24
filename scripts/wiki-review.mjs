@@ -30,6 +30,7 @@ import { join } from 'node:path';
 // Node 22.12+ 能剥掉类型标注直接跑；重写一份的代价是"两处不一致时
 // 这条命令会一本正经地说谎"，而它存在的全部意义就是给出正确的值。
 import { contentDigest } from '../src/lib/wiki/digest.ts';
+import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
 
 const args = process.argv.slice(2);
 const slugArg = args.find((a) => a.startsWith('--slug='))?.slice('--slug='.length)
@@ -114,11 +115,11 @@ try {
   files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f));
 } catch {
   console.error(`读不到 ${WIKI}——请在仓库根目录运行。`);
-  process.exit(1);
+  process.exit(EXIT_ENVIRONMENT);
 }
 if (files.length === 0) {
   console.error(`${WIKI} 里一个条目都没有——这一步什么都没检查。`);
-  process.exit(1);
+  process.exit(EXIT_EMPTY_INPUT);
 }
 
 const pages = files.map(parse);
@@ -137,7 +138,7 @@ if (listOnly || !slugArg) {
 const page = pages.find((p) => p.slug === slugArg || p.file === slugArg);
 if (!page) {
   console.error(`\n找不到 ${slugArg}。现有：${pages.map((p) => p.slug).sort().join('、')}`);
-  process.exit(1);
+  process.exit(EXIT_NOT_FOUND);
 }
 
 console.log(`\n${page.title}（${page.slug}）\n`);

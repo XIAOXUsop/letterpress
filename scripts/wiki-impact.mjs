@@ -39,6 +39,7 @@ import { join } from 'node:path';
 import { loadSources } from '../src/lib/wiki/sources.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
 import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { EXIT_EMPTY_INPUT, EXIT_INVARIANT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
 
 const args = process.argv.slice(2);
 const getArg = (name) => {
@@ -58,7 +59,7 @@ const registry = loadSources(DOCS_DIR);
 
 if (registry.size === 0) {
   console.error(`\n${DOCS_DIR} 里一个来源都没登记——这一步什么都分析不了。`);
-  process.exit(1);
+  process.exit(EXIT_EMPTY_INPUT);
 }
 
 if (listOnly || !sourceId) {
@@ -76,14 +77,14 @@ if (listOnly || !sourceId) {
 const source = registry.get(sourceId);
 if (!source) {
   console.error(`\n没登记过 "${sourceId}"。已登记：${[...registry.keys()].sort().join('、')}`);
-  process.exit(1);
+  process.exit(EXIT_NOT_FOUND);
 }
 if (revision && !source.revisions.some((r) => r.id === revision)) {
   console.error(
     `\n"${sourceId}" 没有登记过版本 "${revision}"。` +
       `已登记：${source.revisions.map((r) => r.id).join('、')}`,
   );
-  process.exit(1);
+  process.exit(EXIT_NOT_FOUND);
 }
 
 /*
@@ -137,7 +138,7 @@ scanRepo(join(process.cwd(), 'src'));
 if (!isDisjoint({ direct, candidates: neighbors }, repoMentions)) {
   console.error('\n① 与 ③ 出现重叠：同一篇 wiki 页既被算作直接引用者，又出现在仓库辅助载体里。');
   console.error('这会让读者以为「还有别的地方要改」。请修 scanRepo 的收集范围。');
-  process.exit(1);
+  process.exit(EXIT_INVARIANT);
 }
 
 // ── 输出 ────────────────────────────────────────────────────────────
