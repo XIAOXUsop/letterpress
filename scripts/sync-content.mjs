@@ -25,12 +25,7 @@ if (!origin || !output) {
 try {
   const result = await syncContent({ origin, output });
   if (asJson) {
-    /*
-     * `output` 是**绝对路径**，而它随 `--output` 的写法变——
-     * 同一个镜像换个相对路径写就得到不同的 JSON。
-     * 所以 JSON 里给**传进来的那个**，另附一个是否绝对的标记。
-     * 消费方要的是「同步了多少、变了哪些」，不是本机的绝对路径。
-     */
+    // 同步器返回解析后的绝对路径。JSON 明确标记 absolute，调用方不必猜。
     console.log(
       JSON.stringify(
         jsonOk({

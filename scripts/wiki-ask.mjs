@@ -30,10 +30,9 @@
  *   node scripts/wiki-ask.mjs --all "…"      # 不截断，打全段
  */
 
-import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
-import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_USAGE } from '../src/lib/cli/exit-codes.mjs';
 import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
@@ -73,29 +72,28 @@ const WIKI_DIR = join(ROOT, 'src', 'content', 'wiki');
 const POSTS_DIR = join(ROOT, 'src', 'content', 'posts');
 
 function loadCorpus() {
-  const pages = [];
-  for (const dir of [WIKI_DIR, POSTS_DIR]) {
-    let files;
-    try {
-      files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f)).sort();
-    } catch {
-      failWithJson(asJson ? 'json' : 'text', EXIT_ENVIRONMENT, `读不到 ${dir}。`, {
+  /** @type {ReturnType<typeof readContentDirs>} */
+  let corpus;
+  try {
+    corpus = readContentDirs([WIKI_DIR, POSTS_DIR]);
+  } catch (error) {
+    failWithJson(asJson ? 'json' : 'text', EXIT_ENVIRONMENT,
+      `读取内容失败：${error instanceof Error ? error.message : String(error)}`, {
         hint: '请在仓库根目录运行。',
       });
-    }
-    if (files.length === 0) {
+  }
+  for (const [dir, count] of corpus.counts) {
+    if (count === 0) {
       failWithJson(asJson ? 'json' : 'text', EXIT_EMPTY_INPUT, `${dir} 里一个条目都没有。`, {
         hint: '这个命令只能检索一半的内容——空的那一半会给出误导性的结果。',
       });
     }
-    for (const file of files) pages.push(readContentPage(dir, file));
   }
-  return pages;
+  return corpus.pages;
 }
 
 const docs = loadCorpus();
 
-const bySlug = new Map(docs.map((d) => [d.slug, d]));
 
 // ── 检索 ────────────────────────────────────────────────────────────
 

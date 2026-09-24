@@ -54,6 +54,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import Ajv2020 from 'ajv/dist/2020.js';
 import {
   EXIT_USAGE,
   EXIT_NOT_FOUND,
@@ -110,7 +111,7 @@ function checkDocument(doc, index) {
       message:
         'v1 没有 provenance，迁移后该键**保持缺席**。' +
         '它表示「这份数据从未进过治理流程」，**不是**「已复核、确认无外部来源」。' +
-        '若下游必须区分，请用本工具的 --report 输出。',
+        '若下游必须区分，请保留本工具打印的未标注条目清单。',
     });
   }
   return true;
@@ -206,6 +207,28 @@ function migrateManifest(input) {
   }
   if (diagnostics.some((d) => d.level === 'error')) return null;
 
+  // 字段齐全不代表形状合法。v1 与 v2 的公共字段由同一份 JSON Schema
+  // 约束；迁移前验证，可防止负数 bytes、缺失 site、错误 kind 等进入 v2。
+  const schema = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'public', 'content-manifest.schema.json'), 'utf8'));
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  ajv.addFormat('uri', (value) => {
+    try { new URL(value); return true; } catch { return false; }
+  });
+  ajv.addFormat('date-time', (value) =>
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    && !Number.isNaN(Date.parse(value)));
+  const validate = ajv.compile(schema);
+  if (!validate(input)) {
+    for (const error of validate.errors ?? []) {
+      diagnostics.push({
+        level: 'error',
+        where: error.instancePath || '(根)',
+        message: `不符合内容清单 schema：${error.message}`,
+      });
+    }
+    return null;
+  }
+
   return {
     format: input.format,
     version: TO_VERSION,
@@ -287,6 +310,6 @@ if (!outPath) {
   process.exit(EXIT_USAGE);
 }
 
-writeFileSync(join(process.cwd(), outPath), out + '\n', 'utf8');
+writeFileSync(resolve(process.cwd(), outPath), out + '\n', 'utf8');
 console.log(`  ✓ 已迁移 ${migrated.documents.length} 篇 → ${outPath}`);
 console.log(`  ✓ 输出是**确定性的**：不含时间戳，同一份输入逐字节得到同一份输出\n`);

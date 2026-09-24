@@ -122,7 +122,7 @@ const MUTATIONS = [
     name: '⑧ 去掉显式 slug（应当仍绿——证明修复保留了默认分支）',
     file: 'Export Notes.md',
     expectRed: false,
-    apply: (t) => t.replace(/^slug: .*$/m, 'title: 导出说明'),
+    apply: (t) => t.replace(/^slug: .*\r?\n/m, ''),
   },
   {
     name: '⑦ 两篇同名标题改成不同名（歧义那条路径不再被覆盖）',

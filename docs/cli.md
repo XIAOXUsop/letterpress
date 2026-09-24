@@ -4,7 +4,7 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **482 项**单元测试，全部离线 |
+| `npm test` | **485 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 201 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
@@ -33,7 +33,7 @@
 | `npm run verify:json-output` | **`--json` 模式的输出契约**（阶段 4 第 3 项剩的一半）。逐个真跑 4 个 CLI 的失败场景，断言四件事：退出码符合码表、stdout 是合法 JSON、`ok` 为 false、**`error.code` 与进程退出码一致**（不一致时消费方与外层 CI 会拿到两个互相矛盾的事实）。并确认成功时也带 `ok`——形状固定，消费方才能写「先解析、再看 `ok`」而不必先判断这次是不是成功 |
 | `npm run verify:json-mutations` | 上一道的**负向验证**：注入三类违约（stdout 空 / `ok` 不是 false / `code` 与退出码分叉），每次都必须以**预期的那一条**报红。最后那条是重点：第一次注入改的是调用点的参数，而 `failWithJson` 用同一个 `code` 既写 JSON 又退出，**两边永远一起变**——只有改 `process.exit(code)` 那一行才制造得出分叉 |
 | `npm run migrate:manifest -- <v1.json> [-o out.json] [--check]` | 把 `version: 1` 的内容清单迁到 `version: 2`。**`--check` 只验证能否迁移，不写文件**。迁移器**不补任何 `provenance` 默认值**——v1 的 11 篇一条来源信息都没有，补 `pending` 或 `original` 都是撒谎；正确做法是让该键**保持缺席**并在输出里逐条列出。输出**确定性**：不含时间戳，跨时区跑三次逐字节一致。逐字段列举而非 `{...input, version: 2}`——展开会在 v1 日后新增字段时**静默透传**，产出一个「看着像 v2」的假清单 |
-| `npm run verify:migrate` | 上一条的**负向验证**：往**真实的线上 v1**（`knowledge/fixtures/manifest-v1.json`）里注入 5 种坏法（缺 `id` / `sha256` 不合法 / ID 重复 / `documentCount` 对不上 / 出现不认识的 v1 字段），每次都必须报出**能定位到具体条目**的诊断。对应路线图退出条件的后半句「**失败时有精确诊断**」 |
+| `npm run verify:migrate` | 上一条的**负向验证**：往保存的线上 v1 样本（`knowledge/fixtures/manifest-v1.json`）里注入 7 种坏法（缺 `id` / `sha256` 不合法 / ID 重复 / `documentCount` 对不上 / 出现不认识的字段 / 负数 `bytes` / 缺少站点地址），每次都必须报出定位信息。对应路线图退出条件的后半句「失败时有精确诊断」 |
 | `npm run check:single-source` | **版本号只有一处真值**。`CONTENT_MANIFEST_VERSION` 的真值在 `src/lib/content-manifest.ts`；任何地方再写一遍 `MANIFEST_VERSION = 2` 都会红（注释里的不算）。这条来自一次**真故障**：提交把生产端升到 v2 时同步器与它的测试固件都没跟上，于是**同步器对着本站自己的清单必然报错，而 481 条测试全绿**——因为测试固件也写着旧值，**测的是一个已不存在的格式** |
 | `npm run verify:all` | **32 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:retrieval-gates` → `verify:impact` → `verify:answers` → `verify:review` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:json-output` → `verify:json-mutations` → `verify:migrate` → `check:single-source` → `verify:second-site` → `verify:second-site-real` → `verify:second-site-real-mutations` → `verify:anchors` → `verify:reproducible` → `verify:base` → `check:manifest-schema` → `verify:formats` → `check:anchors` → `check:refs` → `check:agents-doc` → `check:staged`），**不含** `verify:online`（需要外部环境）、`migrate:manifest`（需要显式输入）与三个交互式命令 |
 | `npm run check` | 类型检查（Astro + TypeScript） |

@@ -22,7 +22,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const RETRIEVE = join(ROOT, 'src', 'lib', 'wiki', 'retrieve.ts');

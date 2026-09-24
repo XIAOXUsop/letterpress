@@ -3,9 +3,8 @@
  *
  * ── 为什么要有这个文件 ──────────────────────────────────────────────
  *
- * `sources` 是**块状数组**（`- sourceId:` 下面缩进跟着 `revision`、`locator`），
- * `frontmatterField` 取不到它——它只匹配顶层的 `field: value`。
- * 所以两边都自己写了一段逐行扫描：
+ * `sources` / `review` / `related` 是 YAML 结构字段，不能用标量解析器读取。
+ * 它们曾在两个命令里各自逐行扫描：
  *
  *   - `scripts/wiki-impact.mjs`（人工触发的命令）
  *   - `scripts/check-impact.mjs`（进 CI 的金标检查）
@@ -15,12 +14,13 @@
  * `urlFor` 与 remark 插件各写一份前缀、`related` 方括号处理不一致），
  * 所以这次直接抽出来共用。
  *
- * 与 `frontmatter.ts` 的分工：那边解析**标量**字段（title / summary），
- * 这里解析**嵌套结构**（sources 的块状数组）。
+ * 与 `frontmatter.ts` 的分工：那边限制建链接用的标量字段（title / slug），
+ * 这里按 YAML 语义解析结构字段。
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseDocument } from 'yaml';
 import { frontmatterField } from './frontmatter.ts';
 import { resolveSlug } from './slug.ts';
 
@@ -83,7 +83,7 @@ export function readContentPage(dir: string, file: string): {
 } {
   const source = readFileSync(join(dir, file), 'utf8');
   const end = source.indexOf('\n---', 3);
-  const block = source.slice(3, end === -1 ? undefined : end);
+  const block = source.slice(3, end === -1 ? undefined : end).replace(/\r$/, '');
   /*
    * ⚠️ **`trim()` 不是可选的。**
    *
@@ -105,27 +105,36 @@ export function readContentPage(dir: string, file: string): {
    */
   const body = end === -1 ? source : source.slice(source.indexOf('\n', end + 1) + 1).trim();
 
-  // sources 是块状数组，逐条抓 sourceId / revision / locator
-  const refs: PageSourceRef[] = [];
-  let current: { sourceId: string; revision: string; locator: string } | null = null;
-  for (const line of block.split('\n')) {
-    const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
-    if (sid) {
-      if (current) refs.push(current);
-      current = { sourceId: sid[1], revision: '', locator: '' };
-      continue;
-    }
-    if (!current) continue;
-    const rev = /^\s*revision:\s*(.+?)\s*$/.exec(line);
-    if (rev) current.revision = rev[1];
-    const loc = /^\s*locator:\s*(.+?)\s*$/.exec(line);
-    if (loc) current.locator = loc[1];
+  // Astro 读取的是 YAML。结构字段也必须按 YAML 解析，否则合法的行内数组
+  // 会被漏掉，且另一个顶层块的 revision/locator 会误覆盖上一条来源。
+  const parsed = parseDocument(block);
+  if (parsed.errors.length > 0) {
+    throw new Error(`${file} 的 frontmatter 无法解析：${parsed.errors[0].message}`);
   }
-  if (current) refs.push(current);
-
-  // review 是一个块（`review:` 下面缩进跟着 status / checkedAt），
-  // 与 sources 一样只能逐行扫，取顶层字段会取错。
-  const review = parseReview(block);
+  const data = parsed.toJS() as Record<string, unknown> | null;
+  const sources = data?.sources;
+  if (sources != null && !Array.isArray(sources)) {
+    throw new Error(`${file} 的 sources 必须是数组。`);
+  }
+  const refs: PageSourceRef[] = (sources ?? []).map((item: unknown) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`${file} 的 sources 条目必须是对象。`);
+    }
+    const ref = item as Record<string, unknown>;
+    return {
+      sourceId: String(ref.sourceId ?? ''),
+      revision: String(ref.revision ?? ''),
+      locator: String(ref.locator ?? ''),
+    };
+  });
+  const rawReview = data?.review;
+  const review = rawReview && typeof rawReview === 'object' && !Array.isArray(rawReview)
+    ? rawReview as Record<string, unknown>
+    : null;
+  const related = data?.related;
+  if (related != null && !Array.isArray(related)) {
+    throw new Error(`${file} 的 related 必须是数组。`);
+  }
 
   return {
     explicitSlug: Boolean(frontmatterField(source, 'slug')?.trim()),
@@ -164,105 +173,21 @@ export function readContentPage(dir: string, file: string): {
     kind: frontmatterField(source, 'kind') ?? '',
     updated: frontmatterField(source, 'updated') ?? '',
     sources: refs,
-    ...(review ? { review } : {}),
-    // ⚠️ 必须先剥方括号：`frontmatterField` 返回**原始字符串**，
-    // `related: [a, b]` 拿到的是 `"[a, b]"`。不剥的话第一项变成 `"[a"`，
-    // **所有关系都解析不出来**——症状是「候选页全空」而不是报错。
-    related: (frontmatterField(source, 'related') ?? '')
-      .replace(/^\[/, '')
-      .replace(/\]$/, '')
-      .split(/[、,，]/)
-      .map((s) => s.trim())
-      .filter(Boolean),
+    ...(review?.status ? { review: {
+      status: String(review.status),
+      ...(review.checkedAt ? { checkedAt: String(review.checkedAt) } : {}),
+      ...(review.contentDigest ? { contentDigest: String(review.contentDigest) } : {}),
+    } } : {}),
+    related: (related ?? []).map((item: unknown) => String(item)),
     body,
-  };
-}
-
-/**
- * 解析 frontmatter 里的 `review:` 块。
- *
- * ⚠️ **这个函数犯过两次同型的错，第二次只修了一半。**
- *
- * **第一次**（2026-09-24 迭代 I 发现）：它用 `(?=\n\S|\s*$)`，
- * 而在**多行模式**下 `\s*` 能匹配**零个字符**、`$` 立刻成立——
- * 于是它在 `review:` 后面当场截断，**捕获组恒为空**，函数恒返回 `undefined`。
- * 症状是「复核状态读不到」，而**没有任何报错**。
- *
- * **第二次**（2026-09-24 迭代 AO 发现）：改成 `(?=\n[^\s]|\r?\n?$)`，
- * 空字符串的问题解决了（`status` 能读到），
- * 但**捕获组仍然只有第一行**——
- * 实测 `review:` 块有 `status` / `checkedAt` / `contentDigest` 三行，
- * 拿到的 `m[1]` 是 `"  status: reviewed"`。
- *
- * 根因：**`\r?\n?$` 里的 `\n?` 是可选的**，
- * 而多行模式下 `$` 匹配**每一行**的行尾 ——
- * 于是它在第一行末零消耗地成立，根本没等 `\r?\n` 那个分支。
- *
- * > **「修好了」和「修对了」不是一回事**：第一次的验收标准是
- * > 「能读到 status」，通过了；而「能读到全部三行」从没被测过。
- * > **判据只覆盖了故障的一个切面**——而那次修复是被另一个症状逼出来的，
- * > 不是被「完整的行为」逼出来的。
- *
- * 现在的判据是行为本身：**捕获组必须含块里全部缩进行**。
- * `verify` 侧有专门一条对账（`check-review-status.mjs` 逐页比摘要），
- * 它在第二次修好之前一直是「6 个全部跳过」——
- * **一个静默跳过全部被测对象的检查，等于没有检查。**
- */
-function parseReview(block: string): PageReview | undefined {
-  /*
-   * 块 = 「从 review: 后到下一个**顶层**字段之前」的所有**缩进**行，
-   * **外加夹在它们之间的空行**。
-   *
-   * ⚠️ **这里试过三次正则，三次都不对。**
-   *
-   * ① `(?=\n[^\s]|\r?\n?$)` —— `\r?\n?` 的 `\n?` 可选，
-   *    多行模式下 `$` 匹配每行行尾，于是在 `status` 行末**零消耗**成立，
-   *    捕获组只有第一行。
-   * ② `(?:^[ \t]+.*\r?\n?)+` —— 能吃全部缩进行，但**遇到空行就停**：
-   *    `review:` 块里夹一个空行（YAML 里完全合法），
-   *    后面的 `contentDigest` **静默丢失**。
-   * ③ 在 ② 后面补一个「吃空行」的组 —— **仍然不对**：
-   *    两组都要求「行」在前，而空行恰好把它们卡在中间。
-   *
-   * > 根因是**同一个**：用正则同时表达「缩进」与「直到下一个顶层字段」
-   * > 这两件事，就得处理它们在空行处交错的情形——
-   * > 而 `\r?\n?` 这种**可选量词**正是让边界悄悄提前成立的元凶。
-   *
-   * 现在**不用正则**：逐行扫，规则一句话说完——**缩进行属于块，空行忽略，
-   * 任何非缩进的非空行结束块**。可读性换来的正确性，在这个场景更划算。
-   */
-  const lines = block.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^review:[ \t]*$/.test(l));
-  if (start === -1) return undefined;
-
-  const fields: string[] = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i] ?? '';
-    if (line.trim() === '') continue; // 空行不终止块
-    if (!/^[ \t]/.test(line)) break; // 下一个顶层字段 → 块结束
-    fields.push(line);
-  }
-  if (fields.length === 0) return undefined;
-
-  const get = (k: string) =>
-    new RegExp(`^[ \\t]+${k}:[ \\t]*(.+?)[ \\t]*$`, 'm').exec(fields.join('\n'))?.[1];
-  const status = get('status');
-  if (!status) return undefined;
-  const checkedAt = get('checkedAt');
-  const contentDigest = get('contentDigest');
-  return {
-    status,
-    ...(checkedAt ? { checkedAt } : {}),
-    ...(contentDigest ? { contentDigest } : {}),
   };
 }
 
 /**
  * 读一个内容目录下的全部页面。
  *
- * 两个目录都要读（wiki 与 posts）：此前只读 wiki，于是文章里那些
- * 日期化的规范 URL 引用**在影响分析里根本不存在**——
- * 不是漏报，是这一层压根没进语料。
+ * 两个目录都要读（wiki 与 posts），且必须递归，与 Astro 的内容 glob 一致。
+ * 否则文章或子目录里的来源会从影响分析与检索中消失。
  */
 export function readContentDirs(dirs: readonly string[]): {
   readonly pages: ReturnType<typeof readContentPage>[];
@@ -271,9 +196,16 @@ export function readContentDirs(dirs: readonly string[]): {
   const pages = [];
   const counts = new Map<string, number>();
   for (const dir of dirs) {
-    const files = readdirSync(dir)
-      .filter((f) => /\.mdx?$/.test(f))
-      .sort();
+    const files: string[] = [];
+    const walk = (relativeDir: string): void => {
+      for (const entry of readdirSync(join(dir, relativeDir), { withFileTypes: true })) {
+        const name = join(relativeDir, entry.name);
+        if (entry.isDirectory()) walk(name);
+        else if (entry.isFile() && /\.mdx?$/.test(entry.name)) files.push(name);
+      }
+    };
+    walk('');
+    files.sort();
     counts.set(dir, files.length);
     for (const file of files) pages.push(readContentPage(dir, file));
   }

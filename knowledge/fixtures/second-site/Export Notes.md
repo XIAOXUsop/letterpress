@@ -1,6 +1,6 @@
 ---
 title: 导出说明
-summary: **文件名与 slugify 结果不同**的那一篇——用来暴露 read-page 与构建侧的 slug 不一致。
+summary: '**文件名与 slugify 结果不同**的那一篇——用来暴露 read-page 与构建侧的 slug 不一致。'
 kind: concept
 slug: 导出说明
 ---

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readContentDirs, readContentPage } from './read-page.js';
@@ -244,14 +244,48 @@ describe('readContentPage', () => {
         { sourceId: 'other', revision: '', locator: '' },
       ]);
     });
+
+    it('行内 YAML 来源与多行 related 不会被静默忽略', () => {
+      write('a.md', [
+        '---',
+        'title: 甲',
+        'sources: [{sourceId: spec, revision: r1, locator: "§2"}]',
+        'related:',
+        '  - x',
+        '  - y',
+        '---',
+        '',
+        '正文。',
+      ].join('\n'));
+      const page = readContentPage(dir, 'a.md');
+      expect(page.sources).toEqual([{ sourceId: 'spec', revision: 'r1', locator: '§2' }]);
+      expect(page.related).toEqual(['x', 'y']);
+    });
+
+    it('其他顶层区块的字段不会覆盖上一条来源', () => {
+      write('a.md', [
+        '---',
+        'title: 甲',
+        'sources:',
+        '  - sourceId: spec',
+        '    revision: r1',
+        'review:',
+        '  status: reviewed',
+        '  revision: unrelated',
+        '  locator: unrelated',
+        '---',
+        '',
+        '正文。',
+      ].join('\n'));
+      expect(readContentPage(dir, 'a.md').sources).toEqual([
+        { sourceId: 'spec', revision: 'r1', locator: '' },
+      ]);
+    });
   });
 
   describe('readContentDirs', () => {
     it('跨目录汇总，counts 按**目录**给出文档数', () => {
-      // ⚠️ 它**不递归**：传进来的是内容目录本身（`src/content/wiki` 等），
-      // 子目录不会被扫。第一次写这条测试时我把文件放在了 `dir/wiki/` 下，
-      // 结果只收到一个文件——**是我的测试写错了，不是实现**。
-      //
+      // 传入的是内容目录；子目录也应参与汇总。
       // ⚠️ `counts` 的键是**目录**不是 slug——它的用途是
       // 「哪个内容目录是空的」（`check-answers.mjs` / `check-impact.mjs` 靠它报错），
       // 而不是「某篇文档出现了几次」。第一次写时我按 slug 查，拿到 undefined。
@@ -278,6 +312,14 @@ describe('readContentPage', () => {
       } finally {
         rmSync(empty, { recursive: true, force: true });
       }
+    });
+
+    it('递归读取子目录，与 Astro 的 **/* 内容 glob 一致', () => {
+      mkdirSync(join(dir, 'nested'));
+      writeFileSync(join(dir, 'nested', 'entry.md'), '---\ntitle: 条目\n---\n\n正文。\n');
+      const { pages, counts } = readContentDirs([dir]);
+      expect(counts.get(dir)).toBe(1);
+      expect(pages.map((page) => page.slug)).toEqual(['nested-entry']);
     });
   });
 });

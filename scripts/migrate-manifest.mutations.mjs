@@ -10,20 +10,22 @@
  * 而「精确」这个词必须能证伪 —— 所以这里逐种注入坏数据，
  * 每次都必须报出**能定位到具体条目**的诊断，而不是一个笼统的失败。
  *
- * 坏法分五类：
+ * 坏法分七类：
  *   ① 缺 `id`             → 应定位到 documents[i]
  *   ② `markdown.sha256` 不合法 → 应定位到具体 id
  *   ③ ID 重复            → 应报出重复的那个 id
  *   ④ `documentCount` 对不上 → 应报出两个数（说明清单被改过）
  *   ⑤ v1 里出现**不认识**的字段 → 应拦下（不能静默透传）
+ *   ⑥ 正文长度为负数 → 必须被 schema 拦下
+ *   ⑦ 缺少站点地址 → 必须被 schema 拦下
  *
  * ⑤ 最要紧：`{ ...input, version: 2 }` 那种写法会**静默带过去**，
  * 产出一个「看着像 v2」实则不兼容的清单——**而它不会报任何错**。
  *
  * 跑法：`node scripts/migrate-manifest.mutations.mjs`
- * 退出码 0 = 五次都真的报出了精确诊断。
+ * 退出码 0 = 七次都真的报出了精确诊断。
  */
-import { readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -99,6 +101,22 @@ const MUTATIONS = [
       m.documents[2].legacyScore = 0.87;
     },
   },
+  {
+    name: '⑥ markdown.bytes 为负数',
+    expect: /documents\/2\/markdown\/bytes.*schema.*>= 0/s,
+    why: '不能迁出不符合 schema 的 v2 清单',
+    apply: (m) => {
+      m.documents[2].markdown.bytes = -1;
+    },
+  },
+  {
+    name: '⑦ 缺少站点地址',
+    expect: /\/site.*schema.*home/s,
+    why: '缺少 site.home 时下游无法定位正文',
+    apply: (m) => {
+      delete m.site.home;
+    },
+  },
 ];
 
 let allGood = true;
@@ -139,7 +157,7 @@ rmSync(TMP, { force: true });
 console.log('');
 console.log(
   allGood
-    ? '五种坏法都报出了能定位到具体条目的诊断——「失败时有精确诊断」这句退出条件有证据了。'
+    ? '七种坏法都报出了能定位到具体条目的诊断——「失败时有精确诊断」这句退出条件有证据了。'
     : '有坏法没有被精确诊断拦下。',
 );
 console.log();
