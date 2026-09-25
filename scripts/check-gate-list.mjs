@@ -24,6 +24,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { checkCiWiring } from './ci-wiring.mjs';
 
 const ROOT = process.cwd();
 const problems = [];
@@ -70,6 +71,18 @@ const EXPECTED = [
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const scripts = pkg.scripts ?? {};
 const all = scripts['verify:all'] ?? '';
+const ciWorkflow = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+
+problems.push(...checkCiWiring(ciWorkflow));
+for (const [name, changed] of [
+  ['移除 test 分支', ciWorkflow.replace('branches: [main, master, test]', 'branches: [main, master]')],
+  ['移除完整门禁 job', ciWorkflow.replace('  full-gates:', '  full-gates-disabled:')],
+  ['移除完整门禁命令', ciWorkflow.replace('run: npm run verify:all', 'run: npm run check')],
+]) {
+  if (changed === ciWorkflow || checkCiWiring(changed).length === 0) {
+    problems.push(`CI 接线自测失效：${name} 后没有报错`);
+  }
+}
 
 // ── 1. 步骤数量 ─────────────────────────────────────────────────────
 const steps = all
@@ -387,4 +400,5 @@ if (problems.length > 0) {
 }
 console.log(`  ✓ ${steps.length} 步齐全、顺序正确、脚本都存在`);
 console.log('  ✓ 没有「定义了却不在编排里」的门禁');
+console.log('  ✓ CI 的 test 分支与完整门禁接线均被负向验证');
 console.log(`  ✓ ${DOCS_WITH_STEP_COUNT.join(' 与 ')} 转述的步数与实际一致\n`);
