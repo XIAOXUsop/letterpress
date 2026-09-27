@@ -261,6 +261,74 @@ if (files.length === 0) {
   console.log(`  ✓ 没有「可选链没保护字段本身」的写法（扫了 ${files.length} 个文件）`);
 }
 
+/*
+ * ── 第三条：核心模块必须有**真实调用方**，不能只有测试在引用 ────────
+ *
+ * ⚠️ **2026-09-28 实测：`pageToDoc` 曾经整个仓库只有一个调用方——
+ * 而那个调用方是 `check-second-site-real.mjs`，也就是「证明它可复用」的那个测试。**
+ *
+ * 换句话说：它是**为核心复用而抽出来的**，却**没有任何真实路径在用它**。
+ * 阶段 4 第 1 条退出条件是「不复制内部代码」，
+ * 而一个没人调用的公共函数**不构成「复用了」**——它只是一段没人验证的承诺。
+ *
+ * > 这与「注释里写了而代码没实现」是同族：
+ * > 接线写好了、测试也绿着，**但没接上任何东西**。
+ *
+ * 处置不是删掉它（本轮已把它接进 `wiki-review.mjs`，替换掉那里手写的第二份 `digestDoc`），
+ * 而是**加一条门禁**，让「只剩测试在引用」这个状态会红。
+ *
+ * ⚠️ **调用方名单要排除测试与检查脚本自身**：
+ * `.test.ts` 与 `scripts/check-*.mjs` 引用不算——否则这道闸恒真
+ * （任何单测都必然 import 它要测的模块）。
+ */
+const PROD_CALLERS = ['scripts', 'src'];
+
+console.log('');
+console.log('核心模块有没有真实调用方（排除测试与检查脚本）');
+console.log('─'.repeat(64));
+
+/** 这些脚本是「检查器」，不是产品的调用方。 */
+const INSPECTOR = /^scripts[/\\](check-|verify-)/;
+
+for (const file of CORE) {
+  const exports = REQUIRED_EXPORTS[file] ?? [];
+  /*
+   * ⚠️ **导出名取自上表的 `REQUIRED_EXPORTS`，不按文件名推导。**
+   *
+   * 第一版用 `context-pack.ts → contextPack` 猜，结果报「没有真实调用方」——
+   * 而 `scripts/wiki-ask.mjs:37` 明明 import 了 `buildContextPack`。
+   * **判据自己错了，红的却是被测对象**：那正是本项目反复吃过的亏。
+   *
+   * > 靠命名规律猜导出名，必然在「文件名与导出名对不上」时错。
+   * > 而 `REQUIRED_EXPORTS` 是**已经断言过的**导出名，直接用它。
+   */
+  const names = exports.length > 0 ? exports : [file.replace(/\.ts$/, '')];
+  const hits = new Set();
+  for (const sub of PROD_CALLERS) {
+    for (const entry of readdirSync(join(ROOT, sub), { withFileTypes: true, recursive: true })) {
+      if (!entry.isFile() || !/\.(ts|mjs|astro)$/.test(entry.name)) continue;
+      if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.mutations.mjs')) continue;
+      const p = join(entry.parentPath ?? entry.path, entry.name);
+      const rel = relative(ROOT, p).replace(/\\/g, '/');
+      if (rel === `src/lib/wiki/${file}`) continue; // 自己
+      if (INSPECTOR.test(rel)) continue;
+      const text = readFileSync(p, 'utf8');
+      // 必须在 import 语句里出现，而不是正文里提到这个名字。
+      if (names.some((n) => new RegExp(`import[^;]*\\b${n}\\b[^;]*from`).test(text))) hits.add(rel);
+    }
+  }
+  if (hits.size === 0) {
+    problems.push(
+      `${file}（${names.join(' / ')}）**没有任何真实调用方**——只有测试或检查脚本在引用它。\n` +
+        `    抽出来是为了「不复制内部代码」，而没人调用就不构成复用。\n` +
+        `    要么接进真实的读取/CLI 路径，要么把它删掉。`,
+    );
+    console.log(`  ✗ ${file}（${names.join(' / ')}）没有真实调用方`);
+  } else {
+    console.log(`  ✓ ${file}（${names.join(' / ')}）被 ${hits.size} 处使用：${[...hits].join('、')}`);
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);

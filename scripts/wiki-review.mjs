@@ -46,6 +46,7 @@ import { join } from 'node:path';
  */
 import { contentDigest } from '../src/lib/wiki/digest.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
 import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
@@ -59,28 +60,21 @@ const asJson = args.includes('--json');
 const WIKI = join(process.cwd(), 'src', 'content', 'wiki');
 
 /**
- * 摘要用的 `Doc`。**只填参与摘要的字段**——
- * `slug` / `draft` / `explicitSlug` 不参与计算（见 `digestInput`）。
+ * 组装 `Doc`。
+ *
+ * ⚠️ **2026-09-28 改：原先这里手写了一份 `digestDoc`，现已换成核心的 `pageToDoc`。**
+ *
+ * 那份手写实现是 `pageToDoc` 的**第二份拷贝**，而两处已经漂开：
+ * 它的 `explicitSlug` 写死 `false`（`pageToDoc` 从 `page.explicitSlug` 读），
+ * 也不带 `sources`。
+ *
+ * > **「这三个字段不参与摘要计算」不能成为留着第二份实现的理由。**
+ * > 它只是说 `digestInput` 现在没读它们——而 `digestInput` 一改，
+ * > 两份实现就会算出**不同的摘要**，症状是「所有已复核页面突然报 stale」。
+ * > 本项目已经因为摘要口径差一个 `trim`、差一个字段名，浪费过两轮排查。
+ *
+ * 所以统一到核心那一份：**摘要口径从此只有一个定义。**
  */
-function digestDoc(page, summary) {
-  return {
-    kind: 'wiki',
-    wikiKind: page.kind,
-    slug: page.slug,
-    title: page.title,
-    summary,
-    // ⚠️ `readContentPage` 的 `body` **已经 trim 过**，
-    // 与 Astro 的 `entry.body` 口径一致（差一个 trim 摘要就永远对不上）。
-    body: page.body,
-    // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
-    // 传错键的话 `?? []` 会静静兜成空数组——摘要照样算得出，
-    // 只是永远对不上，而症状是「所有已复核页面都报 stale」，
-    // 看起来像机制坏了。这个坑我踩过一次，写在这里。
-    declaredRelations: page.related,
-    explicitSlug: false,
-    draft: false,
-  };
-}
 
 /*
  * ── 为什么是**两个**模块，不是一个 ──────────────────────────────────
@@ -105,7 +99,7 @@ function parse(file) {
     title: page.title,
     // ✅ 从 `review` 块里读（read-page 解析嵌套块），不是从行首的 `status:`。
     status: page.review?.status ?? null,
-    digest: contentDigest(digestDoc(page, summary)),
+    digest: contentDigest(pageToDoc(page, { summary })),
   };
 }
 
