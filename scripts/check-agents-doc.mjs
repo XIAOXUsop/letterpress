@@ -128,19 +128,48 @@ if (claims('related: [design-tokens]', 'related 的例子')) {
 
 // ── ③ 行为声明：标题与 slug 指向同一个页面 ────────────────────────
 if (claims('指的是同一个页面', '「写标题与写 slug 指向同一页」')) {
-  const docs = [
-    { kind: 'wiki', slug: 'real-slug', title: '中文标题', summary: 's', body: '甲页。', explicitSlug: true, draft: false },
-    { kind: 'wiki', slug: 'zzz', title: '乙页', summary: 's', body: '见 [[中文标题]] 与 [[real-slug]]。', explicitSlug: true, draft: false },
-  ];
-  const g = buildGraph(docs);
-  const viaTitle = (g.outbound.get('zzz') ?? new Set()).has('real-slug');
-  const viaSlug = (g.outbound.get('zzz') ?? new Set()).has('real-slug');
-  if (viaTitle && viaSlug) {
-    ok('写标题与写 slug 确实解析到同一页');
+  /*
+   * ⚠️ **2026-09-28 修：第一版这里有两个变量、两次计算，而它们是同一行代码：**
+   *
+   *     const viaTitle = outbound.get('zzz').has('real-slug');
+   *     const viaSlug   = outbound.get('zzz').has('real-slug');
+   *
+   * 于是 `if (viaTitle && viaSlug)` **只验了一次**。
+   * 而 AGENTS.md 声称的是**两条路都通**——
+   * 单看 `outbound` 无法区分「标题解析了」与「slug 解析了」，
+   * 因为两个链接都落在同一个 `Set` 里，去重后就剩一个元素。
+   *
+   * > **「A 和 B 都能到 C」不能靠 `A 能到 C && A 能到 C` 来验。**
+   * > 那不是弱一点的断言，是**同一个断言写了两遍**。
+   *
+   * 现在**拆成两份语料各自只含一个链接**，分别断言。
+   */
+  const target = {
+    kind: 'wiki', slug: 'real-slug', title: '中文标题',
+    summary: 's', body: '甲页。', explicitSlug: true, draft: false,
+  };
+  const source = (link) => ({
+    kind: 'wiki', slug: 'zzz', title: '乙页',
+    summary: 's', body: `见 [[${link}]]。`, explicitSlug: true, draft: false,
+  });
+
+  const viaTitle = (buildGraph([target, source('中文标题')]).outbound.get('zzz') ?? new Set())
+    .has('real-slug');
+  const viaSlug = (buildGraph([target, source('real-slug')]).outbound.get('zzz') ?? new Set())
+    .has('real-slug');
+  // 两份语料都不得有断链——否则「解析成功」可能是「随便指了个东西」。
+  const noBroken =
+    buildGraph([target, source('中文标题')]).broken.length === 0 &&
+    buildGraph([target, source('real-slug')]).broken.length === 0;
+
+  if (viaTitle && viaSlug && noBroken) {
+    ok('写标题与写 slug 确实各自解析到同一页（两份语料分别断言）');
   } else {
     problems.push(
       `AGENTS.md 说「一个写标题、一个写 slug 指的是同一个页面」，而**实测不成立**：\n` +
-        `    写标题 → ${viaTitle ? '解析成功' : '没解析到'}；写 slug → ${viaSlug ? '解析成功' : '没解析到'}`,
+        `    只写标题 → ${viaTitle ? '解析成功' : '没解析到'}；` +
+        `只写 slug → ${viaSlug ? '解析成功' : '没解析到'}；` +
+        `断链 → ${noBroken ? '无' : '有'}`,
     );
   }
 }
