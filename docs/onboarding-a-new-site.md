@@ -7,40 +7,25 @@
 ## 五行主线
 
 ```js
-import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
 import { buildGraph } from '../src/lib/wiki/graph.ts';
 import { lint, hasErrors } from '../src/lib/wiki/lint.ts';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
 
-const DIRS = ['content/wiki', 'content/posts'];            // ① 两个目录都要
-const docs = DIRS.flatMap((dir) =>
-  readdirSync(dir)
-    .filter((f) => /\.mdx?$/.test(f))
-    .map((file) => {
-      const full = join(dir, file);
-      return pageToDoc(readContentPage(dir, file), {      // ② 组装成 Doc
-        summary: frontmatterField(readFileSync(full, 'utf8'), 'summary') ?? '',
-      });
-    }),
-);
-const graph = buildGraph(docs);                             // ③ 链接图
-const issues = lint(docs, graph);                           // ④ 体检
+const { pages } = readContentDirs(['content/wiki', 'content/posts']);  // ① 两个目录都要
+const docs = pages.map((p) => pageToDoc(p));                           // ② 摘要已随页带回来
+const graph = buildGraph(docs);                                        // ③ 链接图
+const issues = lint(docs, graph);                                      // ④ 体检
 if (hasErrors(issues)) throw new Error(JSON.stringify(issues));
 ```
 
-⚠️ 两个必须知道的形状（**实测**，2026-09-28）：
+**为什么是这四个模块、这个顺序**：前三个是纯逻辑、零耦合，第四个消费第三个的产物。
+它们都能被**裸 Node** 直接 `import`（`npm run check:portability` 守着这条），
+所以维护脚本、CLI、一次性分析都不必先跑 bundler。
 
-- **`readContentDirs` 不能用在这条主线上**。它返回 `{ pages, counts }`，
-  而 `pages[i]` 的键只有
-  `explicitSlug / slug / title / kind / updated / sources / review / related / body`
-  ——**没有 `dir` / `file`，也没有 `summary`**。
-  拿它读就凑不出 `summary`（见下面第 ② 条）。
-  它的适用场景是**只要 `related:` 的消费者**，例如 `check-impact.mjs`。
-- **`readContentPage` 也不返回 `summary`**，所以 `p.summary ?? ''` 恒等于 `''`。
-  上面第 ② 步必须自己读一次 frontmatter。
+⚠️ 下面第 ② 条讲的坑**曾经要写 12 行代码才能绕开**——
+2026-09-28 已把 `summary` 收进 `readContentDirs`，所以第 ② 步现在只是 `pageToDoc(p)`。
+保留那一节是因为**它解释了这个设计是怎么来的**，以及单个 `readContentPage` 仍然要自己补。
 
 **为什么是这四个模块、这个顺序**：前三个是纯逻辑、零耦合，第四个消费第三个的产物。
 它们都能被**裸 Node** 直接 `import`（`npm run check:portability` 守着这条），
@@ -74,11 +59,14 @@ if (hasErrors(issues)) throw new Error(JSON.stringify(issues));
 | `''`（不传） | **10** |
 | 从 frontmatter 读 | **4** |
 
-⚠️ `readContentPage` **不返回 `summary`**（它服务检索，检索不需要摘要）。
-拿 `p.summary` 会拿到 `undefined`——而 `pageToDoc` 把它兜成 `''`，
-于是**空摘要**触发额外规则，而症状是「核心好像坏了」。
+⚠️ **单个 `readContentPage` 不返回 `summary`，而 `readContentDirs` 返回。**
 
-正确做法是补一次顶层读取：
+- **`readContentDirs`（读一整个语料）**：`summary` 已经随页带回来了，
+  `pageToDoc(p)` 不传任何选项就对。
+- **`readContentPage`（读单个文件）**：拿 `p.summary` 会得到 `undefined`，
+  而 `pageToDoc` 把它兜成 `''`——于是**空摘要**触发额外规则，
+  症状是「核心好像坏了」（本表：lint 从 4 条涨到 10 条）。
+  这种场景要自己补一次顶层读取：
 
 ```js
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
@@ -87,6 +75,10 @@ import { readFileSync } from 'node:fs';
 const summary = frontmatterField(readFileSync(file, 'utf8'), 'summary') ?? '';
 ```
 
+⚠️ **自己遍历目录时最容易漏的是 `.sort()`**。漏了它，页面顺序取决于文件系统的
+返回顺序——本机 NTFS 恰好已排序，**漏了也看不出**，直到换一台机器。
+`readContentDirs` 里有那个 `.sort()`，自己写就没有。
+
 **两个读取器，一个都不够**：`frontmatterField` 只认**顶层标量**（`title` / `summary`），
 `readContentPage` 解析**嵌套块**（`review:` / `sources:` / `related:`）。
 这个结论是实测来的，不是设计偏好——`scripts/wiki-review.mjs` 的注释记着
@@ -94,8 +86,8 @@ const summary = frontmatterField(readFileSync(file, 'utf8'), 'summary') ?? '';
 
 ## 站点专属的部分只有一处
 
-上面五行里，**只有 `summary` 的来源与目录布局是站点专属的**。
-剩下的（slug 规则、关系声明、字段名）核心都认。
+上面五行里，**只有目录布局是站点专属的**。
+剩下的（slug 规则、关系声明、字段名、摘要）核心都认。
 
 唯一必须翻译的是**关系字段名**——本仓库叫 `related:`，别的站点可能叫 `audience:`：
 

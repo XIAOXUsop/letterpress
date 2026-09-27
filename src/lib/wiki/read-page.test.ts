@@ -268,6 +268,40 @@ describe('readContentPage', () => {
       }
     });
 
+    /**
+     * ⚠️ **2026-09-28 加。** `readContentDirs` 顺带补 `summary`，
+     * 于是 `pageToDoc(p)` 不传选项也能算对摘要。
+     *
+     * 此前每个要摘要的调用方都得自己重走「遍历 → 读文件 → `frontmatterField`」，
+     * **而那段代码里最容易漏的是 `.sort()`**——
+     * 本机 NTFS 恰好已排序，于是漏了也看不出（同型：「本站 0 篇写 slug:」）。
+     */
+    it('顺带补上 summary——单读的 readContentPage 不给的那一个', () => {
+      write('a.md', '---\ntitle: 甲\nsummary: 甲的摘要。\n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect(pages[0].summary).toBe('甲的摘要。');
+    });
+
+    it('没有 summary 字段时是空串，不是 undefined', () => {
+      // `undefined` 会让 `pageToDoc` 的 `?? ''` 兜底，
+      // 而**兜底与「本来就是空」在下游完全等价**——
+      // 那正是空摘要让 lint 多报 6 条的入口。
+      write('a.md', '---\ntitle: 甲\n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect(pages[0].summary).toBe('');
+    });
+
+    it('按文件名排序——顺序不能取决于文件系统返回什么', () => {
+      // 本机 NTFS 的 `readdirSync` 本来就是排序的，**所以这条在 Windows 上不会红**。
+      // 它守的是「有人把 `.sort()` 删了」：症状是同一份语料在不同机器上
+      // 报出**顺序不同**的同一条问题，而没人能立刻看出是排序丢了。
+      write('c.md', '---\ntitle: 丙\n---\n\n丙。\n');
+      write('a.md', '---\ntitle: 甲\n---\n\n甲。\n');
+      write('b.md', '---\ntitle: 乙\n---\n\n乙。\n');
+      const { pages } = readContentDirs([dir]);
+      expect(pages.map((p) => p.slug)).toEqual(['a', 'b', 'c']);
+    });
+
     it('空目录的计数是 0 而不是缺席——消费方靠它报错', () => {
       // 缺席的话 `[...counts.values()].some((n) => n === 0)` 永远不成立，
       // 而那正是「语料里一半是空的」要报的错。

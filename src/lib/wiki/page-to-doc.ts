@@ -31,7 +31,7 @@
  * 与路线图第 6 项（剥离站点专属逻辑）正好相反。
  */
 
-/** 一个「读到的页面」。与 `readContentPage` 的返回值同形（只取需要的字段）。 */
+/** 一个「读到的页面」。与 `readContentDirs` 的返回值同形。 */
 export interface ReadPage {
   readonly slug: string;
   readonly explicitSlug?: boolean;
@@ -41,10 +41,25 @@ export interface ReadPage {
   readonly body: string;
   readonly sources: readonly { sourceId: string; revision: string; locator: string }[];
   readonly related: readonly string[];
+  /**
+   * 顶层 `summary`。
+   *
+   * ⚠️ **`readContentPage`（单个）不返回它，`readContentDirs`（多个）返回。**
+   * 两者都要，因为前者服务检索（不需要摘要），
+   * 后者服务「读完一整个语料再组装」这条路径。
+   */
+  readonly summary?: string;
 }
 
 export interface PageToDocOptions {
-  /** 顶层 `summary:`。`readContentPage` 不返回它（四个站内调用方都不需要）。 */
+  /**
+   * 顶层 `summary:`。
+   *
+   * ⚠️ **2026-09-28 改：现在默认从 `page.summary` 取。**
+   * `readContentDirs` 已经顺带补上它（此前只有逐个 `readContentPage` 的路径要自己补，
+   * 而那段代码里最容易漏的是 `.sort()`）。显式传入仍然优先——
+   * `readContentPage` 出来的页面没有 `summary`，那种场景由调用方给。
+   */
   readonly summary?: string;
   /** `Doc.kind`：文档类型。默认 `'wiki'`。 */
   readonly docKind?: 'post' | 'wiki';
@@ -73,7 +88,7 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
     kind: options.docKind ?? 'wiki',
     slug: page.slug,
     title: page.title,
-    summary: options.summary ?? '',
+    summary: options.summary ?? page.summary ?? '',
     body: page.body,
     sources: page.sources,
     wikiKind: page.kind,

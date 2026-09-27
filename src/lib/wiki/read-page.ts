@@ -265,7 +265,14 @@ function parseReview(block: string): PageReview | undefined {
  * 不是漏报，是这一层压根没进语料。
  */
 export function readContentDirs(dirs: readonly string[]): {
-  readonly pages: ReturnType<typeof readContentPage>[];
+  /**
+   * ⚠️ **不是 `ReturnType<typeof readContentPage>`**——那不含 `summary`，
+   * 而这里实际返回的页**多一个字段**。
+   * 写成前者时运行着没问题、类型上却报「Property 'summary' does not exist」，
+   * 于是调用方只能去加 `as any` 或者干脆不读它——
+   * **类型签名与运行时形状脱节，编译器就成了摆设。**
+   */
+  readonly pages: (ReturnType<typeof readContentPage> & { readonly summary: string })[];
   readonly counts: ReadonlyMap<string, number>;
 } {
   const pages = [];
@@ -275,7 +282,27 @@ export function readContentDirs(dirs: readonly string[]): {
       .filter((f) => /\.mdx?$/.test(f))
       .sort();
     counts.set(dir, files.length);
-    for (const file of files) pages.push(readContentPage(dir, file));
+    for (const file of files) {
+      const page = readContentPage(dir, file);
+      /*
+       * ⚠️ **2026-09-28 加：顺带补上 `summary`。**
+       *
+       * 它是顶层标量，而 `readContentPage` 只解析**嵌套块**——
+       * 所以拿不到是设计如此，不是漏了。原先每个要摘要的调用方都得
+       * 自己重走一遍「遍历目录 → 读文件 → `frontmatterField`」，
+       * **而那段代码里最容易漏的是 `.sort()`**：
+       * 漏了它，页面顺序就取决于文件系统的返回顺序
+       * （本机 NTFS 恰好已排序，于是**漏了也看不出**——
+       *  与「本站 0 篇写 slug:，所以那个 bug 从未发作」同型）。
+       *
+       * 补在这里，`pageToDoc(page)` 不传 `summary` 也能算对摘要。
+       * 四个现有调用方只用 `slug` / `sources` / `body`，**不受影响**。
+       */
+      pages.push({
+        ...page,
+        summary: frontmatterField(readFileSync(join(dir, file), 'utf8'), 'summary') ?? '',
+      });
+    }
   }
   return { pages, counts };
 }

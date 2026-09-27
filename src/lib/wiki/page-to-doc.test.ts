@@ -46,6 +46,30 @@ describe('pageToDoc', () => {
     expect(pageToDoc(page, {}).summary).toBe('');
   });
 
+  /**
+   * ⚠️ **2026-09-28 加。** `readContentDirs` 已经顺带补上 `summary`，
+   * 所以读一整个语料时**不必再传 options**。
+   *
+   * 空摘要不是「少了个字段」，它会让 lint 多报 6 条——
+   * 所以这条兜底链（`options.summary ?? page.summary ?? ''`）
+   * 决定了一个接线写错的人看到的是「正常」还是「核心坏了」。
+   */
+  it('不传 options 时从 page.summary 取（readContentDirs 已经补好的）', () => {
+    expect(pageToDoc({ ...page, summary: '甲的摘要。' }, {}).summary).toBe('甲的摘要。');
+  });
+
+  it('显式传入的 summary 优先于 page.summary', () => {
+    expect(pageToDoc({ ...page, summary: '页面的' }, { summary: '调用方的' }).summary)
+      .toBe('调用方的');
+  });
+
+  it('page.summary 是空串时不会被显式传入顶掉', () => {
+    // 空串是**已读到了、确实没有**，而 undefined 是**没读**。
+    // 两者都要尊重调用方的显式值——否则「显式传空以清空摘要」做不到。
+    expect(pageToDoc({ ...page, summary: '' }, { summary: '调用方的' }).summary)
+      .toBe('调用方的');
+  });
+
   it('wikiKind 取 page.kind（知识类型），不是 Doc.kind（文档类型）', () => {
     const doc = pageToDoc(page, { docKind: 'wiki' });
     expect(doc.kind).toBe('wiki');          // 文档类型
