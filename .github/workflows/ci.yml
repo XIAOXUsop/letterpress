@@ -131,6 +131,95 @@ jobs:
 
           echo "出厂配置（site.url 为空）下构建通过 ✓，关于页也列出了待填字段 ✓"
 
+  knowledge-gates:
+    name: 知识层门禁
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: 安装 Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # ⚠️ **这一整个 job 是补一个 2026-09-28 实测出来的缺口。**
+      #
+      # `verify:all` 有 33 步，而 `build` job 只显式调用了其中 7 个
+      # （check / test / verify / verify:testcount / verify:search /
+      #  verify:reproducible / verify:base / verify:formats）。
+      # **剩下 26 道门禁在 CI 上从来没跑过**——包括本仓库最核心的那批：
+      # 检索金标、影响分析、答案可定位性、复核状态、核心可移植性、
+      # 错误码与 JSON 输出契约、异构站点、迁移器、文档一致性。
+      #
+      # 此前有人注意到过一次（`verify:testcount` 那段注释写着
+      # 「**但 CI 从来没调用过它**」）——**只补了那一条**。
+      #
+      # > **写好的门禁没接线，和没有门禁是同一件事。**
+      # > 而「本地 33 步全绿、CI 也绿」会让人以为那些门禁在把关。
+      #
+      # 下面这 21 步**全部实测过不依赖 `dist`、不联网、且会自行还原源码**。
+      # ⚠️ **必须串行**：`verify:site-mutations` / `verify:exit-codes` /
+      # `verify:json-mutations` 靠「改坏源码再还原」证明自己不是装饰，
+      # **并发跑会互相踩**（这一条在 `docs/cli.md` 里有记）。
+      #
+      # 不在这里跑的：`verify:anchors` / `check:manifest-schema` / `check:refs`
+      # 读 `dist`（`build` job 已覆盖前两者的等价物）；`check:staged`
+      # 是提交前自检，CI 上暂存区恒为空；`verify:online` 需要外部环境。
+      - name: 知识层门禁（21 步，串行）
+        run: |
+          set -euo pipefail
+          failed=""
+          for step in \
+            verify:gates \
+            verify:questions \
+            verify:retrieval-gates \
+            verify:impact \
+            verify:answers \
+            verify:review \
+            verify:portability \
+            check:site-agnostic \
+            verify:site-mutations \
+            check:exit-codes \
+            verify:exit-codes \
+            verify:json-output \
+            verify:json-mutations \
+            verify:migrate \
+            check:single-source \
+            verify:second-site \
+            verify:second-site-real \
+            verify:second-site-real-mutations \
+            check:anchors \
+            check:agents-doc \
+            check:onboarding-doc
+          do
+            printf '::group::%s\n' "$step"
+            if npm run "$step"; then
+              echo "✓ $step"
+            else
+              # **不立刻退出**——一次跑完才知道还剩几道红的，
+              # 而 `set -e` 会在第一道就停，剩下的就没人知道了。
+              failed="$failed $step"
+            fi
+            printf '::endgroup::\n'
+          done
+
+          # 变异注入那几道改过源码。**必须确认它们还原干净了**——
+          # 否则后面几步量的是被改坏的代码。
+          if ! git diff --quiet -- src/ scripts/; then
+            echo "::error::有门禁把源码改坏后没还原："
+            git diff --stat -- src/ scripts/
+            exit 1
+          fi
+
+          if [ -n "$failed" ]; then
+            echo "::error::以下门禁在 CI 上是红的：$failed"
+            exit 1
+          fi
+
   lint-content:
     name: 内容体检
     runs-on: ubuntu-latest
