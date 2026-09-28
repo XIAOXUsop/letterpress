@@ -108,6 +108,21 @@ const BUNDLED = new Set(['verify']);
  * > **锚点里出现「会变的数」，锚点迟早会失效。**
  * > 正确做法是**运行时从本文件算出来**。
  */
+/**
+ * **台账里那两个「会变」的数字**（单文件命令数、编排步数）——运行时算出来。
+ *
+ * ⚠️ **不能硬写**（与 `MUT_COUNT` 同一条教训）：
+ * 2026-09-29 我把台账里 48→59→61、43→44 改了三遍，
+ * **而两条变异的锚点正写着那些数**——于是它们「锚点出现 0 次」，
+ * **而那句话在「锚点不对」与「门禁没盲区」之间是同义的**。
+ *
+ * > **锚点里出现「会变的数」，锚点迟早会失效。**
+ */
+const ACTUAL_CMDS = String(Object.keys(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts).length);
+const ACTUAL_STEPS = String(
+  JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts['verify:all'].split('&&').length,
+);
+
 const MUT_COUNT = (() => {
   const src = readFileSync(import.meta.filename, 'utf8');
   // ⚠️ **`lastIndexOf`**：这段自省代码**自己就含** `const CASES = [`，
@@ -132,6 +147,30 @@ const MUT_COUNT = (() => {
  * 空目录同样「存在」，而那正是 `check:manifest-schema` 当初栽的地方。
  */
 const NEEDS_DIST = new Set(['verify-negotiation.mjs']);
+
+/**
+ * `check-package-files.mjs` 要**真打一个 tarball**——所以它比别的门禁慢，
+ * 而 `mutate()` 的默认超时（120 秒）**对它不够**。
+ *
+ * ⚠️ 而**超时与「门禁判定为红」在输出上完全一样**——
+ * `spawnSync` 超时给 `status: null` + `error`，而 `red()` 只看 `status !== 0`。
+ * 那是形态十一，**处置是给足超时而不是改判据**（判据没错，是等待不够）。
+ */
+const SLOW_GATES = new Set(['check-package-files.mjs']);
+
+/**
+ * 有些门禁**必须带参数跑**——不带就等于没跑。
+ *
+ * ⚠️ `check-package-files.mjs` 的判据②要**真打 tarball、真装依赖、真构建**，
+ * 所以只有 `--full` 才会跑它。而**不带 `--full` 时它明确打印「本轮没验」**
+ * ——**而「没验」与「验过了」在输出上完全一样**。
+ *
+ * > 变异若不带 `--full` 去跑它，**两条判据都不会触发**，
+ * > 而「门禁绿着」会被我读成「判据没问题」。
+ *
+ * 所以：这类门禁的**变异目标**写成 `--full` 形式，`red()` 直接拼上。
+ */
+const GATE_ARGS = new Map([['check-package-files.mjs', ['--full']]]);
 
 /**
  * ⚠️ **判据不能只是「`dist` 在不在」。**（2026-09-28 第二次栽在这里）
@@ -210,10 +249,10 @@ const red = (script) => {
     }
     return { red: r.status !== 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
   }
-  const r = spawnSync('node', [join('scripts', script)], {
+  const r = spawnSync('node', [join('scripts', script), ...(GATE_ARGS.get(script) ?? [])], {
     cwd: ROOT,
     encoding: 'utf8',
-    timeout: 120_000,
+    timeout: SLOW_GATES.has(script) ? 900_000 : 120_000,
   });
   return { red: r.status !== 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 };
@@ -441,7 +480,7 @@ const GATES = [
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
   'check-single-source.mjs', 'check-agents-doc.mjs', 'check-rule-levels.mjs',
-  'check-agents-coverage.mjs',
+  'check-agents-coverage.mjs', 'check-package-files.mjs',
 ];
 
 const CASES = [
@@ -982,7 +1021,7 @@ const CASES = [
      */
     why: 'check:gate-list — 台账里的命令总数漂了（4g 必须重跑门禁抓到它）',
     file: 'knowledge/gate-negatives.md',
-    find: '一次性探针扫了 59 个单文件命令',
+    find: '一次性探针扫了 ' + ACTUAL_CMDS + ' 个单文件命令',
     replace: '一次性探针扫了 48 个单文件命令',
     target: 'check-gate-list.mjs',
   },
@@ -1057,9 +1096,48 @@ const CASES = [
     // ⚠️ **锚点不能只写「**有 43 步**」**——我 2026-09-29 写完这一节的表之后，
     // 它在台账里出现了 **2 次**（原文那处 + 我新写的对照表），于是变异失效。
     // 锚点必须带上**只有原文才有的上下文**。
-    find: '**有 43 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
+    find: '**有 ' + ACTUAL_STEPS + ' 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
     replace: '**有 33 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
     target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着一个 npm 会「静默忽略」的行为**（2026-09-29 实测）。
+     *
+     * `files` 里只要有一条注释行，**npm 就静默忽略整个字段**——
+     * 打包从 124 个文件变回 224 个（868 KB），**而 `npm pack` 一个警告都不打**。
+     *
+     * > **「我加了配置」与「配置生效了」在输出上完全一样**——
+     * > 而这里连「没生效」都没人察觉，直到某天发出一个 868 KB 的包。
+     *
+     * 变异就是往 `files` 里塞一条注释：门禁必须立刻指出它。
+     */
+    why: 'check:package-files — files 里出现注释行（npm 会静默忽略整个字段）',
+    file: 'package.json',
+    find: '    "LICENSE",',
+    replace: '    "// 理由写在这一段的注释里",\n    "LICENSE",',
+    target: 'check-package-files.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着「白名单排掉了构建真正要读的东西」那个失效状态。**
+     *
+     * 2026-09-29 实测过一次：我把 `knowledge/` 当「开发资产」排掉了，
+     * 而内容页的 frontmatter 用 `verify:` 声明指向 `knowledge/questions.md`
+     * 与 `scripts/wiki-impact.mjs`，`astro.config.mjs` 里的 `checkVerifyClaims`
+     * **在构建时逐条核文件在不在**——**干净目录里 `npm run build` 直接失败**。
+     *
+     * > **「看起来是开发资产」与「是构建的输入」在代码里长得一样。**
+     * > 唯一的分法是**在干净目录里真跑一次构建**。
+     *
+     * ⚠️ 而这条变异**要跑完整的 `--full`**（打包 + 装依赖 + 构建），
+     * 所以它是本文件里最慢的一条——**这正是它该有的代价**。
+     */
+    why: 'check:package-files — 排掉 knowledge/（构建会因 verify 声明而失败）',
+    file: 'package.json',
+    find: '    "knowledge/",',
+    replace: '    "knowledge-排掉了/",',
+    target: 'check-package-files.mjs',
   },
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
