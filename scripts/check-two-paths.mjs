@@ -51,26 +51,50 @@ console.log('读路径与构建路径的 post 口径');
 console.log('─'.repeat(64));
 
 // ── ① 构建侧有几处「post 拿不到」判定 ──────────────────────────────
+/*
+ * 这几个是**知识层专属**的：构建侧对 `post` 一律给 `undefined`。
+ * 加一个进来，就必须同时更新构建侧与本门禁的名单——
+ * **这正是它存在的意义：两份名单不可能悄悄漂开**。
+ *
+ * ⚠️ 它必须定义在**使用之前**：第一版定义在使用之后，
+ * 于是 `gates !== WIKI_ONLY.length` 那句在运行时是 TDZ 报错。
+ * （`const` 不会「取到旧值」，只会抛——所以症状是崩，不是假绿。）
+ */
+const WIKI_ONLY = ['wikiKind', 'review', 'declaredRelations', 'original'];
+
 const contentTs = readFileSync(join(ROOT, 'src', 'lib', 'content.ts'), 'utf8');
 const gates = [...contentTs.matchAll(/kind === 'wiki' \?/g)].length;
+
+/**
+ * ⚠️ **判据必须是「精确相等」，不是「大于 0」。**
+ *
+ * 第一版只判 `gates === 0`，于是把构建侧 `related` 那处判定删掉
+ * （4 → 3）时它照样报「✓ 构建侧有 3 处判定」——
+ * **基准掉了一格，而它把这当成正常。**
+ *
+ * > 「基准还在」与「基准没变过」是两件事。
+ * > 而这条门禁的全部价值就在后者：它存在的理由是**两边不能各改一处**。
+ */
 if (gates === 0) {
   problems.push(
     "src/lib/content.ts 里一处 `kind === 'wiki' ?` 都没有——"
     + '要么实现变了，要么路径不对。**基准消失了，判据就恒真。**',
   );
   console.log('  ✗ 构建侧找不到 `kind === \'wiki\' ?` 判定');
+} else if (gates !== WIKI_ONLY.length) {
+  problems.push(
+    `构建侧有 ${gates} 处 \`kind === 'wiki' ?\`，而本门禁的名单是 ${WIKI_ONLY.length} 项`
+    + `（${WIKI_ONLY.join(' / ')}）。\n`
+    + '    **两边必须一一对应**——构建侧多一处或少一处，说明有人改了它而没改这里，'
+    + '或者改了两边但只改了一边。',
+  );
+  console.log(`  ✗ 构建侧 ${gates} 处 vs 名单 ${WIKI_ONLY.length} 项——对不上`);
 } else {
-  console.log(`  ✓ 构建侧有 ${gates} 处 \`kind === 'wiki' ?\` 判定（基准）`);
+  console.log(`  ✓ 构建侧 ${gates} 处判定与名单 ${WIKI_ONLY.length} 项一一对应`);
 }
 
 // ── ② 运行时：post 拿不到哪些字段 ───────────────────────────────────
-/**
- * 这几个是**知识层专属**的：构建侧对 `post` 一律给 `undefined`。
- * 加一个进来，就必须同时更新构建侧与本门禁的名单——
- * **这正是它存在的意义：两份名单不可能悄悄漂开。**
- */
-const WIKI_ONLY = ['wikiKind', 'review', 'declaredRelations', 'original'];
-
+// （`WIKI_ONLY` 已定义在上面——它必须与构建侧的处数一一对应）
 const page = {
   slug: 'a',
   title: '甲',
