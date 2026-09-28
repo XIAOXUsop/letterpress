@@ -215,7 +215,8 @@ jobs:
           check:anchors
           check:agents-doc
           check:onboarding-doc
-          check:two-paths"
+          check:two-paths
+          check:adapter-size"
           total="$(printf '%s\n' "$steps" | grep -c .)"
           for step in $steps; do
             printf '::group::%s\n' "$step"

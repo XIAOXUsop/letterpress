@@ -66,7 +66,8 @@ const EXPECTED = [
   ['npm run check:refs', '**文档里提到的路径都存在**（放最后：verify:formats 会清 dist，本检查要 dist 才判产物）'],
   ['npm run check:agents-doc', '**AGENTS.md 的可证伪声明还成立**（规则名 / 例子 slug / 行为声明）'],
   ['npm run check:onboarding-doc', '**接线文档里的实测数字与现在跑出来的一致**（判据从文档表格里解析数字，不核脚本里的常量）'],
-  ['npm run check:two-paths', '**读路径与构建路径对「post 拿不到什么」同一口径**（`related` / `review` / `wikiKind`）——本站 posts 里 0 篇写这些字段，所以那处分歧从未发作过'],
+  ['npm run check:two-paths', '**读路径与构建路径对「post 拿不到什么」同一口径**（`related` / `review` / `original` / `wikiKind`）——本站 posts 里 0 篇写这些字段，所以那处分歧从未发作过'],
+  ['npm run check:adapter-size', '**站点专属接线只剩「站点事实」**（阶段 4 第 4 条的代理指标）——行数只能降不能升，且不能靠「不接核心」变小'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
 ];
 
