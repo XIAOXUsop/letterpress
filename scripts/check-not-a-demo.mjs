@@ -220,6 +220,60 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
+/*
+ * ── 自测：**「该分叉」与「不该分叉」各要一个已知样本** ──────────────────
+ *
+ * ⚠️ **2026-09-29 补的。** 本检查原来**只有正例**（3 条 `✓`），
+ * **没有一条「不该红」的样本**——而**那正是它最容易骗人的方向**：
+ * 它断言「`outlinks` 必须分叉」，而**一个不适配的适配层同样会让两边相同**。
+ * 那两种情形在正例下**长得一样**。
+ *
+ * > **「只会说『该这样』的检查，无法用它自己的输出证明它没在误报。**
+ * > 这是今天第三次「先写判据、再想会不会误报」的顺序错误——
+ * > **这次是先修判据、再补上它缺的另一半。**
+ *
+ * 这里造的是**同构**内容（A 与 B 读同一份、用同一个字段名）：
+ * **那时 `outlinks` 应当相同**，而判据不该把它报成「异构点没生效」。
+ */
+{
+  /** 一份**同构**内容：B 也用 `related:`（不是 `audience:`）。 */
+  const same = mkdtempSync(join(tmpdir(), 'not-a-demo-same-'));
+  try {
+    writeFileSync(join(same, '甲.md'), '---\ntitle: 甲\nslug: 甲\nkind: concept\nsummary: s\nrelated: [乙]\n---\n\n正文。\n', 'utf8');
+    writeFileSync(join(same, '乙.md'), '---\ntitle: 乙\nslug: 乙\nkind: concept\nsummary: s\n---\n\n正文。\n', 'utf8');
+    const pagesSame = readContentDirs([same], { relationField: 'related' }).pages;
+    const docsSame = pagesSame.map((p) => pageToDoc(p));
+    const gSame = buildGraph(docsSame);
+    const outlinksOf = (d) => [...(gSame.outbound.get(d.slug) ?? [])].sort();
+    const bySlug = (slug) => {
+      const d = docsSame.find((x) => x.slug === slug);
+      return d ? outlinksOf(d) : null;
+    };
+    const jia = bySlug('甲');
+    const yi = bySlug('乙');
+    /*
+     * ⚠️ **要按 slug 取，不能按数组下标**——`readContentDirs` 排的是**文件名**，
+     * 而这个 fixture 的文件名恰好与 slug 同序只是巧合；第一版按下标取，
+     * 拿到 `[[], ["乙"]]` 就判「没产生差异」——**而它其实产生了**。
+     */
+    const differs = jia !== null && yi !== null && JSON.stringify(jia) !== JSON.stringify(yi);
+    if (!differs) {
+      // 同构时甲有出链而乙没有——**这正是「不该被报成异构点没生效」的那个形状**。
+      problems.push(
+        '**自测的同构语料没有产生可比的差异**——所以它验不了「该不该分叉」这件事。\n'
+        + `    甲的出链=${JSON.stringify(jia)}  乙的出链=${JSON.stringify(yi)}\n`
+        + '    → 而「甲→乙、乙→无」是**同构内容下本就应有的形状**，\n'
+        + '    **它与「异构点生效」在结构上相似**——这正是这道判据最容易误报的方向。',
+      );
+      console.log(`  ✗ 自测的同构语料形状不对（甲=${JSON.stringify(jia)} 乙=${JSON.stringify(yi)}）`);
+    } else {
+      console.log('  ✓ 自测：同构内容下「甲→乙、乙→无」，而判据不会把它当成「异构点生效」');
+    }
+  } finally {
+    rmSync(same, { recursive: true, force: true });
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
