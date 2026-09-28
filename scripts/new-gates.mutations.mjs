@@ -1309,6 +1309,27 @@ const CASES = [
     target: 'check-gate-list.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着 4i 的 `NOT_VERIFIABLE`——登记了就不报，没登记就报。**
+     *
+     * 4i 数「验证条数 vs 编号判据数」，而它有**一个例外出口**：
+     * 某些门禁**验不了**（`check:staged` 注入的是工作区，而它核的是暂存区；
+     * `check:manifest-schema` 读的是产物，而变异改产物会被重建覆盖）。
+     *
+     * > **「验不了」必须与「忘了验」在输出上分得开**——
+     * > 否则登记就会被当成「有人管」，而实际上**没有人能验**。
+     *
+     * ⚠️ 变异把 `NOT_VERIFIABLE` 里**没有的那道**（`check:manifest-schema`）
+     * 挪走——**它就该重新出现在「明显不成比例」里**。
+     * 而这正是「登记真的在起作用」的证明。
+     */
+    why: 'check:gate-list — 把 NOT_VERIFIABLE 里的一条挪走（4i 必须重新报它）',
+    file: 'scripts/check-gate-list.mjs',
+    find: "    ['check:manifest-schema', '它读的是**产物**",
+    replace: "    ['check:manifest-schema-挪走了', '它读的是**产物**",
+    target: 'check-gate-list.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",
