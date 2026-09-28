@@ -73,6 +73,10 @@ export function readContentPage(dir: string, file: string): {
   readonly title: string;
   readonly kind: string;
   readonly updated: string;
+  /** 2026-09-28 补：构建侧读它，而读路径原先没有。字符串形态（构建侧是真 Date）。 */
+  readonly date: string;
+  /** 2026-09-28 补：分组维度，不是展示字段。 */
+  readonly tags: readonly string[];
   /**
    * 本页的来源引用。
    *
@@ -176,6 +180,32 @@ export function readContentPage(dir: string, file: string): {
     // post 没有 kind 字段，wiki 才有——**别与 Doc.kind 搞混**（那个是 post/wiki）
     kind: frontmatterField(source, 'kind') ?? '',
     updated: frontmatterField(source, 'updated') ?? '',
+    /*
+     * ⚠️ **2026-09-28 补 `date` 与 `tags`。**
+     *
+     * 系统性对比过：构建侧 `toDoc` 还读 `date` / `tags` / `cover` / `coverAlt`，
+     * 而读路径原先一个都没有。逐个看该不该补：
+     *
+     * | 字段 | 决定 | 理由 |
+     * |---|---|---|
+     * | `date` | **补** | 文章的时间流全靠它（归档 / RSS / 排序）。读路径现在没有消费者，**但那不等于不需要**——将来一个「列出最近的文章」就会拿到空日期 |
+     * | `tags` | **补** | 同上，且它是**分组维度**而不是展示字段 |
+     * | `cover` / `coverAlt` | **不补** | 纯展示（封面图与它的 alt）。核心流程是「链接图 / 体检 / 检索 / 影响分析」，一个都不看图——**补进来只会让核心知道它用不上的东西** |
+     *
+     * ⚠️ `date` 在构建侧是 `z.coerce.date()`（真 Date），
+     * 而 `frontmatterField` 给的是**原始字符串**。这里保持字符串——
+     * `Doc` 里没有日期字段，而 CLI 侧要的是「能排序、能显示」的那个值。
+     * **要真 Date 的消费者（RSS / 归档）都走构建侧。**
+     */
+    date: frontmatterField(source, 'date') ?? '',
+    /*
+     * ⚠️ **复用 `relationList` 而不是再写一遍剥括号 + 切分隔符。**
+     *
+     * 那段逻辑今天刚从两处收进 `relationList`（`related` 与站点的 `audience`），
+     * 而 `tags` 是**同一种形状**（`[a, b]` 列表）。
+     * 再写一遍就是第三份拷贝——而「剥方括号」正是最容易漏的那一行。
+     */
+    tags: relationList(source, 'tags'),
     sources: refs,
     ...(review ? { review } : {}),
     related: relationList(source, 'related'),

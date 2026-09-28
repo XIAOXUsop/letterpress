@@ -301,6 +301,47 @@ describe('readContentPage', () => {
     });
   });
 
+  describe('date 与 tags', () => {
+    /**
+     * ⚠️ **2026-09-28 补。** 系统性对比过：构建侧 `toDoc` 读
+     * `date` / `tags` / `cover` / `coverAlt`，而读路径原先一个都没有。
+     *
+     * 决定补前两个、不补后两个（`cover` 系列是纯展示，核心一个都不看图）。
+     * ⚠️ 而「读路径现在没有消费者」**不是不补的理由**——
+     * 将来一个「列出最近的文章」就会拿到空日期。
+     */
+    it('date 读到（字符串形态，与构建侧的真 Date 不同）', () => {
+      // 构建侧是 `z.coerce.date()`，而这里给字符串——
+      // **要真 Date 的消费者（RSS / 归档）都走构建侧**。
+      write('a.md', '---\ntitle: 甲\ndate: 2026-09-12\n---\n\n甲。\n');
+      const p = readContentPage(dir, 'a.md');
+      expect(p.date).toBe('2026-09-12');
+      expect(typeof p.date).toBe('string');
+    });
+
+    it('没有 date 时是空串', () => {
+      write('a.md', '---\ntitle: 甲\n---\n\n甲。\n');
+      expect(readContentPage(dir, 'a.md').date).toBe('');
+    });
+
+    it('tags 剥方括号并切分——复用 relationList，不写第三份拷贝', () => {
+      write('a.md', '---\ntitle: 甲\ntags: [排版, css, 中文]\n---\n\n甲。\n');
+      expect(readContentPage(dir, 'a.md').tags).toEqual(['排版', 'css', '中文']);
+    });
+
+    it('单个 tag 也要剥掉方括号', () => {
+      // ⚠️ 这正是「剥方括号」那行最容易漏的场景：只有一个元素时，
+      // 不剥的话第一个 tag 会带着前导 `[`。
+      write('a.md', '---\ntitle: 甲\ntags: [使用说明]\n---\n\n甲。\n');
+      expect(readContentPage(dir, 'a.md').tags).toEqual(['使用说明']);
+    });
+
+    it('没有 tags 时是空数组', () => {
+      write('a.md', '---\ntitle: 甲\n---\n\n甲。\n');
+      expect(readContentPage(dir, 'a.md').tags).toEqual([]);
+    });
+  });
+
   describe('draft（草稿）', () => {
     /**
      * ⚠️ **2026-09-28 补。** `readContentPage` 原先**完全不读 `draft`**，
