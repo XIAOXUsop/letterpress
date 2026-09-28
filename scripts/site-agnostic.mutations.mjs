@@ -11,12 +11,17 @@
  *   ③ 删掉 `LintOptions` 的注入口    → 门禁「根层保留路由表」应红
  *   ④ 让 `lint()` 忽略该选项、退回模块级常量 → 同上
  *   ⑤ 把 `toDoc` 改回写死 `data.related` → 门禁「关系声明的字段名」应红
+ *   ⑥ 改 `site.wiki.relationField` 而不改 zod schema → 同上（关系会静默全丢）
  *
  * ④ 是最关键的一条：只留选项、但调用点不传，门禁仍然该红——
  * **「声明了能力没接线」正是迭代 AK 在 JSON-LD 上踩过的同一个坑**。
  *
  * ⑤ 守的是 2026-09-28 新增的那条判据：构建侧的关系字段名此前写死，
  * 而读路径那侧已经是 `relationField` 参数——**同一件事，一处能配一处不能**。
+ *
+ * ⑥ 守的是它**剩下的一半**：zod schema 必须是静态字面量（否则 Astro
+ * 推不出 `data` 的类型），所以**改配置必须同时改 schema**，
+ * 而忘了改的后果是**关系静默全丢、构建成功、所有门禁全绿**。
  *
  * 跑法：`npm run verify:site-mutations`
  *
@@ -52,12 +57,15 @@ const lib = (name) => join(ROOT, 'src/lib/wiki', name);
  */
 const libOf = (key) => (key === 'content'
   ? join(ROOT, 'src/lib/content.ts')
-  : lib(`${key}.ts`));
+  : key === 'config'
+    ? join(ROOT, 'src/config.ts')
+    : lib(`${key}.ts`));
 
 const original = {
   graph: readFileSync(lib('graph.ts'), 'utf8'),
   lint: readFileSync(lib('lint.ts'), 'utf8'),
   content: readFileSync(join(ROOT, 'src/lib/content.ts'), 'utf8'),
+  config: readFileSync(join(ROOT, 'src/config.ts'), 'utf8'),
 };
 
 /*
@@ -168,6 +176,26 @@ const MUTATIONS = [
         'content',
         '  const relationValues = (data as Record<string, unknown>)[site.wiki.relationField];',
         '  const relationValues = (data as { related?: string[] }).related;',
+      ),
+  },
+  {
+    /**
+     * ⚠️ **2026-09-28 新增。**
+     *
+     * 「改了 `site.wiki.relationField` 忘了改 zod schema」的后果是**静默的**：
+     * zod 把那个键剥掉 → `toDoc` 读到 `undefined` → **关系全丢**，
+     * 而构建成功、lint 通过、所有门禁全绿。
+     *
+     * 所以这一条把配置改成 `audience`（zod 仍声明 `related`），
+     * 断言 `check-site-agnostic` 会红。
+     */
+    name: '⑥ 配置改了字段名而 zod 没改（关系会静默全丢）',
+    expectRed: true,
+    apply: () =>
+      patch(
+        'config',
+        "    relationField: 'related',",
+        "    relationField: 'audience',",
       ),
   },
 ];

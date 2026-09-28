@@ -107,6 +107,48 @@ const REQUIREMENTS = [
 
 const problems = [];
 
+/*
+ * ⚠️ **2026-09-28 加：配置与 zod schema 的字段名必须一致。**
+ *
+ * `toDoc` 已改成按 `site.wiki.relationField` 读关系，**但 zod schema 仍写死**
+ * （Astro 靠静态字面量推导 `data` 的类型，实测把字段名换成变量后推导会退化）。
+ *
+ * 两者不一致时，后果是**静默的**：
+ *   1. frontmatter 写 `audience: [x]`
+ *   2. zod 校验发现 `audience` 不在 schema 里 → **把它剥掉**（`z.object` 默认 strip）
+ *   3. `toDoc` 读 `data['audience']` → `undefined`
+ *   4. `related = []` → **关系全丢，而构建成功、lint 通过、门禁全绿**
+ *
+ * > 「改了配置忘了改 schema」是一个**必然会发生**的失误
+ * > （两处不在同一个文件，而没有任何东西提醒）。
+ *
+ * 处置**不是**让 zod 也可配（那要放弃 Astro 的类型推导），
+ * 而是**让两者不一致时立刻红**。
+ */
+{
+  const configTs = readFileSync(join(process.cwd(), 'src', 'config.ts'), 'utf8');
+  const schemaTs = readFileSync(join(process.cwd(), 'src', 'content.config.ts'), 'utf8');
+  const field = /relationField:\s*'([a-zA-Z_][a-zA-Z0-9_]*)'/.exec(configTs)?.[1];
+  if (!field) {
+    problems.push(
+      'src/config.ts 里读不出 `wiki.relationField`——'
+      + '要么它被改名/挪走了（那要改这条检查），要么配置被删了。',
+    );
+    console.log('  ✗ 读不出 site.wiki.relationField');
+  } else if (!new RegExp(`^\\s*${field}:`, 'm').test(schemaTs)) {
+    problems.push(
+      `配置说关系声明叫 \`${field}\`，而 src/content.config.ts 的 zod schema 里没有 \`${field}:\` 这个键。\n`
+      + `    zod 会把 frontmatter 里那个字段**剥掉**，于是 \`toDoc\` 读到 undefined、`
+      + '**关系静默全丢**——而构建成功、lint 通过、所有门禁全绿。\n'
+      + '    ⚠️ Astro 的 schema 必须是静态字面量才能推导 `data` 的类型，'
+      + '所以**改 zod 那一行**是正解（不是改这条检查）。',
+    );
+    console.log(`  ✗ zod schema 与 site.wiki.relationField（${field}）不一致`);
+  } else {
+    console.log(`  ✓ zod schema 与 site.wiki.relationField 一致（都是 \`${field}\`）`);
+  }
+}
+
 console.log('核心模块的站点专属逻辑是否可由调用方覆盖');
 console.log('─'.repeat(64));
 
