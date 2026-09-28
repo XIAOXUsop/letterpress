@@ -237,6 +237,57 @@ if (!FULL) {
   }
 }
 
+// ── ④ 护栏挂在 `prepublishOnly`，而**不能**挂在 `prepack` ──────────────
+/*
+ * ⚠️ **hook 的语义来自 npm 11 自带的官方文档**，不是记忆——
+ * `node_modules/npm/docs/content/using-npm/scripts.md` 第 151–157 行：
+ *
+ * ```
+ * #### `npm publish`
+ * * `prepublishOnly`   ← **只在 npm publish**
+ * * `prepack`         ← npm pack / npm publish / git 依赖
+ * ```
+ *
+ * ⚠️ **而 `prepack` 那条明写它也在 `npm pack` 时跑**——
+ * 而**本文件（判据②）每次都跑 `npm pack`**。
+ * 把护栏挂到 `prepack` 上，就会变成：
+ *
+ *   `npm pack` → `prepack` → 护栏 → `verify:all`（44 步，几分钟）→ ……
+ *
+ * **而 `verify:all` 里有一道门禁又跑 `npm pack`**——套娃。
+ *
+ * > **hook 名相似，语义完全不同**。而那个相似正是容易选错的理由，
+ * > 所以判据把它变成一件**每次构建都会被检查**的事。
+ */
+{
+  const s = pkg.scripts ?? {};
+  if (s.prepublishOnly !== 'node scripts/prepublish-guard.mjs') {
+    problems.push(
+      `**\`prepublishOnly\` 没有指向 \`scripts/prepublish-guard.mjs\`**`
+      + `（现在是 ${JSON.stringify(s.prepublishOnly)}）。\n`
+      + '    → 那个 hook **只在 `npm publish` 时跑**（npm 11 官方文档第 153 行），\n'
+      + '    它是「发布前跑一遍全量门禁」的唯一正确位置。',
+    );
+    console.log('  ✗ `prepublishOnly` 没指向发布前护栏');
+  } else {
+    console.log('  ✓ `prepublishOnly` → 发布前护栏');
+  }
+  for (const hook of ['prepack', 'prepare', 'prepublish']) {
+    if (s[hook] !== undefined) {
+      problems.push(
+        `**\`${hook}\` 不该被占用**（现在是 ${JSON.stringify(s[hook])}）。\n`
+        + '    → npm 11 官方文档第 63–65 行：它**在 `npm pack` 时也跑**——\n'
+        + '    而本文件的判据②每次都跑 `npm pack`，\n'
+        + '    于是会变成「打包 → 护栏 → `verify:all` → 打包 → ……」的套娃。',
+      );
+      console.log(`  ✗ \`${hook}\` 被占用（会在 \`npm pack\` 时触发，而本文件就靠它）`);
+    }
+  }
+  if (s.prepack === undefined && s.prepare === undefined && s.prepublish === undefined) {
+    console.log('  ✓ `prepack` / `prepare` / `prepublish` 都没被占用');
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);

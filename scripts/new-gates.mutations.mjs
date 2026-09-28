@@ -1161,6 +1161,26 @@ const CASES = [
     target: 'check-package-files.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着判据④：「护栏不能挂在 `prepack` 上」。**
+     *
+     * npm 11 官方文档（`npm/docs/content/using-npm/scripts.md` 第 63–65 行）
+     * 明写：`prepack` **在 `npm pack` 时也跑**——
+     * 而 `check-package-files` 的判据②**每次都跑 `npm pack`**。
+     * 把护栏挂上去就变成套娃：
+     * 打包 → `prepack` → 护栏 → `verify:all`（44 步）→ 打包 → ……
+     *
+     * > **hook 名相似，语义完全不同**——而那个相似正是容易选错的理由。
+     *
+     * 变异：把 `prepack` 占用掉，判据必须立刻报出来。
+     */
+    why: 'check:package-files — prepack 被占用（会让 npm pack 触发护栏 → 套娃）',
+    file: 'package.json',
+    find: '    "prepublishOnly": "node scripts/prepublish-guard.mjs"',
+    replace: '    "prepublishOnly": "node scripts/prepublish-guard.mjs",\n    "prepack": "node scripts/prepublish-guard.mjs"',
+    target: 'check-package-files.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",

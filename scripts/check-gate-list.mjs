@@ -103,7 +103,7 @@ const EXPECTED = [
   ['npm run check:adapter-size', '**站点专属接线只剩「站点事实」**（阶段 4 第 4 条的代理指标）——行数只能降不能升，且不能靠「不接核心」变小'],
   ['npm run check:not-a-demo', '**「接入」而不是「演示」**：核心的算法行为在两个消费者上逐字相同，而异构点那一项**必须**分叉——两边都空正是演示的典型形态'],
   ['npm run check:no-duplicate-lists', '**同一份清单不许写两遍**（同族第四道：前两次是「同一逻辑两处实现」，这次是「同一字面量两处拷贝」）'],
-  ['npm run check:command-scripts', '**命令名与脚本名对不上时必须登记在册**（实测 61 个里 8 个分叉）——照着命令名 grep 脚本会落空'],
+  ['npm run check:command-scripts', '**命令名与脚本名对不上时必须登记在册**（实测 62 个里 9 个分叉）——照着命令名 grep 脚本会落空'],
   ['npm run check:rule-levels', '**AGENTS.md 那张规则表的第二、三列与实测一致**——级别逐条真跑（静态分析只捞到 1/11 条）；含义列里**能机械核的 5 条**逐条跑，而**核不了的 5 条显式列出**（不写成「11 条都核了」）'],
   ['npm run check:agents-coverage', '**`AGENTS.md` 里每个含可证伪声明的小节都有门禁在核**（13 个小节、7 个含声明、3 个是散文不算缺口）——「匹配到标记却无门禁认领」也红，那是空白归属'],
   ['npm run check:package-files', '**从 tarball 装上后还能构建**（`files` 白名单排掉了必要文件时，构建直接失败——而 `npm pack` 只认 `files` 与 `.npmignore`，不看 `.gitignore`）'],
@@ -926,7 +926,7 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
  * ⚠️ **这是 4d 之后第一处真正的数字漂移，而它是当场抓到的。**
  *
  * 2026-09-29 实测：台账里写着「一次性探针扫了 **48** 个单文件命令」，
- * 而 `check-command-scripts` 现在报的是「**59** 个命令，8 个与脚本名对不上」。
+ * 而 `check-command-scripts` 现在报的是「**62** 个命令，9 个与脚本名对不上」。
  * 分叉数没错（8），**总数从 48 涨到 59 了**——
  * 因为这几天加了十几道门禁，**而那一句没人核**。
  *

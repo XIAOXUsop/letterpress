@@ -42,6 +42,7 @@ import {
   EXIT_EMPTY_INPUT,
   EXIT_NOT_FOUND,
   EXIT_INVARIANT,
+  EXIT_GATE_FAILED,
 } from '../src/lib/cli/exit-codes.mjs';
 
 const ROOT = process.cwd();
@@ -53,6 +54,7 @@ const NAME_TO_CODE = new Map(
     EXIT_EMPTY_INPUT,
     EXIT_NOT_FOUND,
     EXIT_INVARIANT,
+    EXIT_GATE_FAILED,
   }),
 );
 

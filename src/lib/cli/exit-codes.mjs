@@ -72,6 +72,29 @@ export const EXIT_NOT_FOUND = 5;
  */
 export const EXIT_INVARIANT = 6;
 
+/**
+ * 门禁未通过：检查**跑了**，而它判定不通过。
+ *
+ * ⚠️ **2026-09-29 加。** `scripts/prepublish-guard.mjs` 拦住发布时需要这个码，
+ * 而它**归不到现有任何一个**——
+ *
+ * | 看着像 | 为什么不合适 |
+ * |---|---|
+ * | `EXIT_INVARIANT`（6） | 那是「**本工具的 bug**」；而门禁红是**正常结果**，代码没坏 |
+ * | `EXIT_ENVIRONMENT`（3） | 那是「读不到目录 / 网络不通」；门禁跑完了，只是判红 |
+ * | `EXIT_USAGE`（2） | 那是「你该改参数」；而门禁红要改的是**代码** |
+ * | `EXIT_UNSPECIFIED`（1） | **不该主动使用**——而这正是主动使用 |
+ *
+ * > **「检查判定不通过」与「检查跑不起来」是两件事**，
+ * > 而它们**在那个脚本里原本共用退出码 1**——
+ * > 消费方无法区分「该改代码」与「该改环境」。
+ * > 那正是这个文件存在的理由在重演一次。
+ *
+ * ⚠️ 而 `prepublish-guard` 里**「压根没跑起来」那一支用的正是 3**
+ * （环境错）——**那不是同一件事，所以是两个码**。
+ */
+export const EXIT_GATE_FAILED = 7;
+
 /** 码 → 语义。供文档与自检使用。 */
 export const EXIT_MEANINGS = Object.freeze({
   [EXIT_OK]: '成功',
@@ -81,6 +104,7 @@ export const EXIT_MEANINGS = Object.freeze({
   [EXIT_EMPTY_INPUT]: '语料为空：没有可检索的条目或已登记的来源',
   [EXIT_NOT_FOUND]: '查无此项：slug / sourceId / revision 不存在',
   [EXIT_INVARIANT]: '内部不变式被破坏（本工具的 bug，不是用法问题）',
+  [EXIT_GATE_FAILED]: '门禁未通过（检查跑了，判定不通过）',
 });
 
 // ── 使用方式 ────────────────────────────────────────────────────────

@@ -36,6 +36,11 @@
  * 换口径的话，这里与 `check-command-scripts.mjs` 要同步改。
  */
 export const NAME_DIVERGENCE = [
+  // npm lifecycle：命令名是 npm 规定的钩子名，脚本名是这道护栏自己
+  // ——**而 npm 规定的那七个名字都不能改**（`prepublishOnly` / `prepack` / …），
+  // 所以这条分叉不是选择，是**被上游决定的**。
+  ['prepublishOnly', 'scripts/prepublish-guard.mjs', '**npm lifecycle 的钩子名不能改**——发布前跑一遍 `verify:all` 的护栏'],
+
   // 有意：它是 verify 的别名，脚本名是「构建并验证」这个动作
   ['verify:only', 'scripts/bundle-and-verify.mjs', '**`verify` 的别名**——刻意不同名以表达「只跑契约」'],
   // 前缀差：命令叫「门禁编排」，脚本叫「检查门禁清单」，是同一个东西的两种叫法
