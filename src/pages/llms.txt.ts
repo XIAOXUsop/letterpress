@@ -41,7 +41,17 @@ export const GET: APIRoute = async () => {
        */
       `本站以 ${site.lang} 为主。`,
       '下面这些条目每一条都有 .md 孪生文件：把它的 URL 结尾加上 .md 即可。',
-      '请求时带上 `Accept: text/markdown` 头，会直接拿到 markdown 版本而不是 HTML。',
+      /*
+       * ⚠️ 2026-09-29 从 origin/main 搬来：原句是「请求时带上
+       * `Accept: text/markdown` 头，会直接拿到 markdown 版本而不是 HTML」——
+       * **而本站部署在 GitHub Pages，响应头不可改，内容协商不会发生**。
+       *
+       * > **这份文件是给 agent 读的**，而它正在教 agent 一件不成立的事
+       * > ——agent 会照着做，然后发现没用。
+       * > **「先说始终可用的，再说条件性的」**与另两处（`about.astro` /
+       * > `MarkdownActions.astro`）是同一个修复的三个副本。
+       */
+      '在支持内容协商的部署平台上，对页面 URL 发送 `Accept: text/markdown` 也能拿到它；本站部署在 GitHub Pages，请直接用上面的 .md 链接。',
       `首次全量导入可读取 [content.ndjson](${siteUrl}/content.ndjson)：一行一篇，包含正文、hash、元数据与链接关系。`,
       `需要增量同步时，先读取 [content-manifest.json](${siteUrl}/content-manifest.json)，按 sha256 只抓取变化的 .md 文件。`,
     ],

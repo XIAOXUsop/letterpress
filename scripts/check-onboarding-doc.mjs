@@ -23,7 +23,7 @@
  *
  * 用法：`npm run check:onboarding-doc`
  */
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
@@ -390,6 +390,72 @@ checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount}
   }
   if (promisedHits === 0) {
     console.log(`  ✓ 没有「以后会引入 X」而 X 已经在仓库里的陈述（查了 ${PROMISED.size} 条）`);
+  }
+}
+
+/*
+ * ── 第六条：页面文案不得承诺**在本站不成立**的事 ──────────────────
+ *
+ * ⚠️ **2026-09-29 实测到四处同一处谎言**（来自 `origin/main` 那个提交）：
+ * 「请求时带上 `Accept: text/markdown` 会自动拿到 markdown」
+ * 出现在 `MarkdownActions.astro` / `about.astro` / `llms.txt.ts` 里，
+ * **而本站部署在 GitHub Pages，响应头不可改，内容协商根本不会发生**。
+ *
+ * > **访客与 agent 都会照着做，然后发现没用。**
+ * > 而它在**每个页面**上（`MarkdownActions` 是共用组件）。
+ *
+ * ⚠️ **判据必须排除「解释原先错在哪」的注释**——而那不能靠眼力：
+ * 我改完之后 grep 仍命中两处，**那两处恰恰是我自己写的记述**。
+ * 做法：**只看会被渲染出去的文本**（`.astro` 的模板段 / `.ts` 的字符串字面量），
+ * **注释整段剥掉**——与 `check:command-scripts` 同一手法。
+ */
+{
+  const LIES = [
+    /会(自动|直接)拿到\s*(markdown|它)/,
+    /真正起作用的是内容协商/,
+  ];
+  /** 只留「会被渲染出去的文本」：`.astro` 剥掉 JSX 注释与 HTML 注释，`.ts` 剥掉注释。 */
+  const renderable = (src, ext) =>
+    ext === '.astro'
+      ? src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/<!--[\s\S]*?-->/g, '')
+      : src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  /*
+   * ⚠️ **两支必须返回同一种形状**（相对仓库根的路径）。
+   * 第一版文件那支返回 `join(ROOT, ...)`（**绝对**）而目录那支返回相对的，
+   * 于是后面 `join(ROOT, f)` 把绝对路径又拼了一次 →
+   * `ENOENT ...\D:\OneDrive\...\D:\OneDrive\...`。**两条都读得通，只有形状对不上。**
+   */
+  const files = [
+    ...readdirSync(join(ROOT, 'src/components')).map((f) => join('src/components', f)),
+    ...readdirSync(join(ROOT, 'src/pages')).flatMap((f) => {
+      const p = join(ROOT, 'src/pages', f);
+      return statSync(p).isDirectory()
+        ? readdirSync(p).map((g) => join('src/pages', f, g))
+        : [join('src/pages', f)];
+    }),
+  ].filter((f) => /\.(astro|ts)$/.test(f));
+
+  const lies = [];
+  for (const f of files) {
+    const src = renderable(readFileSync(join(ROOT, f), 'utf8'), f.endsWith('.astro') ? '.astro' : '.ts');
+    for (const re of LIES) {
+      if (re.test(src)) lies.push(f);
+    }
+  }
+  if (lies.length > 0) {
+    problems.push(
+      `页面文案承诺了**在本站不成立**的事：\n`
+      + lies.map((f) => `      ${f}`).join('\n') + '\n'
+      + '    → 「带上 `Accept: text/markdown` 会拿到 markdown」**在本站是假的**：\n'
+      + '    站点部署在 GitHub Pages，**响应头不可改，内容协商根本不会发生**。\n'
+      + '    访客与 agent 都会照着做，然后发现没用——而它在**每个页面**上。\n'
+      + '    正确写法：**先说始终可用的**（那个可点的 `.md` 链接），\n'
+      + '    **再说条件性的**（在支持内容协商的部署平台上）。',
+    );
+    console.log(`  ✗ ${lies.length} 个文件承诺了在本站不成立的事：${lies.join('、')}`);
+  } else {
+    console.log(`  ✓ 没有页面文案承诺在本站不成立的事（扫了 ${files.length} 个会被渲染的文件）`);
   }
 }
 

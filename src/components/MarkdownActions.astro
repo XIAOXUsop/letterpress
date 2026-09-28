@@ -17,7 +17,22 @@ const { href } = Astro.props;
   <button class="md-available__copy" type="button" data-copy-markdown hidden>复制 Markdown</button>
   <span class="md-available__status" role="status" aria-live="polite" data-copy-status></span>
   <br />
-  请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。
+  <!--
+    ⚠️ **2026-09-29 从 `origin/main` 搬来。** 原先这句是
+    「请求时带上 `Accept: text/markdown` 会自动拿到它」——
+    **而它在本站是假的**：站点部署在 GitHub Pages，**该平台的响应头不可改，
+    内容协商根本不会发生**。访客照着做，然后发现没用。
+
+    > **这不是措辞偏好，是一句对用户不成立的承诺**，而且它出现在**每个页面**上。
+    > 修法：**先说始终可用的**（上面那个可点的 `.md` 链接），
+    > **再说条件性的**（在支持内容协商的部署平台上）。
+
+    同一次提交还改了 `docs/` 与 `accept.ts` 里的实测数字，但那些**不能跟着搬**——
+    它们是在 `main` 那份内容上量的，而本分支的内容不同（实测 2852 / 3919 / 1106，
+    与本分支的文档表格逐条一致）。
+  -->
+  直接打开上面的 <code>.md</code> 链接即可读取；在支持内容协商的部署平台上，
+  也可以对页面 URL 发送 <code>Accept: text/markdown</code>。
 </p>
 
 <script>

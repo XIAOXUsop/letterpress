@@ -344,6 +344,20 @@ const GATES = [
 
 const CASES = [
   {
+    // ⚠️ 守着 2026-09-29 补的第六条判据：**页面文案不得承诺在本站不成立的事**。
+    // 「带上 Accept: text/markdown 会自动拿到 markdown」在 GitHub Pages 上是假的
+    // （响应头不可改），而它出现在**每个页面**的共用组件里。
+    // 访客与 agent 都会照着做，然后发现没用。
+    //
+    // ⚠️ 判据只看**会被渲染出去的文本**（剥掉 JSX/HTML/行注释）——
+    // 而「解释原先错在哪」的注释里**必然引用那句原话**，不剥就会误报。
+    why: 'check:onboarding-doc — 页面文案又承诺了本站不成立的内容协商',
+    file: 'src/components/MarkdownActions.astro',
+    find: '  直接打开上面的 <code>.md</code> 链接即可读取',
+    replace: '  请求时带上 <code>Accept: text/markdown</code> 会自动拿到它。',
+    target: 'check-onboarding-doc.mjs',
+  },
+  {
     // ⚠️ 守着 2026-09-29 加的那条：**「以后会引入 X」而 X 已经在仓库里**。
     // `docs/content-sync.md` 原先写「如果以后引入 Schema」——
     // 而 `public/content-manifest.schema.json` 已经到了（`verify:migrate` 昨天还在用）。
@@ -487,7 +501,7 @@ const CASES = [
     // 而**不能**默认通过（形态四）。
     why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',
     file: 'docs/content-negotiation.md',
-    find: '> | /cjk-web-typography/ | 8,732 / 10,095（−13.5%） | 3,919 / 4,246（−7.7%） | 55.1% / **57.9%** |',
+    find: '> | /cjk-web-typography/ | 9,013 / 10,380（−13.2%） | 3,919 / 4,246（−7.7%） | 56.5% / **59.1%** |',
     replace: '',
     target: 'verify-negotiation.mjs',
   },
