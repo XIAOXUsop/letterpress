@@ -275,96 +275,41 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # ⚠️ **补一个 2026-09-28 实测出来的缺口。**
+      # ⚠️ **每道门禁是独立的一个 step，不是循环。**
       #
-      # `verify:all` 有 33 步，而 `build` job 只显式调用了其中 7 个
-      # （check / test / verify / verify:testcount / verify:search /
-      #  verify:reproducible / verify:base / verify:formats）。
-      # **剩下 26 道在 CI 上从来没跑过**——包括本仓库最核心的那批：
-      # 检索金标、影响分析、答案可定位性、复核状态、核心可移植性、
-      # 错误码与 JSON 输出契约、异构站点、迁移器、文档一致性。
+      # 2026-09-28：这个 job 连续三次红，而**我读不到原因**——
+      # job 日志要 admin 权限（匿名 API 403 "Must have admin rights"），
+      # `::error::` 只在日志里，`GITHUB_STEP_SUMMARY` 也不在 check-run output 里。
+      # 循环写法只能告诉我「有红」，**说不出是哪一道**。
       #
-      # 此前有人注意到过一次（`verify:testcount` 那段注释写着
-      # 「**但 CI 从来没调用过它**」）——**只补了那一条**。
+      # 拆成独立 step 后，GitHub **在首个失败 step 后停止**，
+      # 于是「第一个红的 step 名字」就是答案——而 step 列表**匿名可读**
+      # （`/commits/<sha>/check-runs` 能读到每一步的结论）。
       #
-      # > **写好的门禁没接线，和没有门禁是同一件事。**
-      # > 而「本地 33 步全绿、CI 也绿」会让人以为那些门禁在把关。
+      # 代价是「失败不提前终止、跑完才知道还剩几道红」——
+      # 那个诉求由上面 `knowledge-gates`（纯计算组，仍是循环 + 聚合）承担。
+      # **两组的取舍不同，是有意的。**
       #
-      # ⚠️ **必须串行**：`verify:site-mutations` / `verify:exit-codes` /
-      # `verify:json-mutations` 靠「改坏源码再还原」证明自己不是装饰，
-      # **并发跑会互相踩**（这一条在 `docs/cli.md` 里有记）。
-      # 这一组会**起子进程 / 用临时目录**（8 道）——变异注入那几道都在这里。
-      # 在 Linux 上它们与纯计算那组的行为差异最大（进程退出码、
-      # 临时目录、文件写回），所以单独一个 job。
-      #
-      # ⚠️ **每个 job 内部仍必须串行**：它们靠「改坏源码再还原」证明自己
-      # 不是装饰，并发会互相踩。
+      # ⚠️ 每个 step 内部仍必须**自己**保证还原：GitHub 在失败后不再跑后续 step，
+      # 所以「跑完确认源码干净」那一段在这里**没有机会执行**——
+      # 这也是为什么 `full-gates`（跑 `verify:all` 全程）不能省。
 
-      - name: 起子进程的门禁（8 道，串行）
-        run: |
-          set -euo pipefail
-          failed=""
-          passed=0
-          residual=0
-          for step in \
-            verify:retrieval-gates \
-            verify:review \
-            verify:site-mutations \
-            verify:exit-codes \
-            verify:json-output \
-            verify:json-mutations \
-            verify:migrate \
-            verify:second-site-real-mutations
-          do
-            printf '::group::%s\n' "$step"
-            if npm run "$step"; then
-              passed="$((passed + 1))"
-            else
-              # **不立刻退出**——一次跑完才知道还剩几道的红，
-              # 而 `set -e` 会在第一道就停，剩下的就没人知道了。
-              failed="$failed $step"
-            fi
-            printf '::endgroup::\n'
-          done
-
-          # 变异注入那几道改过源码。**确认它们还原干净了**——
-          # 否则结论下在被改坏的代码上。
-          residual_detail=""
-          if ! git diff --quiet -- src/ scripts/; then
-            residual=1
-            residual_detail="$(git diff --stat -- src/ scripts/)"
-            echo "::error::有门禁把源码改坏后没还原"
-            echo "$residual_detail"
-          fi
-
-          # ⚠️ **结论写进 `GITHUB_STEP_SUMMARY`。**
-          # 2026-09-28 实测：job 日志要 admin 权限才下载得到（匿名 403），
-          # 而 `GITHUB_STEP_SUMMARY` 写进 run 页面、**权限要求低得多**。
-          {
-            echo '## 知识层门禁（子进程）'
-            echo
-            echo "- 通过 $passed / 8"
-            if [ -n "$failed" ]; then
-              echo "- **失败 $(echo "$failed" | wc -w) 道**：$failed"
-            else
-              echo "- 失败：无"
-            fi
-            if [ "$residual" -ne 0 ]; then
-              echo "- **源码有残留改动**："
-              echo '```'
-              echo "$residual_detail"
-              echo '```'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ -n "$failed" ]; then
-            echo "::error::以下门禁在 CI 上是红的：$failed"
-            exit 1
-          fi
-          if [ "$residual" -ne 0 ]; then
-            echo "::error::门禁都绿了，但源码有残留改动（见上）——结论不作数"
-            exit 1
-          fi
+      - name: verify:retrieval-gates
+        run: npm run verify:retrieval-gates
+      - name: verify:review
+        run: npm run verify:review
+      - name: verify:site-mutations
+        run: npm run verify:site-mutations
+      - name: verify:exit-codes
+        run: npm run verify:exit-codes
+      - name: verify:json-output
+        run: npm run verify:json-output
+      - name: verify:json-mutations
+        run: npm run verify:json-mutations
+      - name: verify:migrate
+        run: npm run verify:migrate
+      - name: verify:second-site-real-mutations
+        run: npm run verify:second-site-real-mutations
 
   lint-content:
     name: 内容体检
