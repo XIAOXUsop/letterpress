@@ -24,7 +24,7 @@
  * 用法：`npm run check:onboarding-doc`
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
@@ -287,7 +287,29 @@ checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount}
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   const defined = new Set(Object.keys(pkg.scripts));
   const ghosts = new Set();
-  const DOCS_WITH_COMMANDS = ['docs/cli.md', 'README.md', 'docs/onboarding-a-new-site.md'];
+  /*
+   * ⚠️ **从文件系统推导，不要手写清单。**
+   *
+   * 原来是手写的三份（`docs/cli.md` / `README.md` / `docs/onboarding-a-new-site.md`），
+   * 而 `docs/` 下**有 8 份文档**，其中 4 份同样写着 `npm run`（13 处）。
+   * 2026-09-28 实测：那 13 处**当时全是对的**——所以这不是「又抓到一个 bug」，
+   * 而是**「下次改命令名，那 4 份就漏了」**。
+   *
+   * > **手写清单必然漏**（2026-09-28 一天内栽过四次，见 `gate-negatives.md`），
+   * > 而**这一次的差别是：漏了也不会立刻有人发现**——
+   * > 幽灵命令要等到有人照着敲才会暴露，而那可能是几个月后。
+   *
+   * 排除：`knowledge/` 下的是**门禁的台账**，那里出现的命令名是**被检查的对象**
+   * （故意写错的命令名、变异脚本的注入值），**核它们必然误报**。
+   */
+  const DOCS_WITH_COMMANDS = [
+    join(ROOT, 'README.md'),
+    join(ROOT, 'AGENTS.md'),
+    ...readdirSync(join(ROOT, 'docs'))
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => join('docs', f)),
+  ].map((p) => relative(ROOT, p).split(sep).join('/'));
+  console.log(`  扫了 ${DOCS_WITH_COMMANDS.length} 份文档里的 \`npm run\`（从文件系统推导，非手写清单）`);
   for (const name of DOCS_WITH_COMMANDS) {
     // 逐行扫，跳过围栏代码块内部（``` … ```）。
     //

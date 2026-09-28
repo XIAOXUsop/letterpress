@@ -235,6 +235,17 @@ const CASES = [
     target: 'check-onboarding-doc.mjs',
   },
   {
+    // ⚠️ 这一条守着「文件清单从手写改成从文件系统推导」那个改动。
+    // 原来是手写三份，而 docs/ 下有 8 份——实测那 4 份漏掉的文档里
+    // 13 处 `npm run` 当时全是对的，所以**漏了也不会立刻暴露**：
+    // 幽灵命令要等到有人照着敲才现形，那可能是几个月后。
+    why: 'check:onboarding-doc — 从文件系统推导后才纳入的 docs/deploy.md 里出现幽灵命令',
+    file: 'docs/deploy.md',
+    find: '| **GitHub Pages（项目站）** | `SITE_BASE=/仓库名 npm run build` |',
+    replace: '| **GitHub Pages（项目站）** | `SITE_BASE=/仓库名 npm run buildx` |',
+    target: 'check-onboarding-doc.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",
