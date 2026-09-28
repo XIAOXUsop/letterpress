@@ -52,12 +52,26 @@ Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/lette
 
 ## 30 秒开始
 
+**① 拿到代码**（这是**模板**，所以第一步是 clone 而不是 install）：
+
+```bash
+git clone https://github.com/XIAOXUsop/letterpress.git my-blog
+cd my-blog
+```
+
+**② 跑起来：**
+
 ```bash
 npm install
 npm run dev     # → http://localhost:4321
 ```
 
 **不用改配置、不用建数据库、不用填环境变量。** 你现在看到的就是完整站点。
+
+> ⚠️ **为什么原来只写 `npm install`**：那假设代码已经在手上了，
+> 而一个**模板**的第一件事恰恰是**拿到代码**。
+> 2026-09-29 查 npm registry 时顺手发现的——`create-astro` / `create-astro-starter`
+> 在生态里排最前，**共识是「先起一个新项目」**，而那不是 `npm install` 干得了的。
 
 上线只改 `src/config.ts` 里的几行：
 
