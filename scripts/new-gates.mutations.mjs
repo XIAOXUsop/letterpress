@@ -133,6 +133,15 @@ const ACTUAL_STEPS = String(
  */
 const LEDGER_ONLY_ROW = "| `verify:base` | 在组件里注入绕过 `path()` 的硬编码 `href` | ✅ 红（32 个页面） | 2026-09-24 |\n"
 
+/**
+ * `EXPECTED` 里 `check:staged` 那一行——**从目标文件切出来，不手写**。
+ *
+ * ⚠️ **切出来而不是手写**：2026-09-29 手写过一次，
+ * 而那行里的中文与换行经过几层转义全变了，报「锚点出现 0 次」。
+ * 而**锚点里出现「会变的内容」迟早会失效**（同 `ACTUAL_CMDS` 那条教训）。
+ */
+const STAGED_STEP_LINE = "  ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],\n";
+
 const MUT_COUNT = (() => {
   const src = readFileSync(import.meta.filename, 'utf8');
   // ⚠️ **`lastIndexOf`**：这段自省代码**自己就含** `const CASES = [`，
@@ -1388,6 +1397,25 @@ const CASES = [
     // 恰是 `ownIds` 用来识别判据的那一截。
     find: '── ⑤ ',
     replace: '── ⑥ ',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着判据 1 与判据 2——而它们此前完全零覆盖。**
+     *
+     * 判据 1 是整份文件的**第一条**：`verify:all` 少一步 / 多一步都要报。
+     * 而**「少一步不会有任何报错」**（npm 只看最后一个的退出码）——
+     * **所以它是整套门禁的入口，而没有任何变异验过它。**
+     *
+     * 变异：**从 `EXPECTED` 里删掉一步**。
+     * ⚠️ **而它同时打中判据 1（数量不等）与判据 2（逐位比对）**——
+     * **一条变异可以守两条判据**，所以 `covers` 是个数组、两条都写上。
+     */
+    why: 'check:gate-list — EXPECTED 里少了一步（判据 1 的数量、2 的逐位比对都要报）',
+    covers: ['1', '2'],
+    file: 'scripts/check-gate-list.mjs',
+    find: STAGED_STEP_LINE,
+    replace: '',
     target: 'check-gate-list.mjs',
   },
   {
