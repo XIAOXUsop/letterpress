@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的十二道门禁的负向验证。**
+ * **2026-09-28 新增的那些门禁的负向验证。**
+ *
+ * ⚠️ **这里原先硬写着「十三道」与一份手抄名单**，而 `GATES` 数组才是真值——
+ * 而 2026-09-28 加第 13 道时**数组没加上、那句话改了**，
+ * 于是它一边打印「12 道」、一边标题写「十三道」，**而两个数都不会报错**。
+ *
+ * > **清单写两遍 = 迟早漏一处**（本文件 2026-09-28 记的第四例）。
+ * > **而这一处的代价是「验证脚本自己少验了一道门禁」**——
+ * > 它正是「决定别人有没有被验」的那一道。
+ * >
+ * > 处置：**名单只写在 `GATES` 数组里**，输出用 `GATES.length`，
+ * > 标题**不写数字**（写了就得同步，而同步靠自觉）。
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那十道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
- * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists` /
- * `check:onboarding-doc` / `check:command-scripts` / `check:gate-list` / `check:single-source`。
- * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
- * 语料一扩、判据一改，遮住关系就变了。
+ * 下面是 `GATES` 里的每一道。
  *
  * > 这个仓库已经吃过好几次同族亏：五道检索闸「每道有专属用例」这句话
  * > 曾经是假的（`verify:retrieval-gates` 揭穿了它）。
@@ -332,9 +339,24 @@ const GATES = [
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
   'check-single-source.mjs', 'check-agents-doc.mjs', 'check-rule-levels.mjs',
+  'check-agents-coverage.mjs',
 ];
 
 const CASES = [
+  {
+    why: `check:agents-coverage — 某类声明「无门禁认领」（空白归属比错的归属更隐蔽）`,
+    file: 'scripts/check-agents-coverage.mjs',
+    find: "    gate: 'check:field-coverage',",
+    replace: "    gate: null, // MUTATION：这一类无门禁认领",
+    target: 'check-agents-coverage.mjs',
+  },
+  {
+    why: `check:agents-coverage — OWNERS 说某道门禁核它，而那个门禁不存在（「已核」是自己说的）`,
+    file: 'scripts/check-agents-coverage.mjs',
+    find: "gate: 'check:onboarding-doc', why: '命令名' },",
+    replace: "gate: 'check:nonexistent-gate', why: '命令名' },",
+    target: 'check-agents-coverage.mjs',
+  },
   {
     // ⚠️ 守着第三列那条判据的**加强版**。
     // 第一版只核行为（「默认下报不报」），于是把文档里的「默认关闭」改成

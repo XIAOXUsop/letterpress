@@ -222,7 +222,8 @@ jobs:
           check:not-a-demo
           check:no-duplicate-lists
           check:command-scripts
-          check:rule-levels"
+          check:rule-levels
+          check:agents-coverage"
           total="$(printf '%s\n' "$steps" | grep -c .)"
           for step in $steps; do
             printf '::group::%s\n' "$step"

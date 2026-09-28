@@ -53,7 +53,7 @@ const EXPECTED = [
   ['npm run verify:json-output', '**`--json` 模式下失败也有结构化输出**（阶段 4 第 3 项剩的一半）'],
   ['npm run verify:json-mutations', '上一道的负向验证（三类违约：stdout 空 / ok 不是 false / code 与退出码打架）'],
   ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
-  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的十二道门禁的负向验证**（35 条变异：每条必须让被测的那道红，恢复后回绿）'],
+  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的那些门禁的负向验证**（37 条变异：每条必须让被测的那道红，恢复后回绿）'],
   ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集（合成 docs 数组）'],
   ['npm run verify:second-site-real', '**读自文件的**异构内容集（阶段 4 第 5 项）'],
@@ -75,6 +75,7 @@ const EXPECTED = [
   ['npm run check:no-duplicate-lists', '**同一份清单不许写两遍**（同族第四道：前两次是「同一逻辑两处实现」，这次是「同一字面量两处拷贝」）'],
   ['npm run check:command-scripts', '**命令名与脚本名对不上时必须登记在册**（实测 48 个里 8 个分叉）——照着命令名 grep 脚本会落空'],
   ['npm run check:rule-levels', '**AGENTS.md 那张规则表的第二、三列与实测一致**——级别逐条真跑（静态分析只捞到 1/11 条）；含义列里**能机械核的 5 条**逐条跑，而**核不了的 5 条显式列出**（不写成「11 条都核了」）'],
+  ['npm run check:agents-coverage', '**`AGENTS.md` 里每个含可证伪声明的小节都有门禁在核**（13 个小节、7 个含声明、3 个是散文不算缺口）——「匹配到标记却无门禁认领」也红，那是空白归属'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
 ];
 
