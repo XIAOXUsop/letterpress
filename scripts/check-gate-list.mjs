@@ -107,6 +107,7 @@ const EXPECTED = [
   ['npm run check:rule-levels', '**AGENTS.md 那张规则表的第二、三列与实测一致**——级别逐条真跑（静态分析只捞到 1/11 条）；含义列里**能机械核的 5 条**逐条跑，而**核不了的 5 条显式列出**（不写成「11 条都核了」）'],
   ['npm run check:agents-coverage', '**`AGENTS.md` 里每个含可证伪声明的小节都有门禁在核**（13 个小节、7 个含声明、3 个是散文不算缺口）——「匹配到标记却无门禁认领」也红，那是空白归属'],
   ['npm run check:package-files', '**从 tarball 装上后还能构建**（`files` 白名单排掉了必要文件时，构建直接失败——而 `npm pack` 只认 `files` 与 `.npmignore`，不看 `.gitignore`）'],
+  ['npm run check:release', '**版本号、git tag、`CHANGELOG` 三者对得上**（发布前那步不能靠记性）——而「HEAD 比 tag 新」只**报事实不报缺陷**，那是发过之后又改了的正常状态'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
 ];
 
@@ -635,9 +636,22 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
    * 「未验」也是一行，那正是「已知的空白」，**不是缺口**。
    */
   const ledger = readFileSync(join(ROOT, 'knowledge', 'gate-negatives.md'), 'utf8');
-  /** 台账表里出现过的门禁命令名（第一列是反引号包着的命令）。 */
+  /**
+   * 台账表里出现过的门禁命令名（第一列反引号里的那个）。
+   *
+   * ⚠️⚠️ **第一版要求「反引号后紧跟竖线」——而台账里有 12 行星着「（新）」**
+   * （`` `check:two-paths`（新） ``），于是**那 12 行对这道判据等于不存在**。
+   *
+   * > 「（新）」是给人看的备注，而**机器不该因为它看不见那一行**——
+   * > 那与「文件里没写」在输出上完全一样（形态四的变体）。
+   *
+   * 2026-09-29 实测：加 `check:release` 时它报「三样都没有」，
+   * 而台账里**明明有那一行**（第 93 行）——差别只是「（新）」两个字。
+   *
+   * 所以改成：**取反引号里的名字，不关心后面跟什么**。
+   */
   const inLedger = new Set(
-    [...ledger.matchAll(/^\| `?((?:verify|check|wiki)[:\w-]*)`?\s*\|/gm)].map((m) => m[1]),
+    [...ledger.matchAll(/^\|\s*`((?:verify|check|wiki)[:\w-]*)`[^|]*\|/gm)].map((m) => m[1]),
   );
 
   const NO_MUTATION = new Map([

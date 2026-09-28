@@ -123,6 +123,16 @@ const ACTUAL_STEPS = String(
   JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts['verify:all'].split('&&').length,
 );
 
+/**
+ * 台账里 `verify:base` 那一行（**含末尾换行**）——用作变异锚点。
+ *
+ * ⚠️ **从台账里切出来，不手写**：我手写了一次，
+ * 而那个换行转义（反斜杠加 n）经过几层转义变成了**真实换行**，
+ * 文件直接语法错。而**锚点里出现「会变的内容」迟早会失效**
+ * （同 `ACTUAL_CMDS` 那条教训）。
+ */
+const LEDGER_ONLY_ROW = "| `verify:base` | 在组件里注入绕过 `path()` 的硬编码 `href` | ✅ 红（32 个页面） | 2026-09-24 |\n"
+
 const MUT_COUNT = (() => {
   const src = readFileSync(import.meta.filename, 'utf8');
   // ⚠️ **`lastIndexOf`**：这段自省代码**自己就含** `const CASES = [`，
@@ -480,7 +490,7 @@ const GATES = [
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
   'check-single-source.mjs', 'check-agents-doc.mjs', 'check-rule-levels.mjs',
-  'check-agents-coverage.mjs', 'check-package-files.mjs',
+  'check-agents-coverage.mjs', 'check-package-files.mjs', 'check-release.mjs',
 ];
 
 const CASES = [
@@ -1179,6 +1189,52 @@ const CASES = [
     find: '    "prepublishOnly": "node scripts/prepublish-guard.mjs"',
     replace: '    "prepublishOnly": "node scripts/prepublish-guard.mjs",\n    "prepack": "node scripts/prepublish-guard.mjs"',
     target: 'check-package-files.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 `check:release` 的判据②：tag 与 `package.json` 要一致。**
+     *
+     * 两者是**同一个事实的两处真值**（`npm version` 会同时改它们并打 tag），
+     * 而**各改一处**就会分叉——那时候「已发布的版本」与「仓库写着的版本」对不上，
+     * 而 **npm 页面上的版本号仍然是对的**（它读的是 registry 上那次发布）。
+     *
+     * 变异：只改 `package.json` 的 version，不打 tag。
+     */
+    why: 'check:release — 改 package.json 的 version 而不打 tag（两份真值分叉）',
+    file: 'package.json',
+    find: '  "version": "0.1.0",',
+    replace: '  "version": "0.2.0",',
+    target: 'check-release.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4c 的「台账第一列解析」——它第一版太窄。**
+     *
+     * 台账里有 **12 行**写成 `` `check:two-paths`（新） ``，
+     * 而旧正则要求「反引号后紧跟竖线」——**那 12 行对 4c 等于不存在**。
+     *
+     * > 「（新）」是给人看的备注，而**机器不该因为它看不见那一行**——
+     * > 那与「文件里没写」在输出上完全一样（形态四的变体）。
+     *
+     * 2026-09-29 实测：加 `check:release` 时 4c 报「三样都没有」，
+     * 而台账第 93 行**明明有那一行**——差别只是「（新）」两个字。
+     *
+     * ⚠️⚠️ **我第一版这条变异写错了方向**：把「（新）」去掉之后，
+     * 4c **本来就应该仍认得出**（两种写法都对）——于是它**不会红**，
+     * 而 `CASES` 要求每条都必须红。
+     *
+     * > **一条必定失败的变异 = 让套件永远红**——而那比「不写这条」更坏。
+     *
+     * 所以改成**删掉整行**（含换行）：那才是 4c 真正该抓的失效状态。
+     * ⚠️ **而它顺带验了「（新）」那 12 行现在被算进去了**——
+     * 因为 `check:release` 那一行正是带「（新）」的。
+     */
+    why: 'check:gate-list — 删掉「只有台账在册」的那一行（4c 必须报「三样都没有」）',
+    file: 'knowledge/gate-negatives.md',
+    // ⚠️ **带末尾换行**——只删行内容会留下一个空行，而那仍是合法 Markdown 表格行。
+    find: LEDGER_ONLY_ROW,
+    replace: '',
+    target: 'check-gate-list.mjs',
   },
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
