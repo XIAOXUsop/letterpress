@@ -200,6 +200,7 @@ jobs:
         run: |
           set -euo pipefail
           failed=""
+          passed=0
           residual=0
           for step in \
             verify:gates \
@@ -226,13 +227,11 @@ jobs:
           do
             printf '::group::%s\n' "$step"
             if npm run "$step"; then
+              passed="$((passed + 1))"
               echo "✓ $step"
             else
               # **不立刻退出**——一次跑完才知道还剩几道的红，
               # 而 `set -e` 会在第一道就停，剩下的就没人知道了。
-              # `::error::` 让失败在 GitHub 的 run 摘要里**直接可见**，
-              # 不必去翻被 `::group::` 折叠起来的日志。
-              echo "::error::门禁失败：$step"
               failed="$failed $step"
             fi
             printf '::endgroup::\n'
@@ -246,17 +245,39 @@ jobs:
           # 同一批门禁在 `full-gates`（`verify:all`，全 33 步）里却是绿的。
           # 本段是该 job **独有**的东西，所以先怀疑自己。
           #
-          # ⚠️ **它不能盖掉门禁本身的失败**——`exit 1` 只在真有残留改动时执行，
-          # 而 `::error::` 两类都报，所以下一次跑完能从 run 摘要看出是哪一类。
+          # ⚠️ **它不 exit 1**——否则会盖掉门禁本身的失败信息，
+          # 下一次跑完只看得到「有残留改动」，看不到真正失败的是哪道门禁。
+          residual_detail=""
           if ! git diff --quiet -- src/ scripts/; then
-            echo "::error::有门禁把源码改坏后没还原（这是 knowledge-gates job 独有的检查）"
-            git diff --stat -- src/ scripts/
-            # `git config core.autocrlf true` 之外还要看行尾：
-            # Windows 上写回的文件是 LF，理论上不该有差异——
-            # **但「理论上」正是本条要证伪的东西**，所以把原始差异也打出来。
-            git diff -- src/ scripts/ | head -40
             residual=1
+            residual_detail="$(git diff --stat -- src/ scripts/)"
+            echo "::error::有门禁把源码改坏后没还原（这是 knowledge-gates job 独有的检查）"
+            echo "$residual_detail"
+            git diff -- src/ scripts/ | head -40
           fi
+
+          # ⚠️ **结论写进 `GITHUB_STEP_SUMMARY`，不只 `::error::`。**
+          #
+          # 2026-09-28 实测：`::error::` **只出现在日志里**，而日志要 admin
+          # 权限才下载得到（匿名 API 返回 403 "Must have admin rights"）。
+          # 也就是说「让 CI 自己说出失败原因」这个目标，用 `::error::` 达不到。
+          # `GITHUB_STEP_SUMMARY` 写的是 job 摘要页，**匿名可读**。
+          {
+            echo '## 知识层门禁'
+            echo
+            echo "- 通过 $passed / 21"
+            if [ -n "$failed" ]; then
+              echo "- **失败 $(echo "$failed" | wc -w) 道**：$failed"
+            else
+              echo "- 失败：无"
+            fi
+            if [ "$residual" -ne 0 ]; then
+              echo "- **源码有残留改动**（本 job 独有检查）："
+              echo '```'
+              echo "$residual_detail"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -n "$failed" ]; then
             echo "::error::以下门禁在 CI 上是红的：$failed"
