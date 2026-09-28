@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的十一道门禁的负向验证。**
+ * **2026-09-28 新增的十二道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
@@ -72,8 +72,41 @@ const BUNDLED = new Set(['verify']);
  */
 const NEEDS_DIST = new Set(['verify-negotiation.mjs']);
 
+/**
+ * ⚠️ **判据不能只是「`dist` 在不在」。**（2026-09-28 第二次栽在这里）
+ *
+ * 第一版只查 `content-manifest.json` 存在与否——那挡住了「没有产物」，
+ * **挡不住「产物在、但是上一次门禁留下的旧的那份」**。
+ * 于是 `verify-negotiation` 报「`markdown-for-agents.md` 存在于产物中」，
+ * 而那个文件当下并不存在——**它在 `dist` 里，却不在清单里**。
+ *
+ * > **「产物在」与「产物对得上现在的源码」是两件事**，
+ * > 而第一版把前者当成了后者的充分条件。
+ *
+ * 所以：**产物在，但它与 `content-manifest.json` 对不上时也要重建。**
+ * 判据是「清单里点名的每个 `.md` 是否真的在 `dist` 里」——
+ * 那正是 `check:base` 里那句「产物里每个站内链接都要指向存在的文件」的弱化版，
+ * **够便宜，且能抓住「旧产物」**。
+ */
+function distLooksConsistent() {
+  const manifest = join(ROOT, 'dist', 'content-manifest.json');
+  if (!existsSync(manifest)) return false;
+  try {
+    const m = JSON.parse(readFileSync(manifest, 'utf8'));
+    for (const d of m.documents ?? []) {
+      const url = d.urls?.markdown;
+      if (!url) continue;
+      const rel = url.replace(/^https?:\/\/[^/]+\/[^/]+\//, '');
+      if (!existsSync(join(ROOT, 'dist', rel))) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function ensureDist() {
-  if (existsSync(join(ROOT, 'dist', 'content-manifest.json'))) return;
+  if (distLooksConsistent()) return;
   const r = spawnSync(NPM, ['run', 'build'], {
     cwd: ROOT, encoding: 'utf8', timeout: 600_000,
   });
@@ -247,10 +280,31 @@ const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
-  'check-single-source.mjs', 'check-agents-doc.mjs',
+  'check-single-source.mjs', 'check-agents-doc.mjs', 'check-rule-levels.mjs',
 ];
 
 const CASES = [
+  {
+    // ⚠️ 守着 2026-09-28 新增的第五类判据：AGENTS.md 那张规则表的**级别**列。
+    // 而「`broken-wikilink` 是 error（会让构建失败）」正是 agent 最会照着用的
+    // 那一列——AGENTS.md 开头就写着「那是给 agent 读的约定」。
+    // 级别只能**真跑**出来：静态分析（往上找 N 行找 `level:`）只捞到 1/11 条。
+    why: 'check:rule-levels — 文档把 error 写成 warn（agent 会照着它判断什么会让构建失败）',
+    file: 'AGENTS.md',
+    find: '| 错误 | `broken-wikilink` | 引用了不存在的页面。**会让构建失败** |',
+    replace: '| 警告 | `broken-wikilink` | 引用了不存在的页面。**会让构建失败** |',
+    target: 'check-rule-levels.mjs',
+  },
+  {
+    // ⚠️ 守着「语料没触发到的规则必须报」那条。删掉「断链」那篇之后，
+    // `related: [断链]` 跟着失效 → `redundant-relation` 不再触发，
+    // **而它的级别此刻没被核**。「没触发」与「都对」在结果上无法区分。
+    why: 'check:rule-levels — 语料缺一段，某个级别根本没被核对（没触发 ≠ 都对）',
+    file: 'scripts/check-rule-levels.mjs',
+    find: "  writeFileSync(join(dir, '断链.md'), page('断链', '断链', '', '见 [[根本不存在的目标]]。'), 'utf8');",
+    replace: '',
+    target: 'check-rule-levels.mjs',
+  },
   {
     // ⚠️ 这两条守着 2026-09-28 补的判据：AGENTS.md 那张「分三级」的规则表
     // 必须与 lint.ts 的规则集**完全相同**。

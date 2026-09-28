@@ -53,7 +53,7 @@ const EXPECTED = [
   ['npm run verify:json-output', '**`--json` 模式下失败也有结构化输出**（阶段 4 第 3 项剩的一半）'],
   ['npm run verify:json-mutations', '上一道的负向验证（三类违约：stdout 空 / ok 不是 false / code 与退出码打架）'],
   ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
-  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的十一道门禁的负向验证**（32 条变异：每条必须让被测的那道红，恢复后回绿）'],
+  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的十二道门禁的负向验证**（34 条变异：每条必须让被测的那道红，恢复后回绿）'],
   ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集（合成 docs 数组）'],
   ['npm run verify:second-site-real', '**读自文件的**异构内容集（阶段 4 第 5 项）'],
@@ -74,6 +74,7 @@ const EXPECTED = [
   ['npm run check:not-a-demo', '**「接入」而不是「演示」**：核心的算法行为在两个消费者上逐字相同，而异构点那一项**必须**分叉——两边都空正是演示的典型形态'],
   ['npm run check:no-duplicate-lists', '**同一份清单不许写两遍**（同族第四道：前两次是「同一逻辑两处实现」，这次是「同一字面量两处拷贝」）'],
   ['npm run check:command-scripts', '**命令名与脚本名对不上时必须登记在册**（实测 48 个里 8 个分叉）——照着命令名 grep 脚本会落空'],
+  ['npm run check:rule-levels', '**AGENTS.md 那张规则表的「级别」列与真跑出来的一致**——静态分析只捞到 1/11 条，级别只能跑出来；语料要造两轮（docKind 决定哪些规则报）且要造到 11 条全触发'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
 ];
 
