@@ -172,4 +172,36 @@ describe('pageToDoc', () => {
   it('不产出 id——稳定身份走另一条路，不在这里混', () => {
     expect(pageToDoc(page, {})).not.toHaveProperty('id');
   });
+
+  /**
+   * ⚠️ **2026-09-28 加：与 `Doc` 契约的键集合逐个对上。**
+   *
+   * 上面那条只守「多一个 `id`」，而**少一个键同样破坏契约**——
+   * `content-manifest` 序列化 `Doc` 时少一个字段，订阅方就少一个信息，
+   * 而症状是「那个字段永远是 undefined」。
+   *
+   * `Doc` 的顶层键（2026-09-28 实测 13 个）：
+   * `body` `declaredRelations` `draft` `explicitSlug` `id` `kind` `original`
+   * `review` `slug` `sources` `summary` `title` `wikiKind`
+   */
+  it('**除 id 外，Doc 的每个顶层键都给**——少一个同样破坏契约', () => {
+    const DOC_TOP_LEVEL = [
+      'body', 'declaredRelations', 'draft', 'explicitSlug', 'kind', 'original',
+      'review', 'slug', 'sources', 'summary', 'title', 'wikiKind',
+    ];
+    // 用一个字段齐全的固件，否则 `review` / `original` 因缺席而不出现，
+    // 那会让这条判据在**弱固件下恒真**。
+    const full = {
+      ...page,
+      review: { status: 'reviewed' as const, checkedAt: '2026-01-01' },
+      original: { reason: '本站' },
+    };
+    const keys = Object.keys(pageToDoc(full, { docKind: 'wiki' })).sort();
+    expect(keys).toEqual([...DOC_TOP_LEVEL].sort());
+    // ⚠️ 而 post 侧要少三个知识层字段——那是另一条判据（见上）。
+    const postKeys = Object.keys(pageToDoc(full, { docKind: 'post' })).sort();
+    expect(postKeys).toEqual(
+      [...DOC_TOP_LEVEL].filter((k) => !['wikiKind', 'review', 'original'].includes(k)).sort(),
+    );
+  });
 });
