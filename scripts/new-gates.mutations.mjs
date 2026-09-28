@@ -285,6 +285,17 @@ const GATES = [
 
 const CASES = [
   {
+    // ⚠️ 守着第三列那条判据的**加强版**。
+    // 第一版只核行为（「默认下报不报」），于是把文档里的「默认关闭」改成
+    // 「默认开启」（**而实现没变**）它照样绿——**行为对、文档错，判据无感**。
+    // 现在从 AGENTS.md 那一行**解析出「默认开/关」**再与实测比。
+    why: 'check:rule-levels — 第三列的说法被反过来说（实现没变，文档错）',
+    file: 'AGENTS.md',
+    find: '| 提示 | `cjk-slug` | URL 由中文标题生成（默认关闭，可在配置里开） |',
+    replace: '| 提示 | `cjk-slug` | URL 由中文标题生成（**默认开启**，可在配置里关） |',
+    target: 'check-rule-levels.mjs',
+  },
+  {
     // ⚠️ 守着 2026-09-28 新增的第五类判据：AGENTS.md 那张规则表的**级别**列。
     // 而「`broken-wikilink` 是 error（会让构建失败）」正是 agent 最会照着用的
     // 那一列——AGENTS.md 开头就写着「那是给 agent 读的约定」。

@@ -185,6 +185,160 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
+/*
+ * ── 第三列「含义」：**能跑出真假的那些，逐条核** ──────────────────────
+ *
+ * 那张表有三列：规则名（已核集合相等）、级别（已核逐条真跑）、
+ * **含义（唯一一列写给人看的）** ——「agent 照着它理解每条规则到底在说什么」。
+ *
+ * ⚠️ **11 条里只有 5 条能机械核**，其余 6 条描述的是**机制**
+ * （而机制由 `check:field-coverage` 在字段层核过）。
+ * **核不了的那 6 条必须写明**，否则「核了 5 条」会被读成「11 条都核了」。
+ *
+ * 每条都是一个**能跑出真假的具体说法**，不是「描述得像不像」——
+ * 「默认关闭」要真的默认不报，「没有任何页面指向它」要有入链/没入链各跑一次。
+ */
+{
+  /** 跑一份临时语料，返回它报出的规则名集合。 */
+  const probe = (files, opts = {}) => {
+    const d = mkdtempSync(join(tmpdir(), 'rule-claims-'));
+    try {
+      for (const [n, b] of Object.entries(files)) writeFileSync(join(d, n), b, 'utf8');
+      const { pages: ps } = readContentDirs([d]);
+      const ds = ps.map((x) => pageToDoc(x));
+      return { rules: new Set(lint(ds, buildGraph(ds), opts).map((i) => i.rule)), orphans: buildGraph(ds).orphans };
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  };
+  const P = (title, slug, extra = '', body = '正文。') =>
+    `---\ntitle: ${title}\nslug: ${slug}\nkind: concept\nsummary: 一句话。\n${extra}---\n\n${body}\n`;
+
+  /** @type {{rule: string, claim: string, ok: boolean, detail: string}[]} */
+  const claims = [];
+  const claim = (rule, text, ok, detail) => {
+    claims.push({ rule, claim: text, ok, detail });
+    console.log(`  ${ok ? '✓' : '✗'} ${rule}：${text}${ok ? '' : ` —— ${detail}`}`);
+  };
+
+  // ① cjk-slug：「默认关闭，可在配置里开」
+  {
+    const noSlug = {
+      '无slug.md': '---\ntitle: 没有显式 slug\nkind: concept\nsummary: x\n---\n\n正文。\n',
+    };
+    const off = probe(noSlug).rules;
+    const on = probe(noSlug, { warnOnCjkSlug: true }).rules;
+    const docLine = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8')
+      .split('\n').find((l) => /^\| (?:错误|警告|提示) \| `cjk-slug`/.test(l)) ?? '';
+    const saysOn = /默认开启|默认打开|默认启用/.test(docLine);
+    const saysOff = /默认关闭|默认关/.test(docLine);
+    /*
+     * ⚠️ **我第一版在这里多写了一个 `actuallyOff !== actuallyOn`，而它恒假。**
+     *
+     * `actuallyOff` 是「默认**不**报」、`actuallyOn` 是「**开选项后**报」——
+     * **两者本来就都是 true**（「默认不报」与「开选项会报」并不矛盾）。
+     * 我把「两句话」当成「一对互斥的取值」来比，于是干净态就红了。
+     *
+     * > **「默认关闭，可在配置里开」是两句话，不是一个二选一**——
+     * > 核它要**两件独立的事**：① 文档说的默认行为与实测一致
+     * > ② 那个选项**真的能打开它**（否则「可配置」是假的）。
+     */
+    const docMatchesReality = saysOn
+      ? off.has('cjk-slug')              // 文档说默认开 → 默认就该报
+      : saysOff && !off.has('cjk-slug');  // 文档说默认关 → 默认就不该报
+    const optionActuallyToggles = on.has('cjk-slug') && !off.has('cjk-slug');
+    claim(
+      'cjk-slug', '「默认关闭，可在配置里开」——**文档那句话**与实测一致，且那个选项真能打开它',
+      // 文档必须**明确说开或关**（两说都不说也要红）
+      saysOn !== saysOff && docMatchesReality && optionActuallyToggles,
+      `文档说「${saysOn ? '默认开启' : saysOff ? '默认关闭' : '（没说）'}」，`
+      + `实测默认${off.has('cjk-slug') ? '会报' : '不报'}、开选项后${on.has('cjk-slug') ? '会报' : '不报'}`
+      + (optionActuallyToggles ? '' : '（**那个选项根本没改变行为**）'),
+    );
+  }
+  // ② orphan-page：「没有任何页面指向它」
+  {
+    /*
+     * ⚠️ **断言要写成「有入链的不在 orphans 里、没入链的在」**，
+     * 而**不是**「整份语料不报 orphan-page」。
+     *
+     * 第一版那么写，红了——而**规则完全正确**：语料只有 2 篇，
+     * **入口那篇自己没有任何入链**，所以它**必然是孤儿**、必然被报。
+     *
+     * > **这是 2026-09-28 第四次「我以为对不上，其实量错了东西」**
+     * > （前三次：注释量 HTML 侧而 docs 量 MD 侧 / 静态分析只捞到 1 条 /
+     * > 探针正则漏了「检查了 N 个」）。
+     */
+    const files = { '被链.md': P('被链', '被链'), '入口.md': P('入口', '入口', '', '见 [[被链]]。') };
+    const { rules, orphans } = probe(files);
+    claim(
+      'orphan-page', '「没有任何页面指向它」——有入链的不报、没入链的报',
+      !orphans.includes('被链') && orphans.includes('入口') && rules.has('orphan-page'),
+      `orphans=${JSON.stringify(orphans)}（期望含「入口」不含「被链」）`,
+    );
+  }
+  // ③ empty-body：「没写完就加 draft: true」
+  {
+    const body = '---\ntitle: 空正文\nslug: 空正文\nkind: concept\nsummary: x\n---\n\n';
+    const asPost = probe({ '空正文.md': body }).rules;
+    const asDraft = probe({ '空正文.md': body.replace('summary: x', 'summary: x\ndraft: true') }).rules;
+    claim(
+      'empty-body', '「没写完就加 draft: true」——加了草稿标记就不再报',
+      asPost.has('empty-body') && !asDraft.has('empty-body'),
+      `未标草稿报了=${asPost.has('empty-body')}，标了仍报=${asDraft.has('empty-body')}`,
+    );
+  }
+  // ④ summary-too-long：「摘要过长」（默认上限 200）
+  {
+    const mk = (n) => ({
+      '摘要.md': `---\ntitle: 摘要\nslug: 摘要\nkind: concept\nsummary: ${'长'.repeat(n)}\n---\n\n正文。\n`,
+    });
+    const at = probe(mk(200)).rules;
+    const over = probe(mk(201)).rules;
+    claim(
+      'summary-too-long', '「摘要过长」——超过上限（默认 200）才报',
+      !at.has('summary-too-long') && over.has('summary-too-long'),
+      `恰好 200 字报了=${at.has('summary-too-long')}，201 字报了=${over.has('summary-too-long')}`,
+    );
+  }
+  // ⑤ ambiguous-title：「还没有人引用它」——被引用后改报 ambiguous-wikilink
+  {
+    const pair = { '导出-甲.md': P('导出', '导出-甲'), '导出-乙.md': P('导出', '导出-乙') };
+    const un = probe(pair).rules;
+    const re = probe({ ...pair, '引用方.md': P('引用方', '引用方', '', '见 [[导出]]。') }).rules;
+    claim(
+      'ambiguous-title', '「还没有人引用它」——被引用后改报 ambiguous-wikilink',
+      un.has('ambiguous-title') && !un.has('ambiguous-wikilink')
+        && re.has('ambiguous-wikilink') && !re.has('ambiguous-title'),
+      `没人引用时=${[...un].join('、')}；有人引用时=${[...re].join('、')}`,
+    );
+  }
+
+  // ⚠️ **核不了的要显式列出来**——「核了 5 条」不等于「11 条都核了」
+  const NOT_CLAIMABLE = [
+    'broken-wikilink', 'duplicate-slug', 'reserved-post-slug',
+    'missing-summary', 'redundant-relation',
+  ];
+  console.log(
+    '  ℹ 另有 ' + NOT_CLAIMABLE.length + ' 条的「含义」核不了（'
+    + NOT_CLAIMABLE.join('、')
+    + '）——它们描述的是**机制**，而机制由 `check:field-coverage` 在字段层核。',
+  );
+
+  for (const c of claims) {
+    if (!c.ok) {
+      problems.push(
+        `AGENTS.md 说 \`${c.rule}\` ${c.claim}——**实测不成立**。\n`
+        + `    ${c.detail}\n`
+        + '    → 那一列是**唯一写给人看的**，agent 照着它理解规则在做什么。',
+      );
+    }
+  }
+  if (claims.every((c) => c.ok)) {
+    console.log(`  ✓ ${claims.length} 条可机械核的「含义」全部成立`);
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
