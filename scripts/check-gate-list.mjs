@@ -1419,15 +1419,112 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     const inLedger = ledgerText
       .split('\n')
       .filter((l) => new RegExp(`^\\|\\s*\`${cmd}\``).test(l)).length;
+    /*
+     * ⚠️⚠️ **`covers` 优先于「数有几条变异」。**
+     *
+     * `covers: ['④']` 是变异作者**自己登记**的「我这条测的是哪几条判据」，
+     * 而**数 target 的个数**只能回答「有几条」——**那正是 4i 那个口径的软肋**
+     * （「一条变异一次测了多条判据」它数不出来）。
+     *
+     * 2026-09-29 实测能不能答上来：`check:release` 的 3 条变异逐条能答
+     * （② / ④ / ⑤），**而 ① 与 ③ 零覆盖**——
+     * **「3 条变异 / 5 条判据，差 1」那个「差 1」，靠数是看不出来的**：
+     * ② 那条只测②、④ 那条只测④、⑤ 那条只测⑤，**3 条对 3 条判据**，
+     * **剩下的 ①③ 才是真空白**。
+     *
+     * > **登记比数准**，因为它是**作者声明**而不是**代理指标**——
+     * > 而「代理指标」这个教训本项目交过很多次学费
+     * > （「变异数 ≥ 判据数」这个判断第一版就抓错了）。
+     *
+     * ⚠️ **而 `covers` 是可选的**：没登记的仍按「数 target」算，
+     * **并在输出里标明是哪种口径**——否则两个口径的数字混在一起没法比较。
+     */
+    const target = `target: '${f}'`;
+    const coveredIds = new Set();
+    let hasCovers = false;
+    for (const block of mutationText.split('\n  {')) {
+      if (!block.includes(target)) continue;
+      /*
+       * ⚠️⚠️ **必须排除注释里的 `covers`——2026-09-29 实测栽在这。**
+       *
+       * 一条变异的**注释里**写着 `covers: ['⑤']`（举例子），
+       * 而这条正则照样匹配它，于是**它被当成一条真登记**——
+       * 而那个编号在那个门禁里不存在，**门禁立刻假红**。
+       *
+       * > **「描述」与「声明」在字面上完全一样**（都是 `covers: [...]`），
+       * > 而**注释掉的那一份同样会被 grep 到**。
+       *
+       * 所以：**先把块注释与行注释剥掉**，再找 `covers`。
+       */
+      const code = block
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      const m = /covers:\s*\[([^\]]*)\]/.exec(code);
+      if (!m) continue;
+      hasCovers = true;
+      for (const id of m[1].matchAll(/['"]([^'"]+)['"]/g)) coveredIds.add(id[1]);
+    }
+    // ⚠️ **与上面那个 `criteria` 的正则必须一致**——
+    // 第一版这里写的是 `──s*…`，而 `\s` 被 shell 吃掉一层变成了字面 `s`，
+    // **于是它一个都匹配不到、`ownIds` 恒为空、后面那行「未覆盖的判据」永远不打印**。
+    // 而症状是「输出里少了一行」——**不报错，只是少了**（形态四）。
+    const ownIds = [...new Set(
+      [...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤])\.?\s/g)].map((x) => x[1]),
+    )];
     rows.push({
       cmd,
       criteria,
-      muts: mutationText.split(`target: '${f}'`).length - 1,
+      ownIds,
+      muts: mutationText.split(target).length - 1,
       ledger: inLedger,
+      hasCovers,
+      coveredIds,
     });
   }
 
-  const covered = (r) => r.muts + r.ledger;
+  /*
+   * ⚠️⚠️ **`covers` 登记的判据号必须真存在——而这是一个新的失效面。**
+   *
+   * 登记一份「我这条测的是 ④」，而那个门禁**没有 ④**（作者记错了、
+   * 或者那条判据被删了）——**那么登记看起来很认真，实际上一条也没测**，
+   * 而 4i 数不出来。
+   *
+   * > **登记的「权威性」来自它能被核对**——
+   * > 而「能数出来」不等于「核对过」。
+   *
+   * 所以：每条 `covers` 里的编号必须在**该门禁自己的编号判据集合**里。
+   */
+  {
+    const orphans = [];
+    for (const r of rows) {
+      if (!r.hasCovers) continue;
+      const file = scriptOf(r.cmd);
+      if (!file) continue;
+      const text = readFileSync(join(ROOT, 'scripts', file), 'utf8');
+      const ids = new Set(
+        [...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤])\.?\s/g)].map((x) => x[1]),
+      );
+      for (const id of r.coveredIds) {
+        if (!ids.has(id)) {
+          orphans.push(`\`${r.cmd}\` 的 covers 写了 ${id} —— 而它没有 ${id} 这条判据`);
+        }
+      }
+    }
+    if (orphans.length > 0) {
+      problems.push(
+        '这些 `covers` 登记**指向不存在的判据**：\n'
+        + orphans.map((o) => `        ${o}`).join('\n') + '\n'
+        + '    → **登记看起来很认真，实际上一条也没测**——而 4i 数不出来。\n'
+        + '    → 登记的权威性**来自它能被核对**：编号必须真在那个门禁里。',
+      );
+      console.log(`  ✗ ${orphans.length} 条 covers 指向不存在的判据`);
+    } else {
+      console.log('  ✓ 每条 covers 登记的判据号都真实存在');
+    }
+  }
+
+  /** 有 `covers` 就用它（**作者声明**），否则退回「数」（**代理指标**）。 */
+  const covered = (r) => (r.hasCovers ? r.coveredIds.size : r.muts + r.ledger);
   /**
    * ⚠️⚠️ **只报「明显不成比例」的——而这道阈值是量出来的。**
    *
@@ -1492,7 +1589,16 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     console.log(`  – ${cmd}：**验不了**——${why}`);
   }
   for (const r of borderline) {
-    console.log(`  – ${r.cmd}：${r.muts} 条变异 + ${r.ledger} 行台账 / ${r.criteria} 条判据（**差不多**）`);
+    // ⚠️ **标明是哪种口径**——两个口径的数字**混在一起就没法比较**。
+    const how = r.hasCovers ? `登记覆盖 {${[...r.coveredIds].join('、')}}`
+      : `${r.muts} 条变异 + ${r.ledger} 行台账`;
+    const missing = r.hasCovers ? r.ownIds.filter((id) => !r.coveredIds.has(id)) : [];
+    console.log(
+      `  – ${r.cmd}：${r.criteria} 条判据 vs ${how}（**差不多**）`
+      + (missing.length
+        ? `\n      ⚠️ 登记里**没有**的判据：${missing.join('、')}`
+        : ''),
+    );
   }
   if (short.length > 0) {
     problems.push(

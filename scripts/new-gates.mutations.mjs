@@ -1201,6 +1201,7 @@ const CASES = [
      * 变异：只改 `package.json` 的 version，不打 tag。
      */
     why: 'check:release — 改 package.json 的 version 而不打 tag（两份真值分叉）',
+    covers: ['②'],
     file: 'package.json',
     find: '  "version": "0.1.0",',
     replace: '  "version": "0.2.0",',
@@ -1256,6 +1257,7 @@ const CASES = [
      * 而判据认的是后者（正则要 `npm i/install letterpress`）。
      */
     why: 'check:release — README 既没写「模板」也没写「包」（准备工作成了自说自话）',
+    covers: ['④'],
     file: 'README.md',
     find: '**① 拿到代码**（这是**模板**，所以第一步是 clone 而不是 install）：',
     replace: '**① 拿到代码**（第一步是 clone）：',
@@ -1278,6 +1280,7 @@ const CASES = [
      * 变异：在别处加一句「它只是主题」。
      */
     why: 'check:release — README 别处出现与「这是模板」矛盾的表述（⑤ 必须红）',
+    covers: ['⑤'],
     file: 'README.md',
     find: '**不用改配置、不用建数据库、不用填环境变量。** 你现在看到的就是完整站点。',
     replace: '**不用改配置、不用建数据库、不用填环境变量。** 你现在看到的就是完整站点。\n'
@@ -1327,6 +1330,34 @@ const CASES = [
     file: 'scripts/check-gate-list.mjs',
     find: "    ['check:manifest-schema', '它读的是**产物**",
     replace: "    ['check:manifest-schema-挪走了', '它读的是**产物**",
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4i 的 `covers` 校验——而那是一个新的失效面。**
+     *
+     * `covers: ['⑤']` 说「有一条变异测的是第 ⑤ 条判据」，
+     * 而**把那一条判据的编号改成 ⑥**（或删掉它），登记就**悬空了**——
+     * **登记看起来很认真，实际上一条也没测**，而 4i 数不出来
+     * （它数的是「有几条变异」）。
+     *
+     * > **登记的「权威性」来自它能被核对**——
+     * > 而「能数出来」不等于「核对过」。
+     *
+     * ⚠️⚠️ **第一版这条变异写成了「在自己身上加 `covers: ['⑦']`」——
+     * 而那条例外**自己就在 `CASES` 里**，于是它成了「本文件里有一条变异声明了 ⑦」，
+     * **不是「注入一个 ⑦ 进去」**。干净态直接就红了。
+     *
+     * > **变异要注入的是「缺陷」，而「在描述里写上」不是注入**——
+     * > 那正是我这两周反复交学费的一条。
+     */
+    why: 'check:gate-list — 判据编号变了而 covers 登记还指着旧的（必须报「悬空」）',
+    file: 'scripts/check-release.mjs',
+    // ⚠️ **锚点取 `── ⑤ ` 而不是整行**——整行含一长串 U+2500，
+    // 我手写那串时对不上（报「出现 0 次」）。而**短而唯一的那个**
+    // 恰是 `ownIds` 用来识别判据的那一截。
+    find: '── ⑤ ',
+    replace: '── ⑥ ',
     target: 'check-gate-list.mjs',
   },
   {
