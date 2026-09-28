@@ -157,6 +157,40 @@ if ((wikiDoc.declaredRelations ?? []).length === 0) {
   problems.push("wiki 侧的 declaredRelations 是空的——本门禁已经量不到东西了");
 }
 
+/*
+ * ── ③ 核心**不许猜** docKind ──────────────────────────────────────
+ *
+ * ⚠️ **2026-09-28 加。** 一个很自然的想法是「让核心自己判断」：
+ * 本站 wiki 全写 `kind:` 而 posts 全不写（实测 6/6 vs 0/5），
+ * 看起来足够判别。
+ *
+ * **但那是本站的 schema 巧合，不是通则**：
+ * ① `knowledge/fixtures/second-site/` 那 9 篇**也都写 `kind:`**——
+ *    而它们所在的目录既不是 posts 也不是 wiki；
+ * ② 一个新站点若两个目录都写 `kind:`，核心就分不出来；
+ * ③ 而**判错的后果是静默的**：`post` 被当成 `wiki` 时，
+ *    关系照样连进图、构建产物却没有——分歧回到今天这个问题的起点。
+ *
+ * 所以 `docKind` 必须**由调用方给**，核心不猜。
+ */
+const guessed = pageToDoc(page, {});          // 不给 docKind
+const explicitlyWiki = pageToDoc(page, { docKind: 'wiki' });
+if (guessed.kind !== 'wiki' || explicitlyWiki.kind !== 'wiki') {
+  problems.push('不传 docKind 时应当默认 wiki——那不是「猜」，是显式的缺省');
+} else {
+  const guessedKeys = Object.keys(guessed).sort();
+  const explicitKeys = Object.keys(explicitlyWiki).sort();
+  if (guessedKeys.join() !== explicitKeys.join()) {
+    problems.push(
+      '不传 docKind 与显式传 wiki 的键集合不同——那说明默认值不再是 wiki，'
+      + '而调用方没传时就在走另一条路',
+    );
+    console.log('  ✗ 不传 docKind 与显式传 wiki 的键集合不同');
+  } else {
+    console.log('  ✓ 不传 docKind 等价于显式 wiki（缺省是显式的，不是猜出来的）');
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
