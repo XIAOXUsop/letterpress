@@ -40,9 +40,12 @@
  *
  * 用法：`node scripts/check-two-paths.mjs`
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { buildGraph } from '../src/lib/wiki/graph.ts';
 
 const ROOT = process.cwd();
 const problems = [];
@@ -191,10 +194,59 @@ if (guessed.kind !== 'wiki' || explicitlyWiki.kind !== 'wiki') {
   }
 }
 
+/*
+ * ── ④ 读路径必须**真的读到** `draft`，且草稿不进图 ───────────────────
+ *
+ * ⚠️ **2026-09-28 实测的第 6 处分歧。** `readContentPage` 原先**不读 `draft`**，
+ * 于是 `pageToDoc` 恒给 `false`、`buildGraph` 的 `filter((d) => !d.draft)`
+ * 形同虚设——**草稿会进 CLI 的检索与影响分析，而构建产物里没有它。**
+ *
+ * 为什么没被发现：**`verify:formats` 的草稿隔离探针只验构建产物**
+ * （页面 / 孪生 / OG / manifest 里没有它），**读路径无人问**；
+ * 而**本站 0 篇草稿**，所以连"有草稿时会怎样"都没人试过。
+ *
+ * > 与前五处「post 口径」不同：**这一处只要有一篇草稿就会发作。**
+ * > 「本站没有这种数据」在这里**不是理由，是缺口本身**。
+ *
+ * 所以这里用**真文件**跑一遍——合成对象量不到「解析」这一层。
+ */
+{
+  const dir = mkdtempSync(join(tmpdir(), 'two-paths-draft-'));
+  try {
+    writeFileSync(
+      join(dir, 'draft-page.md'),
+      '---\ntitle: 草稿页\nsummary: 未完成。\ndraft: true\n---\n\n没写完。\n',
+      'utf8',
+    );
+    writeFileSync(join(dir, 'live-page.md'), '---\ntitle: 正式页\nsummary: 写完了。\n---\n\n正文。\n', 'utf8');
+
+    const { pages } = readContentDirs([dir]);
+    const docs = pages.map((p) => pageToDoc(p));
+    const inGraph = [...buildGraph(docs).bySlug.keys()];
+
+    if (pages.length !== 2) {
+      problems.push(`临时语料只读到 ${pages.length} 页（期望 2）——判据没量到东西`);
+      console.log('  ✗ 临时语料读到的页数不对');
+    } else if (!inGraph.includes('live-page') || inGraph.includes('draft-page')) {
+      problems.push(
+        `草稿没有从链接图里被滤掉（图里有：${inGraph.join('、') || '空'}）。\n`
+        + '    读路径读不到 `draft` 时，`buildGraph` 的过滤形同虚设，'
+        + '**草稿会进 CLI 的检索与影响分析，而构建产物里没有它**。',
+      );
+      console.log(`  ✗ 草稿没被滤掉（图里有：${inGraph.join('、') || '空'}）`);
+    } else {
+      console.log('  ✓ 读路径读到 draft，草稿不进链接图（与构建产物同口径）');
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
   console.log(`\n${problems.length} 处对不上。\n`);
   process.exit(1);
 }
-console.log(`\n读路径与构建路径对「post 拿不到什么」是同一口径（${WIKI_ONLY.length} 项）。\n`);
+console.log(`\n读路径与构建路径对「post 拿不到什么」是同一口径（${WIKI_ONLY.length} 项），`
+  + '且读路径真的读得到 draft。\n');
