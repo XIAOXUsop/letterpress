@@ -61,6 +61,38 @@
 | `verify:second-site-real` | 把适配层的字段名从 `audience` 改成 `audiences` | ✅ 红，且**只有那一条**红（其余 18 条不受影响） | 2026-09-28 |
 | `verify:second-site-real` | 干脆不传 `relationField` | ✅ 红，且**只有那一条**红 | 2026-09-28 |
 | `check:onboarding-doc` | 把 README 里的断言条数改回旧的 18 | ✅ 红（「找不到 20」） | 2026-09-28 |
+| `check:two-paths`（新） | 撤掉 `pageToDoc` 里 `post` 丢 `wikiKind` 的对齐 | ✅ 红 | 2026-09-28 |
+| `check:two-paths`（新） | 撤掉 `post` 丢 `declaredRelations` 的对齐 | ✅ 红 | 2026-09-28 |
+| `check:two-paths`（新） | 撤掉 `post` 丢 `review` 的**外层**守卫 | ✅ 红 | 2026-09-28 |
+| `check:two-paths`（新） | **只撤内层条件展开那一道锁** | ⚠️ **仍然绿——因为外层 `const review = isWiki ? … : undefined` 挡住了**。同一个约束写了两道锁，**它们互为掩护** | 2026-09-28 |
+
+## 读路径与构建路径的「post 口径」曾经三处分歧（2026-09-28）
+
+本仓库有**两条**从内容到 `Doc` 的路：构建期 `src/lib/content.ts` 的 `toDoc`
+（拿 `astro:content`），与读源码 `readContentDirs` + `pageToDoc`（裸 Node，供 `scripts/*.mjs`）。
+**它们必须给出同一个 `Doc`**，否则同一页在构建产物与 CLI 回答里形状不同，
+而 `wiki:ask` 的 `docId` 正是订阅者做增量同步的键。
+
+`content.ts` 里有 **4 处** `kind === 'wiki' ? … : …`（`related` / `review` /
+`original` / `wikiKind`），而 `pageToDoc` 起初**一处都没对齐**。
+
+**为什么一直没发作**：本站 posts 里 **0 篇**写这些字段（实测无 `^related:`、无 `^kind:`）。
+
+> **「本站没有这种数据」与「这条路径正确」是两件事**——
+> 前者让后者从未被测过，而两者在输出里长得一样。
+
+修完三处，并加 `check:two-paths` 门禁：数构建侧有几处判定当基准，
+**真跑** `pageToDoc` 两种 `docKind` 逐项断言（不 grep 两边源码有没有同样的字符串——
+写法可以完全不同，**行为一致才是契约**）。
+
+⚠️ 加 `post` 那一侧时踩过一次「键在、值是 `undefined`」：
+`{ a: undefined }` 与省略键在 `doc.a` 上一样，但 `Object.keys()` 与
+`JSON.stringify` 不同——而 `content-manifest` 正是把 `Doc` 序列化出去的。
+所以 `post` 侧是**整个键都不出现**。
+
+⚠️ 同日还发现：给 `knowledge-gates` 的摘要加门禁时，我加了第 14 道却忘了改
+写死的 `/ 13`，它打印「通过 14 / 13」。**与「少一步不会有任何报错」同家族**，
+已改成从步骤列表自己数（`total="$(printf '%s\n' "$steps" | grep -c .)"`）。
 
 ## CI 现状（2026-09-28 收尾时）
 

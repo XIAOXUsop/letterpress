@@ -49,6 +49,21 @@ export interface ReadPage {
    * 后者服务「读完一整个语料再组装」这条路径。
    */
   readonly summary?: string;
+  /**
+   * 文档类型。`readContentDirs` 传了 `docKind` 时会带在这里
+   * ——**没有它，`pageToDoc` 只能一律当 wiki**，于是 post 里写的关系会被照收，
+   * 与构建侧（`kind === 'wiki' ? related : []`）相反。
+   */
+  readonly docKind?: 'post' | 'wiki';
+  /**
+   * 复核状态。`readContentPage` 在有 `review:` 块时会给它，**没有时键不出现**
+   * （不是 `undefined`）——所以这里是可选的。
+   */
+  readonly review?: {
+    readonly status: 'pending' | 'reviewed' | 'stale';
+    readonly checkedAt?: string;
+    readonly contentDigest?: string;
+  };
 }
 
 export interface PageToDocOptions {
@@ -61,7 +76,23 @@ export interface PageToDocOptions {
    * `readContentPage` 出来的页面没有 `summary`，那种场景由调用方给。
    */
   readonly summary?: string;
-  /** `Doc.kind`：文档类型。默认 `'wiki'`。 */
+  /**
+   * `Doc.kind`：文档类型。默认 `'wiki'`。
+   *
+   * ⚠️ **它同时决定「这一页算不算有关系」——与构建侧同一口径。**
+   *
+   * 构建路径（`src/lib/content.ts` 的 `toDoc`）写的是
+   * `kind === 'wiki' ? data.related : []`，而 `src/content.config.ts` 的
+   * **posts schema 里没有 `related` 这个键**——所以一篇文章里写了
+   * `related:` 会被 zod 静静剥掉，而读路径会把它保留并连进图。
+   *
+   * > 后果不是「多了一条边」：**同一页在构建产物与 CLI 回答里关系不同**，
+   * > 而 `wiki:ask` 的 `docId` 正是订阅者做增量同步的键。
+   *
+   * 本仓库 posts 里 0 篇写 `related:`，所以**这个分歧从未发作**——
+   * 而「新站点会用 posts 且写了关系」是很正常的一件事。
+   * 两边必须同口径，所以判据放在这里。
+   */
   readonly docKind?: 'post' | 'wiki';
   /**
    * 关系声明。**由调用方翻译好**——核心不认识任何站点的字段名。
@@ -70,6 +101,11 @@ export interface PageToDocOptions {
    * > 而核心只看到「一组关系」。
    */
   readonly relations?: readonly string[];
+  /**
+   * 复核状态。**只有 `docKind: 'wiki'` 才会用上它**——
+   * 与构建侧 `kind === 'wiki' ? data.review : undefined` 同口径。
+   */
+  readonly review?: { readonly status: 'pending' | 'reviewed' | 'stale'; readonly checkedAt?: string; readonly contentDigest?: string };
   /** 草稿不进图（`buildGraph` 默认也会滤，但显式给出更清楚）。 */
   readonly draft?: boolean;
   /** slug 是不是显式指定的。影响 lint 的「中文 slug」告警分级。 */
@@ -84,17 +120,48 @@ export interface PageToDocOptions {
  * 要用 id 的调用方（`content-manifest`）走构建期那条路，不走这里。
  */
 export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
+  // ⚠️ **`options.docKind` 优先于 `page.docKind`**——显式给的更近，也更明确。
+  // 两者都没有时默认 `'wiki'`（本站绝大多数内容是知识页）。
+  const docKind = options.docKind ?? page.docKind ?? 'wiki';
+  /*
+   * ⚠️ **`post` 拿不到知识层专属的三样**：`declaredRelations` / `review` / `wikiKind`。
+   *
+   * 这与 `src/lib/content.ts` 的 `toDoc` **四处** `kind === 'wiki' ? … : …`
+   * 完全同口径（`related` / `review` / `original` / `wikiKind`）。
+   *
+   * > **口径必须逐字对齐，否则两处会各改一处。** 2026-09-28 实测：
+   * > 修好 `related` 之后，`wikiKind` 与 `review` 仍与构建侧相反。
+   * > 本仓库 posts 里 0 篇写这些字段，所以三处分歧**都没发作过**。
+   *
+   * `wikiKind` 落成 `undefined`（而不是 `'concept'`）——那是构建侧的做法，
+   * 而 `lint` 用 `doc.wikiKind ?? ''` 兜，两者兼容。
+   */
+  const isWiki = docKind === 'wiki';
+  const review = isWiki ? options.review ?? page.review : undefined;
   return {
-    kind: options.docKind ?? 'wiki',
+    kind: docKind,
     slug: page.slug,
     title: page.title,
     summary: options.summary ?? page.summary ?? '',
     body: page.body,
     sources: page.sources,
-    wikiKind: page.kind,
+    // ⚠️ **`post` 的 `wikiKind` 与 `review` 整个键都不出现**——
+    // 与构建侧同一口径。
+    //
+    // ⚠️ **而且是「键不出现」而不是「键在、值是 undefined」**：
+    // 两者用 `doc.wikiKind` 读起来一样，但 `Object.keys()` 与
+    // `JSON.stringify` 会不同——而 `content-manifest` 正是把 `Doc`
+    // 序列化出去的。`{ a: undefined }` 序列化成 `{}`，而 `hasOwnProperty`
+    // 也会说它有——**两处都会不一致**。
+    ...(isWiki ? { wikiKind: page.kind } : {}),
+    ...(isWiki && review ? { review } : {}),
     // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
     // 传错键会被 `?? []` 静静兜成空数组——摘要照样算得出，只是永远对不上。
-    declaredRelations: options.relations ?? page.related,
+    //
+    // ⚠️ **`post` 一律没有关系**——与构建侧 `toDoc` 的
+    // `kind === 'wiki' ? data.related : []` 同一口径。
+    // 读路径若照收，就与构建产物对不上（详见 `PageToDocOptions.docKind`）。
+    declaredRelations: docKind === 'post' ? [] : options.relations ?? page.related,
     explicitSlug: options.explicitSlug ?? page.explicitSlug ?? false,
     draft: options.draft ?? false,
   };

@@ -186,33 +186,38 @@ jobs:
       # ⚠️ **必须串行**：`verify:site-mutations` / `verify:exit-codes` /
       # `verify:json-mutations` 靠「改坏源码再还原」证明自己不是装饰，
       # **并发跑会互相踩**（这一条在 `docs/cli.md` 里有记）。
-      # 这一组是**纯计算、无子进程**的门禁（13 道）。
+      # 这一组是**纯计算、无子进程**的门禁（14 道，步数由下面的 `total` 自己数）。
       # 与下面那个 job 分开，是因为 **2026-09-28 那次 CI 失败无法定位**：
       # job 日志要 admin 权限才下载得到，`::error::` 只在日志里。
       # 拆成两个 job 后，**哪个红就是哪组**——这是排查手段，
       # 而分组依据（起子进程 / 用临时目录）本身也是真实的差异面。
 
-      - name: 纯计算门禁（13 道，串行）
+      - name: 纯计算门禁（串行，步数自己数）
         run: |
           set -euo pipefail
           failed=""
           passed=0
           residual=0
-          for step in \
-            verify:gates \
-            verify:questions \
-            verify:impact \
-            verify:answers \
-            verify:portability \
-            check:site-agnostic \
-            check:exit-codes \
-            check:single-source \
-            verify:second-site \
-            verify:second-site-real \
-            check:anchors \
-            check:agents-doc \
-            check:onboarding-doc
-          do
+          # ⚠️ **步数自己数，不要写死。**
+          # 2026-09-28 我加 `check:two-paths` 时忘了改摘要里的 `/ 13`，
+          # 于是它打印「通过 14 / 13」——**结论行比实际判定的多**，
+          # 与 `check-gate-list` 记的「少一步不会有任何报错」是同一个家族。
+          steps="verify:gates
+          verify:questions
+          verify:impact
+          verify:answers
+          verify:portability
+          check:site-agnostic
+          check:exit-codes
+          check:single-source
+          verify:second-site
+          verify:second-site-real
+          check:anchors
+          check:agents-doc
+          check:onboarding-doc
+          check:two-paths"
+          total="$(printf '%s\n' "$steps" | grep -c .)"
+          for step in $steps; do
             printf '::group::%s\n' "$step"
             if npm run "$step"; then
               passed="$((passed + 1))"
@@ -240,7 +245,7 @@ jobs:
           {
             echo '## 知识层门禁（纯计算）'
             echo
-            echo "- 通过 $passed / 13"
+            echo "- 通过 $passed / $total"
             if [ -n "$failed" ]; then
               echo "- **失败 $(echo "$failed" | wc -w) 道**：$failed"
             else

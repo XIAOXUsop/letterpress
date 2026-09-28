@@ -23,10 +23,35 @@ describe('pageToDoc', () => {
     const doc = pageToDoc(page, { summary: '摘要' });
     // ⚠️ `declaredRelations` **不是** `related`——传错键会被 `?? []`
     // 静静兜成空数组，摘要照样算得出，只是永远对不上。
+    //
+    // ⚠️ `review` **默认不在**里面：`page` 固件没有它，而 `Doc.review` 是可选的。
+    // 「字段集合固定」这条不变——变的只是**哪些键出现**（见下一条）。
     expect(Object.keys(doc).sort()).toEqual([
       'body', 'declaredRelations', 'draft', 'explicitSlug', 'kind',
       'slug', 'sources', 'summary', 'title', 'wikiKind',
     ]);
+  });
+
+  /**
+   * ⚠️ **2026-09-28 加。`post` 的键集合比 `wiki` 少两个。**
+   *
+   * `wikiKind` 与 `review` 是**知识层专属**的——构建侧 `toDoc` 对 `post`
+   * 两处都给 `undefined`。若读路径照给，**同一页在两个出口形状不同**。
+   *
+   * > 用「省略键」而不是「给 undefined」：两者 `Doc.x` 读起来一样，
+   * > 但 `Object.keys()` 与 `JSON.stringify` 会不同——
+   * > 而 `content-manifest` 正是把 `Doc` 序列化出去的。
+   */
+  it('post 的键集合少 wikiKind 与 review——与构建侧同一口径', () => {
+    const withReview = { ...page, review: { status: 'reviewed' as const, checkedAt: '2026-01-01' } };
+    const wikiKeys = Object.keys(pageToDoc(withReview, { docKind: 'wiki' })).sort();
+    const postKeys = Object.keys(pageToDoc(withReview, { docKind: 'post' })).sort();
+    expect(wikiKeys).toContain('wikiKind');
+    expect(wikiKeys).toContain('review');
+    expect(postKeys).not.toContain('wikiKind');
+    expect(postKeys).not.toContain('review');
+    // 其余键**一个都不少**——差别只在这两个，不是一大截。
+    expect(postKeys.length).toBe(wikiKeys.length - 2);
   });
 
   it('关系用 declaredRelations，且默认取 page.related', () => {
@@ -79,6 +104,31 @@ describe('pageToDoc', () => {
   it('docKind 默认 wiki，可显式给 post', () => {
     expect(pageToDoc(page, {}).kind).toBe('wiki');
     expect(pageToDoc(page, { docKind: 'post' }).kind).toBe('post');
+  });
+
+  /**
+   * ⚠️ **2026-09-28 加。这条对齐的是「构建侧的口径」，不是设计偏好。**
+   *
+   * `src/lib/content.ts` 的 `toDoc` 写的是
+   * `kind === 'wiki' ? data.related : []`，而 `src/content.config.ts` 的
+   * **posts schema 里根本没有 `related` 这个键**——所以文章里写了会被 zod 剥掉。
+   * 读路径若照收，**同一页在构建产物与 CLI 回答里关系就不同**。
+   *
+   * > 本仓库 posts 里 0 篇写 `related:`，所以**这个分歧从未发作**——
+   * > 而「新站点会在文章里写关系」是很正常的一件事。
+   */
+  it('post 一律没有关系——与构建侧的 `kind === "wiki" ? related : []` 同口径', () => {
+    const withRel = { ...page, related: ['乙'] };
+    expect(pageToDoc(withRel, { docKind: 'post' }).declaredRelations).toEqual([]);
+    expect(pageToDoc(withRel, { docKind: 'wiki' }).declaredRelations).toEqual(['乙']);
+  });
+
+  it('page.docKind 也管用（readContentDirs 传下来的），且 options 优先', () => {
+    // `readContentDirs` 传了 docKind 时会把它带在页上——
+    // 而**调用方不该为了这个再手写一遍 map**。
+    expect(pageToDoc({ ...page, docKind: 'post' }, {}).declaredRelations).toEqual([]);
+    expect(pageToDoc({ ...page, docKind: 'post' }, { docKind: 'wiki' }).declaredRelations)
+      .toEqual(page.related);
   });
 
   it('草稿默认 false——buildGraph 会滤掉它', () => {

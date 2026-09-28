@@ -282,7 +282,15 @@ function parseReview(block: string): PageReview | undefined {
  */
 export function readContentDirs(
   dirs: readonly string[],
-  options: { readonly relationField?: string } = {},
+  options: {
+    readonly relationField?: string;
+    /**
+     * 文档类型。**本站传 `undefined` 时按目录判定不了**——
+     * 所以这里必须由调用方说，否则 `pageToDoc` 只能一律当 wiki，
+     * 于是 post 里写的关系会被照收（与构建侧相反）。
+     */
+    readonly docKind?: 'post' | 'wiki';
+  } = {},
 ): {
   /**
    * ⚠️ **不是 `ReturnType<typeof readContentPage>`**——那不含 `summary`，
@@ -291,7 +299,10 @@ export function readContentDirs(
    * 于是调用方只能去加 `as any` 或者干脆不读它——
    * **类型签名与运行时形状脱节，编译器就成了摆设。**
    */
-  readonly pages: (ReturnType<typeof readContentPage> & { readonly summary: string })[];
+  readonly pages: (ReturnType<typeof readContentPage> & {
+    readonly summary: string;
+    readonly docKind?: 'post' | 'wiki';
+  })[];
   readonly counts: ReadonlyMap<string, number>;
 } {
   const pages = [];
@@ -339,6 +350,7 @@ export function readContentDirs(
         // `related:` 解析——而那个解析与 `relationList` 是同一套逻辑
         // （`readContentPage` 内部就调它），所以两条路不会漂。
         ...(relationField ? { related: relationList(source, relationField) } : {}),
+        ...(options.docKind ? { docKind: options.docKind } : {}),
       });
     }
   }
