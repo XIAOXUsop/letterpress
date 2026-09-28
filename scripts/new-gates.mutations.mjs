@@ -182,9 +182,13 @@ const CASES = [
     target: 'check-no-duplicate-lists.mjs',
   },
   {
+    // ⚠️ 锚点是 `const ROOT_DIRS = SOURCE_DIRS;` 而不是字面量——
+    // 收敛掉跨文件重复之后它就变了，而**锚点失效会被「锚点出现 0 次」当场抓住**
+    // （那正是 2026-09-28 刚加的那道自检救下来的：不是「门禁有盲区」，
+    // 是「变异压根没注入」）。
     why: 'check:no-duplicate-lists — 把扫描根收窄（覆盖面变小却照样绿）',
     file: 'scripts/check-no-duplicate-lists.mjs',
-    find: "const ROOT_DIRS = ['scripts', 'src'];",
+    find: 'const ROOT_DIRS = SOURCE_DIRS;',
     replace: "const ROOT_DIRS = ['src'];",
     target: 'check-no-duplicate-lists.mjs',
   },

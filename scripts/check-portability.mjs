@@ -340,7 +340,8 @@ if (files.length === 0) {
  * > **「谁在用它」这个问题，扫描范围本身就是答案的一部分。**
  * > 范围外的文件不是「没有调用方」，是**没量到**。
  */
-const PROD_CALLERS = ['scripts', 'src'];
+import { SOURCE_DIRS } from './lib/source-dirs.mjs';
+const PROD_CALLERS = SOURCE_DIRS;
 /** 配置文件在仓库根 / src 下，不在 PROD_CALLERS 的目录里，逐个列出。 */
 const CONFIG_FILES = ['astro.config.mjs', 'src/content.config.ts'].map((f) => join(ROOT, f));
 

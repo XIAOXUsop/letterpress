@@ -25,6 +25,16 @@
  * ⚠️ **它量的是「字面量重复」，不是「逻辑重复」**——
  * 后者要读懂每个函数，量不到。而 2026-09-28 那四次**全都是字面量**。
  *
+ * ⚠️ **它量不到「手写的那份是子集」。**
+ * 那天四次里的前两次（`CORE` 漏 5 个、`USER_CLIS` 漏 3 个）**不是这个形态**：
+ * 手写 8 个、实际 13 个，手写那份是**子集而不是副本**，
+ * 而「子集 ≠ 内容相同」——所以本检查对那两次**完全无感**。
+ * 抓子集要靠「名单从数据源推导」，那是另外两处已经采用的处置。
+ *
+ * ⚠️ **它只在「一个文件里」找重复。** 跨文件那份用另一条判据
+ * （2026-09-28 实测：56 份清单里**只有 1 份**跨文件重复，而那 1 份还是
+ * 本文件自己刚写进去的 `['scripts','src']`）——已收敛，没留第二道。
+ *
  * ⚠️ **不排除同名不同内容**：那叫「两个不同的清单碰巧同名」，
  * 不一定是错。所以判据只看**内容逐字相同**的重复。
  *
@@ -32,6 +42,7 @@
  */
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { SOURCE_DIRS } from './lib/source-dirs.mjs';
 
 const ROOT = process.cwd();
 const problems = [];
@@ -51,7 +62,7 @@ const walk = (d) => {
   }
 };
 /** 扫描根目录。⚠️ **改这个列表等于改这道门禁的覆盖面**，见下面的下限断言。 */
-const ROOT_DIRS = ['scripts', 'src'];
+const ROOT_DIRS = SOURCE_DIRS;
 for (const d of ROOT_DIRS) walk(join(ROOT, d));
 
 if (files.length === 0) {
