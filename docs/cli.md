@@ -88,7 +88,7 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 
 ### CI 跑的是 `verify:all` 的一部分，不是全部
 
-2026-09-28 实测：`verify:all` 有 **33 步**，而 CI 的 `build` job 只显式调用了
+2026-09-28 实测：`verify:all` 有 **43 步**，而 CI 的 `build` job 只显式调用了
 其中 **7 个**（`check` / `test` / `verify` / `verify:testcount` / `verify:search` /
 `verify:reproducible` / `verify:base` / `verify:formats`）。
 **剩下 26 道在 CI 上从来没跑过**——包括检索金标、影响分析、答案可定位性、
@@ -97,13 +97,13 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 > 此前有人注意到过一次（`verify:testcount` 那段注释写着
 > 「**但 CI 从来没调用过它**」）——**只补了那一条**。
 > **写好的门禁没接线，和没有门禁是同一件事**；
-> 而「本地 33 步全绿、CI 也绿」会让人以为那些门禁在把关。
+> 而「本地 43 步全绿、CI 也绿」会让人以为那些门禁在把关。
 
 现在 CI 上有两个把关 job：
 
 | job | 跑什么 | 特点 |
 |---|---|---|
-| `full-gates` | `npm run verify:all`（全部 33 步） | ⚠️ **必须在 `verify:all` 之前 build**——第 4 步 `verify` 打在 `dist` 上，而 CI 是全新 checkout。**这个 job 从被加上那天起就是红的**，只是没人推过那个分支 |
+| `full-gates` | `npm run verify:all`（全部 43 步） | ⚠️ **必须在 `verify:all` 之前 build**——第 4 步 `verify` 打在 `dist` 上，而 CI 是全新 checkout。**这个 job 从被加上那天起就是红的**，只是没人推过那个分支 |
 | `knowledge-gates` | 21 道**不依赖 `dist`** 的门禁 | 失败不提前退出（跑完才知道还剩几道红）；跑完检查 `git diff` 是否干净 |
 
 两者都**必须串行**——`verify:site-mutations` / `verify:exit-codes` /

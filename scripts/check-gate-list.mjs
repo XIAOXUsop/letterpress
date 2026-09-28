@@ -40,6 +40,26 @@ const problems = [];
  */
 const ledgerText = readFileSync(join(ROOT, 'knowledge', 'gate-negatives.md'), 'utf8');
 
+/** 跑一个脚本，返回它的输出（4g 重算实测值时用）。 */
+const run = (script) => execFileSync('node', [join(ROOT, 'scripts', script)], {
+  encoding: 'utf8',
+});
+/** 命令名 → 它指向的脚本文件名（去 `scripts/` 前缀）。查不到返回 `undefined`。 */
+const scriptOf = (cmd) => {
+  const m = /node (scripts\/[\w.-]+\.mjs)/.exec(scripts[cmd] ?? '');
+  return m ? m[1].replace(/^scripts\//, '') : undefined;
+};
+
+/**
+ * `check-command-scripts` 输出里「N 个命令，N 个与脚本名对不上」那一段。
+ *
+ * ⚠️ **取不到就返回 `null` 而不是猜**——而 4g 对 `null` 的处置是
+ * **报「此刻核不到任何东西」**，不是默默放过。
+ * **「查不动 ≠ 通过」**：形态四的变体。
+ */
+const CMD_SCRIPTS_OUT = () =>
+  /(\d+)\s*个命令，(\d+)\s*个与脚本名对不上/.exec(run(scriptOf('check:command-scripts')));
+
 // ── 期望的步骤清单 ────────────────────────────────────────────────────
 //
 // **这份清单是本检查的核心价值**：它让「少了一步」变成一件可检测的事。
@@ -64,7 +84,7 @@ const EXPECTED = [
   ['npm run verify:json-output', '**`--json` 模式下失败也有结构化输出**（阶段 4 第 3 项剩的一半）'],
   ['npm run verify:json-mutations', '上一道的负向验证（三类违约：stdout 空 / ok 不是 false / code 与退出码打架）'],
   ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
-  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的那些门禁的负向验证**（43 条变异：每条必须让被测的那道红，恢复后回绿）'],
+  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的那些门禁的负向验证**（56 条变异：每条必须让被测的那道红，恢复后回绿）'],
   ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集（合成 docs 数组）'],
   ['npm run verify:second-site-real', '**读自文件的**异构内容集（阶段 4 第 5 项）'],
@@ -942,57 +962,129 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
  * > **选一个错的代价更小的，然后写明代价**（与判据 ④ 的处置同形）。
  */
 {
-  /** 台账里出现的「N 个命令 / N 处分叉」——**数字的来源是 `check:command-scripts`**。 */
-  const CMDS = [...ledgerText.matchAll(/(\d+)\s*个(?:单文件)?命令/g)]
-    .filter((m) => Number(m[1]) > 10)   // 排除「4 个命令」这类举例
-    .map((m) => Number(m[1]));
-  const DIVERGENT = [...ledgerText.matchAll(/(\d+)\s*个(?:的)?(?:命令名与脚本名|与脚本名)对不上/g)]
-    .map((m) => Number(m[1]));
+  /**
+   * **每一类可重算的数字：台账里的正则 + 怎么算出现在的值。**
+   *
+   * ⚠️⚠️ **2026-09-29 从两类扩到三类——因为量出来第三类也漂了。**
+   *
+   * 我原以为只有「命令数 / 分叉数」需要核，实测去扫那 6 处
+   * 4g 管不到的转述点时，发现：
+   *
+   * | 那一类 | 台账写的 | 实测 |
+   * |---|---|---|
+   * | 命令数 | 48 | **59** |
+   * | **变异条数** | **43** | **56** |
+   * | **编排步数** | **33** | **43** |
+   *
+   * ⚠️ **后两类的漂移在台账之外的 4 个文件里也有**：
+   * `docs/cli.md` 三处「33 步」、`check-gate-list` 的 `EXPECTED` 一处「43 条变异」。
+   * **同一个数字抄多遍这件事本身没被任何东西核**——4g 只核台账。
+   *
+   * ⚠️ **而「33 步」这种历史记录不能核**：台账里也有
+   * 「README 的『19 步』立刻被抓出来，而它早就是 23 步了」这类句子——
+   * **那是在记当时发生过的事，核它反而是错的**。
+   * 所以每条正则都要**排除明显是历史的写法**（见各处注释）。
+   */
+  const RECOMPUTABLE = [
+    {
+      what: '命令数',
+      re: /(\d+)\s*个(?:单文件)?命令/g,
+      min: 10,   // 排除「4 个命令」这类举例
+      actual: () => {
+        const m = CMD_SCRIPTS_OUT();
+        return m ? { total: Number(m[1]), divergent: Number(m[2]) } : null;
+      },
+      keys: ['total'],
+    },
+    {
+      what: '分叉数',
+      re: /(\d+)\s*个(?:的)?(?:命令名与脚本名|与脚本名)对不上|(\d+)\s*个分叉/g,
+      actual: () => {
+        const m = CMD_SCRIPTS_OUT();
+        return m ? { total: Number(m[1]), divergent: Number(m[2]) } : null;
+      },
+      keys: ['divergent'],
+    },
+    {
+      /*
+       * ⚠️ **变异条数是从变异脚本自己数出来的**——
+       * 而**数的方式必须与它报告的方式一致**。
+       * `new-gates.mutations.mjs` 最后打印 `ok/CASES.length`，
+       * 所以权威值是 `CASES` 的长度，**不是**「有多少个左花括号」也不是「有多少行 why」。
+       */
+      what: '变异条数',
+      /*
+       * ⚠️⚠️ **第一版只写「(\d+) 条变异」，报出 4/30/34 三处，全是历史记录。**
+       *
+       * 台账里那些是「34 条变异里 2 条一直假红」——**它记的是当时发生过的事**，
+       * 核它反而是错的（那件事已经过去了，而数字会一直变）。
+       *
+       * > **历史记录与现状声明在字面上完全一样**——
+       * > 唯一的区别是**它前面有没有「现在有多少」那类词**。
+       *
+       * 所以只认**紧跟着一个现状标志**的写法（「共 / 全部 / 现有 / 目前是 N 条」）。
+       * ⚠️ 而这**必然漏**：将来有人写一句不带标志的现状声明，就核不到。
+       * **这是「判据太宽变噪声」与「判据太窄漏」之间选的后者**——
+       * 因为噪声会让人忽略真信号，而漏报只是漏报。
+       */
+      re: /(?:共|全部|现有|目前是)\s*(\d+)\s*条变异/g,
+      actual: () => {
+        const src = readFileSync(join(ROOT, 'scripts', 'new-gates.mutations.mjs'), 'utf8');
+        // ⚠️ **必须 `lastIndexOf`**——变异脚本里那段算 `MUT_COUNT` 的自省代码
+        // **也含 `const CASES = [` 这个字符串**，而 `indexOf` 会找到**它自己**，
+        // 于是数出 0 条，而 4g 把 0 当成「台账写 58、实测 0」。
+        //
+        // > **「数一个字符串」在「那个字符串也出现在别处」时会数到自己**——
+        // > 而症状是「0」，看上去像一个合法的实测值。
+        const i = src.lastIndexOf('const CASES = [');
+        const end = src.indexOf('\n];', i);
+        if (i < 0 || end < 0) return null;
+        return { total: (src.slice(i, end).match(/^  \{$/gm) ?? []).length };
+      },
+      keys: ['total'],
+    },
+    {
+      what: '编排步数',
+      /*
+       * ⚠️ **只认「N 步」紧跟着「verify:all / 全部 / 全」的那种**——
+       * 台账里「19 步」「23 步」那些是**历史记录**
+       *（记当时 README 写的数、以及它被抓出来的过程），**核它反而是错的**。
+       */
+      // ⚠️ **`verify:all` 与「有」之间隔着反引号与加粗星号**
+      // （台账写的是 `` `verify:all` **有 43 步** ``），所以那几样要一并容许。
+      re: /(?:共|全部|现有|目前是)\s*(\d+)\s*步|verify:all`?\s*\**\s*有\s*\**(\d+)\s*步/g,
+      actual: () => ({ total: steps.length }),
+      keys: ['total'],
+    },
+  ];
 
   console.log('');
   console.log('台账里门禁自报实测值的对账（4g）');
   console.log('─'.repeat(64));
 
-  if (CMDS.length === 0) {
-    console.log('  – 台账里没有「N 个命令」这类可重算的数字（跳过）');
-  } else {
-    // 重跑那道门禁，取它自己报的那个数
-    const out = execFileSync('node', [join(ROOT, 'scripts', 'check-command-scripts.mjs')], {
-      encoding: 'utf8',
-    });
-    const m = /(\d+)\s*个命令，(\d+)\s*个与脚本名对不上/.exec(out);
-    if (!m) {
+  for (const item of RECOMPUTABLE) {
+    const claimed = [...ledgerText.matchAll(item.re)]
+      .map((m) => Number(m[1] ?? m[2]))
+      .filter((n) => Number.isInteger(n) && (!item.min || n >= item.min));
+    const got = item.actual();
+    if (!got) {
       problems.push(
-        '**`check-command-scripts` 的输出里找不到「N 个命令，N 个与脚本名对不上」**——\n'
-        + '    那道门禁改了输出格式，而本判据靠解析它。\n'
-        + '    **「4g 曾经核过」这句话此刻不成立**（形态四：查不动 ≠ 通过）。',
+        `**「${item.what}」的重算途径失效了**——本判据靠它取实测值。\n`
+        + '    → 而**「查不动」与「对得上」在输出上完全一样**（形态四的变体）。',
       );
-      console.log('  ✗ 重跑时找不到那段输出——4g 此刻核不到任何东西');
+      console.log(`  ✗ ${item.what}：重算失败，4g 此刻核不到它`);
+      continue;
+    }
+    const bad = [...new Set(claimed.filter((n) => !item.keys.some((k) => got[k] === n)))];
+    if (bad.length > 0) {
+      problems.push(
+        `台账里「${item.what}」写着 **${bad.join(' / ')}**，而现在算出来是 **${item.keys.map((k) => got[k]).join(' / ')}**。\n`
+        + '    → 那是**门禁自己报出来的数**，重算一遍就能对，**而它漂了没人发现**。\n'
+        + '    改台账（若那几句记的是历史事实，就写清是哪一天）。',
+      );
+      console.log(`  ✗ ${item.what}：台账写 ${bad.join('/')}，实测 ${item.keys.map((k) => got[k]).join('/')}`);
     } else {
-      const actual = { total: Number(m[1]), divergent: Number(m[2]) };
-      for (const claimed of [...new Set(CMDS)]) {
-        if (claimed === actual.total) {
-          console.log(`  ✓ 台账写「${claimed} 个命令」，实测 ${actual.total}`);
-        } else {
-          problems.push(
-            `台账里写着「**${claimed} 个命令**」，而现在跑出来是 **${actual.total}**。\n`
-            + '    → 那是**门禁自己报出来的数**，重跑一遍就能对，**而它漂了没人发现**。\n'
-            + '    改台账（若那几句记的是历史事实，就写清是哪一天）。',
-          );
-          console.log(`  ✗ 台账写 ${claimed} 个命令，实测 ${actual.total}`);
-        }
-      }
-      for (const claimed of [...new Set(DIVERGENT)]) {
-        if (claimed === actual.divergent) {
-          console.log(`  ✓ 台账写「${claimed} 个对不上」，实测 ${actual.divergent}`);
-        } else {
-          problems.push(
-            `台账里写着「**${claimed} 个命令名与脚本名对不上**」，`
-            + `而现在跑出来是 **${actual.divergent}**。`,
-          );
-          console.log(`  ✗ 台账写 ${claimed} 个分叉，实测 ${actual.divergent}`);
-        }
-      }
+      console.log(`  ✓ ${item.what}：${[...new Set(claimed)].join('/') || '（台账里没这个说法）'} 与实测一致`);
     }
   }
 }
