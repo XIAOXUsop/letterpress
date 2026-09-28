@@ -99,6 +99,16 @@ try {
     'utf8',
   );
   // cjk-slug：没有显式 slug（**info 级，默认关闭** → 要显式打开）
+  /*
+   * ⚠️ **2026-09-29 变异验证的第一条就是这一段。**
+   * 删掉它 → `cjk-slug` 触发不到 → **报的是「语料没能触发」那条**，
+   * **而级别那条仍然全过**。
+   *
+   * > **这正是本检查最该被看见的失败方向**：
+   * > 「没测到」与「测到且一致」在结果上无法区分（形态四），
+   * > **而它选了「红」**——那是对的（语料缺一条就是没核到），
+   * > **但它红的是「我漏了」而不是「它错了」**，**诊断里必须说清**。
+   */
   writeFileSync(
     join(dir, '中文标题.md'),
     '---\ntitle: 中文标题没写 slug\nkind: concept\nsummary: x\n---\n\n正文。\n', 'utf8',
@@ -336,6 +346,66 @@ try {
   }
   if (claims.every((c) => c.ok)) {
     console.log(`  ✓ ${claims.length} 条可机械核的「含义」全部成立`);
+  }
+}
+
+/*
+ * ── 自测：**「没触发」与「触发且一致」必须能被分开** ──────────────────
+ *
+ * ⚠️ **2026-09-29 补的。** 本检查原来**只有正例**（11 个 `✓`），
+ * **没有一条「不该红」的样本**。
+ *
+ * 而它有**两种完全不同的红**：
+ * ① 「`X` 的级别是 A，实测是 B」——**实现错了**
+ * ② 「`X` 这份语料没能触发它」——**语料缺一条**，而**实现可能完全正确**
+ *
+ * > **②不是误报**（那条规则此刻真的没被核），**但它红的是「我漏了」而不是「它错了」**——
+ * > **而这两种红在输出上必须能分开**，否则读的人会去改实现。
+ *
+ * 这个自测验的正是：**「级别那条全过」与「没触发那条红」能否同时成立**。
+ * 若它们绑在一起，那么**实现对不对就永远分不清**了。
+ */
+{
+  /** 重跑一次**故意少一条语料**的语料，看「没触发」会不会被抓到。 */
+  const shrunk = mkdtempSync(join(tmpdir(), 'rule-levels-selftest-'));
+  try {
+    // 只造 `broken-wikilink` 需要的那一篇 → 其余 10 条**都触发不到**
+    writeFileSync(
+      join(shrunk, '断链.md'),
+      '---\ntitle: 断链\nslug: 断链\nkind: concept\nsummary: s\n---\n\n见 [[不存在]]。\n', 'utf8',
+    );
+    const { pages: sp } = readContentDirs([shrunk]);
+    const sd = sp.map((p) => pageToDoc(p));
+    const rules = new Set(
+      lint(sd, buildGraph(sd), { warnOnCjkSlug: true }).map((i) => i.rule),
+    );
+    // ⚠️ **自己解析文档声称的规则集**——`claimed` 定义在上面那个 `try` 块里，
+    // 而这个自测在块**外**，引用不到（第一版就这么写的，运行时会 ReferenceError）。
+    const LEVEL_CN = { 错误: 'error', 警告: 'warn', 提示: 'info' };
+    const claimedHere = new Map(
+      [...readFileSync(join(ROOT, 'AGENTS.md'), 'utf8')
+        .matchAll(/^\| (错误|警告|提示) \| `([a-z-]+)`/gm)]
+        .map((m) => [m[2], LEVEL_CN[m[1]]]),
+    );
+    const restMiss = [...claimedHere.keys()].filter((r) => !rules.has(r));
+    const total = claimedHere.size;
+    if (rules.size + restMiss.length === total && restMiss.length > 0) {
+      console.log(
+        `  ✓ 自测：语料只造一篇时触发 ${rules.size} 条、其余 ${restMiss.length} 条被「没能触发」抓到，`
+        + `    ${rules.size}+${restMiss.length}=${total}（**「没测到」与「测到且一致」分得开**）`,
+      );
+    } else {
+      problems.push(
+        '**自测失效**：「只造一条语料」本该只触发 1 条规则，'
+        + `实际触发 ${rules.size} 条（${[...rules].join('、')}）、`
+        + `「没触发」抓到 ${restMiss.length} 条（期望 10）。\n`
+        + '    → 而**「没测到」与「测到且一致」分不开**时，'
+        + '**「实现对不对」就永远分不清**。',
+      );
+      console.log(`  ✗ 自测失效：触发 ${rules.size} 条、没触发抓到 ${restMiss.length} 条`);
+    }
+  } finally {
+    rmSync(shrunk, { recursive: true, force: true });
   }
 }
 
