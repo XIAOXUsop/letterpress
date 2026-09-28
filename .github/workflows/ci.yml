@@ -200,6 +200,7 @@ jobs:
         run: |
           set -euo pipefail
           failed=""
+          residual=0
           for step in \
             verify:gates \
             verify:questions \
@@ -227,23 +228,42 @@ jobs:
             if npm run "$step"; then
               echo "✓ $step"
             else
-              # **不立刻退出**——一次跑完才知道还剩几道红的，
+              # **不立刻退出**——一次跑完才知道还剩几道的红，
               # 而 `set -e` 会在第一道就停，剩下的就没人知道了。
+              # `::error::` 让失败在 GitHub 的 run 摘要里**直接可见**，
+              # 不必去翻被 `::group::` 折叠起来的日志。
+              echo "::error::门禁失败：$step"
               failed="$failed $step"
             fi
             printf '::endgroup::\n'
           done
 
-          # 变异注入那几道改过源码。**必须确认它们还原干净了**——
+          # 变异注入那几道改过源码。**确认它们还原干净了**——
           # 否则后面几步量的是被改坏的代码。
+          #
+          # ⚠️ **2026-09-28：这一段在 CI 上是红的，原因待查。**
+          # 本地（Windows，干净态）跑同一个 job 是 0 退出，而 CI（Linux）失败；
+          # 同一批门禁在 `full-gates`（`verify:all`，全 33 步）里却是绿的。
+          # 本段是该 job **独有**的东西，所以先怀疑自己。
+          #
+          # ⚠️ **它不能盖掉门禁本身的失败**——`exit 1` 只在真有残留改动时执行，
+          # 而 `::error::` 两类都报，所以下一次跑完能从 run 摘要看出是哪一类。
           if ! git diff --quiet -- src/ scripts/; then
-            echo "::error::有门禁把源码改坏后没还原："
+            echo "::error::有门禁把源码改坏后没还原（这是 knowledge-gates job 独有的检查）"
             git diff --stat -- src/ scripts/
-            exit 1
+            # `git config core.autocrlf true` 之外还要看行尾：
+            # Windows 上写回的文件是 LF，理论上不该有差异——
+            # **但「理论上」正是本条要证伪的东西**，所以把原始差异也打出来。
+            git diff -- src/ scripts/ | head -40
+            residual=1
           fi
 
           if [ -n "$failed" ]; then
             echo "::error::以下门禁在 CI 上是红的：$failed"
+            exit 1
+          fi
+          if [ "$residual" -ne 0 ]; then
+            echo "::error::门禁都绿了，但源码有残留改动（见上）——结论不作数"
             exit 1
           fi
 
