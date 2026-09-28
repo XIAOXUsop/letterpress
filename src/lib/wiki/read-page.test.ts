@@ -3,6 +3,8 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readContentDirs, readContentPage, relationList } from './read-page.js';
+import { pageToDoc } from './page-to-doc.js';
+import { buildGraph } from './graph.js';
 
 /**
  * `read-page.ts` 此前**没有自己的测试文件**——
@@ -84,6 +86,21 @@ describe('readContentPage', () => {
       // 只有 status 是必填的（它是这条状态机的主键）
       write('a.md', ['---', 'review:', '  checkedAt: 2026-09-24', '---', '', '正文。', ''].join('\n'));
       expect(readContentPage(dir, 'a.md').review).toBeUndefined();
+    });
+
+    it('**status 是非法值时当没写**——构建侧 zod 会拒绝，读路径不能静静接受', () => {
+      // 2026-09-28 实测：`status: garbage` 原先被原样透传，
+      // 于是**同一个坏 frontmatter，构建失败而 CLI 接受**。
+      // 症状是「check:review 说这页没复核」——而真正的原因是它写坏了。
+      write('a.md', ['---', 'review:', '  status: garbage', '  checkedAt: 2026-01-01', '---', '', '正文。', ''].join('\n'));
+      expect(readContentPage(dir, 'a.md').review).toBeUndefined();
+    });
+
+    it('三个合法值都认', () => {
+      for (const s of ['pending', 'reviewed', 'stale']) {
+        write('a.md', ['---', 'review:', `  status: ${s}`, '  checkedAt: 2026-01-01', '---', '', '正文。', ''].join('\n'));
+        expect(readContentPage(dir, 'a.md').review?.status).toBe(s);
+      }
     });
 
     it('CRLF 换行同样能解析', () => {
@@ -281,6 +298,54 @@ describe('readContentPage', () => {
       const src = '---\naudience: [甲, 乙]\nrelated: [丙]\n---\n\n正文。\n';
       expect(relationList(src, 'audience')).toEqual(['甲', '乙']);
       expect(relationList(src, 'related')).toEqual(['丙']);
+    });
+  });
+
+  describe('draft（草稿）', () => {
+    /**
+     * ⚠️ **2026-09-28 补。** `readContentPage` 原先**完全不读 `draft`**，
+     * 于是 `pageToDoc` 恒给 `false`、`buildGraph` 的 `filter((d) => !d.draft)`
+     * 形同虚设——**草稿会进 CLI 的检索与影响分析，而构建产物里没有它**。
+     *
+     * 与前几处「post 口径」不同：**这一处只要有一篇草稿就会发作**。
+     * 本站 0 篇（实测），而 `verify:formats` 的草稿隔离探针**只验构建产物**。
+     */
+    it('draft: true 会被读到', () => {
+      write('a.md', '---\ntitle: 草稿\ndraft: true\n---\n\n未完成。\n');
+      const p = readContentPage(dir, 'a.md');
+      expect(p.draft).toBe(true);
+    });
+
+    it('没写 draft 时是 false', () => {
+      write('a.md', '---\ntitle: 正式\n---\n\n正式。\n');
+      expect(readContentPage(dir, 'a.md').draft).toBe(false);
+    });
+
+    it('认 yes / on / 大写 / 带引号——YAML 都合法', () => {
+      // `frontmatterField` 返回**原始字符串**，而 YAML 的真值不止 `true`。
+      // 只认 `=== 'true'` 的话，`draft: "true"` 会静默变成正式页。
+      for (const v of ['yes', 'on', 'TRUE', '"true"', "'true'"]) {
+        write('a.md', `---\ntitle: 甲\ndraft: ${v}\n---\n\n甲。\n`);
+        expect(readContentPage(dir, 'a.md').draft).toBe(true);
+      }
+    });
+
+    it('draft: false 与别的假值仍是 false', () => {
+      for (const v of ['false', 'no', 'off', '0', '""']) {
+        write('a.md', `---\ntitle: 甲\ndraft: ${v}\n---\n\n甲。\n`);
+        expect(readContentPage(dir, 'a.md').draft).toBe(false);
+      }
+    });
+
+    it('**草稿会被 buildGraph 滤掉**——那正是这个字段存在的理由', () => {
+      // 判据不放在 `readContentPage` 上，而是放在**结果**上：
+      // 「读到 draft」与「草稿不进图」是两件事，后者才是用户要的。
+      write('a.md', '---\ntitle: 草稿\ndraft: true\n---\n\n未完成。\n');
+      write('b.md', '---\ntitle: 正式\n---\n\n正式。\n');
+      const { pages } = readContentDirs([dir]);
+      const docs = pages.map((p) => pageToDoc(p));
+      const g = buildGraph(docs);
+      expect([...g.bySlug.keys()]).toEqual(['b']);
     });
   });
 

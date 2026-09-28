@@ -56,6 +56,12 @@ export interface ReadPage {
    */
   readonly docKind?: 'post' | 'wiki';
   /**
+   * 草稿。**`readContentPage` 从 2026-09-28 起才读它**；
+   * 在那之前 `pageToDoc` 恒给 `false`，于是 `buildGraph` 的草稿过滤形同虚设——
+   * 草稿会进 CLI 的检索与影响分析，而构建产物里没有它。
+   */
+  readonly draft?: boolean;
+  /**
    * 复核状态。`readContentPage` 在有 `review:` 块时会给它，**没有时键不出现**
    * （不是 `undefined`）——所以这里是可选的。
    */
@@ -195,6 +201,6 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
     // 读路径若照收，就与构建产物对不上（详见 `PageToDocOptions.docKind`）。
     declaredRelations: isWiki ? options.relations ?? page.related : [],
     explicitSlug: options.explicitSlug ?? page.explicitSlug ?? false,
-    draft: options.draft ?? false,
+    draft: options.draft ?? page.draft ?? false,
   };
 }

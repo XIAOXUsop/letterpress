@@ -33,7 +33,18 @@ export interface PageSourceRef {
 
 /** 页面上的复核记录。 */
 export interface PageReview {
-  readonly status: string;
+  /**
+   * ⚠️ **2026-09-28 收窄成三个字面量。**
+   *
+   * 原先它是 `string`，而 `Doc.review.status`（以及 `content.config.ts` 的
+   * zod schema）是 `'pending' | 'reviewed' | 'stale'`。
+   * 读路径的页要喂给 `pageToDoc` 时**类型就断了**——
+   * 而在那之前没人把两者放在一起，所以那个不一致一直躺着。
+   *
+   * 收窄是安全的：`parseReview` 本来就只在这三个值里认，
+   * 别的值它给 `undefined`（见那条测试「review 存在但没有 status 时也是 undefined」）。
+   */
+  readonly status: 'pending' | 'reviewed' | 'stale';
   readonly checkedAt?: string;
   /**
    * 复核当时的正文摘要。
@@ -78,6 +89,8 @@ export function readContentPage(dir: string, file: string): {
   readonly sources: readonly PageSourceRef[];
   readonly review?: PageReview;
   readonly related: readonly string[];
+  /** 2026-09-28 补：之前完全不读它，于是 buildGraph 的草稿过滤形同虚设。 */
+  readonly draft: boolean;
   /** frontmatter 之后的正文（不含 frontmatter）。**已 trim，与 Astro 的 `entry.body` 同口径。** */
   readonly body: string;
 } {
@@ -166,6 +179,22 @@ export function readContentPage(dir: string, file: string): {
     sources: refs,
     ...(review ? { review } : {}),
     related: relationList(source, 'related'),
+    /*
+     * ⚠️ **2026-09-28 补 `draft`。**
+     *
+     * 之前 `readContentPage` **完全不读它**，于是 `pageToDoc` 恒给 `false`、
+     * `buildGraph` 的 `filter((d) => !d.draft)` 形同虚设——
+     * **草稿会进 CLI 的检索与影响分析，而构建产物里没有它。**
+     *
+     * 与前四处「post 口径」不同，**这一处只要有一篇草稿就会发作**：
+     * 本站 0 篇（实测），所以一直没暴露；而 `verify:formats` 的草稿隔离探针
+     * **只验构建产物**（页面 / 孪生 / OG / manifest 里没有它），
+     * **不验读路径**——那正是它漏掉这一处的原因。
+     *
+     * ⚠️ 认 `true` / `yes` / `on` 之外还认**带引号的** `"true"`——
+     * YAML 允许，而 `frontmatterField` 返回的是**原始字符串**。
+     */
+    draft: /^(true|yes|on)$/i.test((frontmatterField(source, 'draft') ?? '').trim().replace(/^["']|["']$/g, '')),
     body,
   };
 }
@@ -264,6 +293,22 @@ function parseReview(block: string): PageReview | undefined {
     new RegExp(`^[ \\t]+${k}:[ \\t]*(.+?)[ \\t]*$`, 'm').exec(fields.join('\n'))?.[1];
   const status = get('status');
   if (!status) return undefined;
+  /*
+   * ⚠️ **2026-09-28 补：校验 status 是三个合法值之一。**
+   *
+   * 原先它**原样透传**，而 `content.config.ts` 的 zod schema 是
+   * `z.enum(['pending', 'reviewed', 'stale'])`——所以**同一个坏 frontmatter，
+   * 构建侧直接失败、读路径却静静接受**。
+   *
+   * 实测：`review:\n  status: garbage` → 读路径给出 `{ status: "garbage" }`，
+   * 而构建会在那篇文件的 schema 校验上红。
+   *
+   * > 症状是「`check:review` 说这页没复核」——**而真正的原因是它写坏了**。
+   * > 非法值当「没有 review」处理，比原样透传更接近构建侧的行为。
+   */
+  if (status !== 'pending' && status !== 'reviewed' && status !== 'stale') {
+    return undefined;
+  }
   const checkedAt = get('checkedAt');
   const contentDigest = get('contentDigest');
   return {
