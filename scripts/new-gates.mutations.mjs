@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的八道门禁的负向验证。**
+ * **2026-09-28 新增的九道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那八道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
+ * 那九道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
  * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists` /
- * `check:onboarding-doc` / `check:command-scripts`。
+ * `check:onboarding-doc` / `check:command-scripts` / `check:gate-list`。
  * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
  * 语料一扩、判据一改，遮住关系就变了。
  *
@@ -115,10 +115,34 @@ function mutate({ file, find, replace, target, why }) {
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
-  'check-onboarding-doc.mjs', 'check-command-scripts.mjs',
+  'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
 ];
 
 const CASES = [
+  {
+    // ⚠️ 这一条守着 2026-09-28 修的那处盲区：「第 999 步」格式合法、
+    // 指向一个不存在的步骤，而旧判据只认格式、不核数字。
+    // 讽刺的是它就出在 `verify:only` 那条豁免当初真的翻车的地方。
+    why: 'check:gate-list — 豁免理由里塞一个「第 999 步」（格式合法、指向不存在）',
+    file: 'scripts/check-gate-list.mjs',
+    find: "['wiki:ask', '交互式问答：输入是自然语言问题，没有固定输入就没法当门禁。'",
+    replace: "['wiki:ask', '交互式问答：输入是自然语言问题，没有固定输入就没法当门禁，见 verify:all 的第 999 步。'",
+    target: 'check-gate-list.mjs',
+  },
+  {
+    why: 'check:gate-list — 豁免理由引用的文件不存在（理由本身是空的）',
+    file: 'scripts/check-gate-list.mjs',
+    find: 'scripts/bundle-and-verify.mjs',
+    replace: 'scripts/does-not-exist.mjs',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    why: 'check:gate-list — 豁免理由变成散文（没有可验证的引用）',
+    file: 'scripts/check-gate-list.mjs',
+    find: "['measure', '量产物给**人**看（`scripts/measure.mjs`），判定由 `npm run verify:formats` 里对应的门禁做'],",
+    replace: "['measure', '量产物给人看，判定在别处。'],",
+    target: 'check-gate-list.mjs',
+  },
   {
     // ⚠️ 主判据：分叉没登记。
     // 少了这一条，「加一个命令名与脚本名不同的脚本」什么都不会报——
