@@ -95,8 +95,23 @@ console.log(`  扫了 ${files.length} 个文件\n`);
  * 排除的办法是**按文件名**（与 `check-portability` 排除自己的做法一致），
  * 不是靠「字符串等于自己」这种自指判断。
  */
+/*
+ * ⚠️ **必须排除「故意弄坏」的那些。**
+ *
+ * ① 本文件自己——`SHARED_LITERALS` 里就写着那个字面量（那是**登记处**），
+ *    而本文件自己也是被扫的 `.mjs`——于是它把自己判成「第二处」。
+ * ② `*.mutations.mjs`——**那些脚本的职责就是把某个写法复制一份**，
+ *    所以它们必然含被登记的字面量。**它们不是真值，是测试夹具。**
+ *
+ * ⚠️ ① 第一次跑就抓到了（2026-09-28）；
+ * ② 是写完 `new-gates.mutations.mjs` 之后立刻撞上的——
+ * **新增一个变异脚本就会触发**，而那正是这个门禁该报的「第二处」，
+ * 只是那处**不是漂开，是夹具**。
+ *
+ * 排除的办法是**按文件名模式**，不是自指判断。
+ */
 const SELF = 'check-single-literal.mjs';
-const scanned = files.filter((f) => !f.endsWith(SELF));
+const scanned = files.filter((f) => !f.endsWith(SELF) && !f.endsWith('.mutations.mjs'));
 if (scanned.length === 0) {
   console.error('排除自己之后一个文件都不剩——这个检查什么都没量。');
   process.exit(1);

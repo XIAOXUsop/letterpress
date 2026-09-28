@@ -341,6 +341,12 @@ jobs:
       - name: verify:second-site-real-mutations
         run: npm run verify:second-site-real-mutations
 
+      # ⚠️ **这一组靠「改源码 → 门禁必须红 → 还原」证明自己**，
+      # 所以**必须排在其他 step 之后**——GitHub 在失败后不再跑后续 step，
+      # 而它要改的正是本 job 前面那些门禁的源码。
+      - name: verify:new-gates-mutations
+        run: npm run verify:new-gates-mutations
+
   lint-content:
     name: 内容体检
     runs-on: ubuntu-latest
