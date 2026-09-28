@@ -780,6 +780,37 @@ const CASES = [
     target: 'check-two-paths.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着 4c 的判据本身。**
+     *
+     * 4c 是这一天加的：它发现 `GATES_WITH_MUTATIONS` 里**只有一道**门禁，
+     * 而 `verify:all` 里有 33 道脚本门禁——**4b 那个循环一次都没跑过其余 32 道**，
+     * 而它打印的那行读起来像「每道都核过了」。
+     *
+     * 变异把 4c 的过滤条件拆掉一半（`recorded()` 不再算数），
+     * 于是台账里没记的那 4 道应当立刻冒出来。
+     */
+    why: 'check:gate-list — 4c 不再认台账里的记录（那些「未验」行就当没写）',
+    file: 'scripts/check-gate-list.mjs',
+    find: '!covered(f) && !recorded(f) && !NO_MUTATION.has(f)',
+    replace: '!covered(f) && !NO_MUTATION.has(f)',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 `NO_MUTATION` 这条例外。**
+     *
+     * 例外本身是危险的——**「登记了就不查」正是手写清单的老毛病**。
+     * 而 `check-staged.mjs` 那条理由写得很具体（「注入的改动按定义就在工作区里」），
+     * 所以它**站得住**；要验的是「**理由被删掉之后它就不算例外了**」。
+     */
+    why: 'check:gate-list — NO_MUTATION 里的登记被删（例外消失，check-staged 应当变回未覆盖）',
+    file: 'scripts/check-gate-list.mjs',
+    find: "['check-staged.mjs', '它只比",
+    replace: "['check-staged-删了.mjs', '它只比",
+    target: 'check-gate-list.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",

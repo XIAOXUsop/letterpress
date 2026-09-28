@@ -22,7 +22,7 @@
  *
  * 用法：`node scripts/check-gate-list.mjs`
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkCiWiring } from './ci-wiring.mjs';
 
@@ -492,6 +492,174 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
     console.log(`  ✗ ${gate}：${uncovered.length} 项判据没有对应的变异（${uncovered.join('、')}）`);
   } else {
     console.log(`  ✓ ${gate}：${requirementFiles.length} 项判据都有对应变异`);
+  }
+}
+
+/*
+ * ── 4c. 编排里的每道门禁，**覆盖它的变异脚本要么存在、要么登记理由** ────
+ *
+ * ⚠️⚠️ **2026-09-29 实测：4b 那个循环一次都没跑过 12 道门禁。**
+ *
+ * `GATES_WITH_MUTATIONS` 里**只有一道**（`check-site-agnostic`），
+ * 而 `verify:all` 里有 **21 道**脚本门禁、其中 **13 道**在
+ * `new-gates.mutations.mjs` 里有变异。
+ * 于是对那 13 道，4b 压根不会看——**它只知道登记表里有的那一个**。
+ *
+ * > **「登记表里没有」与「核过了」在输出上完全一样**：
+ * > 4b 打印的那行 `scripts/check-site-agnostic.mjs：3 项判据都有对应变异`
+ * > 读起来像「每道门禁都核过了」，而实际上 12 道从未进入过那个循环。
+ * >
+ * > 而 4b 恰恰是**「谁还没被验」的那个判定者**——
+ * > **判定者自己漏了 12 个对象，而没人看得出来。**
+ *
+ * 修法与 ②⅔ 同一形状：**清单一律从文件系统推导，不手写。**
+ *   ① `scripts/*mutations*.mjs` 就是「有哪些变异脚本」（读目录，不写清单）
+ *   ② `verify:all` 里跑的脚本门禁就是「有哪些要覆盖的对象」（已在 `steps` 里）
+ *   ③ 「哪个脚本覆盖哪道门禁」由**文件名对应**推出来
+ *      （`site-agnostic.mutations.mjs` ↔ `check-site-agnostic.mjs`），
+ *      推不出来的必须在 `NO_MUTATION` 里**写明为什么**
+ *
+ * ⚠️ **③ 的对应关系是「去掉前缀后的名字相同」**，
+ * 而这依赖命名约定——**所以它是本条判据最弱的一环**，
+ * 写在这里是为了让下一个人知道**它有多可信**。
+ * 真要更严，得让每个变异脚本自报 `target`（`new-gates.mutations.mjs` 已经这么做了）。
+ */
+{
+  /** 「`check-xxx.mjs`」与「`xxx.mutations.mjs`」之间的对应：去掉前缀后同名。 */
+  const stem = (f) => f
+    .replace(/^check-/, '')
+    .replace(/^verify-/, '')
+    .replace(/\.mjs$/, '')
+    .replace(/\.mutations$/, '');
+
+  /**
+   * 这道门禁有没有变异脚本覆盖它。
+   *
+   * ⚠️⚠️ **靠文件名推是错的——实测 13 道里 13 道都推不出。**
+   *
+   * 第一版用「`check-x.mjs` ↔ `x.mutations.mjs`」这个约定，
+   * 而 7 个变异脚本的 stem 是：`exit-codes` / `json-output` / `migrate-manifest`
+   * / **`new-gates`** / `retrieval-gates` / `second-site-real` / `site-agnostic`。
+   * **13 道新门禁的变异全在 `new-gates.mutations.mjs` 一个文件里**，
+   * stem 是 `new-gates`——与它们**逐个都对不上**。
+   *
+   * > **只有 4 道能推出来**（`check-exit-codes` / `check-json-output` /
+   * > `migrate-manifest` / `check-second-site-real`），而那 4 道**恰好**
+   * > 是各有独立变异脚本的那些。**巧合，不是规律。**
+   *
+   * 权威关系是变异脚本里的 **`target:` 字段**——
+   * `new-gates.mutations.mjs` 47 条变异里每条都写了 `target`。
+   * **从那里读，不从文件名猜。**
+   *
+   * ⚠️ **而 5 个变异脚本没有 `target` 字段**（`exit-codes` / `json-output` /
+   * `migrate-manifest` / `retrieval-gates` / `second-site-real` /
+   * `site-agnostic`）——那 6 个只能靠文件名，而**那 6 个恰好对得上**。
+   * 两条路并用，**哪条推不出就试另一条**，都推不出才算未覆盖。
+   */
+  const mutationScripts = readdirSync(join(ROOT, 'scripts'))
+    .filter((f) => f.includes('mutations') && f.endsWith('.mjs'));
+  const targets = new Set(
+    mutationScripts.flatMap((m) =>
+      [...readFileSync(join(ROOT, 'scripts', m), 'utf8').matchAll(/target: '([^']+)'/g)].map((x) => x[1]),
+    ),
+  );
+
+  const covered = (f) => targets.has(f) || mutationScripts.some((m) => stem(m) === stem(f));
+
+  /**
+   * 编排里跑的**门禁脚本**（变异脚本自己不算——它就是验证，不是被验证的对象）。
+   * ⚠️ `bundle-and-verify.mjs` 也不算：它是端到端契约，没有可注入的判据层。
+   */
+  const gateScripts = steps
+    .map((s) => /^npm run ([\w:-]+)$/.exec(s)?.[1])
+    .filter(Boolean)
+    .map((n) => (/node (scripts\/[\w.-]+\.mjs)/.exec(scripts[n] ?? '') ?? [])[1])
+    .filter(Boolean)
+    .map((f) => f.replace(/^scripts\//, ''))
+    .filter((f) => !f.includes('mutations') && f !== 'bundle-and-verify.mjs');
+
+  /**
+   * ⚠️⚠️ **「覆盖」不等于「有变异脚本」——这是 4c 第一版栽的地方。**
+   *
+   * 第一版只认变异脚本，于是报出 **28 道未覆盖**。
+   * 而其中绝大多数在 `knowledge/gate-negatives.md` 的表里**明明有 ✅ 红**——
+   * 2026-09-24 那批验证是**手工做的**，后来固化成 7 个变异脚本，
+   * **而那 7 个里有 5 个没有 `target` 字段**，覆盖关系只能从文件名推。
+   *
+   * > **「没找到变异脚本」≠「没被验过」**（形态十一，反向）。
+   * > 台账里那一行「✅ 红」**就是**证据——它是被记下来的事实。
+   *
+   * 所以判据改成**三选一**，三样都是可从文件系统读出来的事实：
+   *   ① 有覆盖它的变异脚本（按文件名对应）
+   *   ② 台账表里有它的一行（**台账是台账，不重新判断对错，只查它在不在**）
+   *   ③ 在 `NO_MUTATION` 里登记了理由
+   *
+   * ⚠️ **② 只查「在不在」，不查那行写的是不是「✅ 红」**——
+   * 「未验」也是一行，那正是「已知的空白」，**不是缺口**。
+   */
+  const ledger = readFileSync(join(ROOT, 'knowledge', 'gate-negatives.md'), 'utf8');
+  /** 台账表里出现过的门禁命令名（第一列是反引号包着的命令）。 */
+  const inLedger = new Set(
+    [...ledger.matchAll(/^\| `?((?:verify|check|wiki)[:\w-]*)`?\s*\|/gm)].map((m) => m[1]),
+  );
+
+  const NO_MUTATION = new Map([
+    ['check-staged.mjs', '它只比**暂存区与工作区**——而**注入的改动按定义就在工作区里**，'
+      + '所以每一条针对它的变异都会「注入后本来就一致」。它核的是流程，不是代码。'],
+  ]);
+
+  /**
+   * 编排里的门禁 → 它的**命令名**。
+   *
+   * ⚠️⚠️ **台账记的是命令名，而 `gateScripts` 给出的是脚本文件名——两样东西。**
+   * 我第一版直接拿脚本文件名去 join 台账，于是**命中 0 道**，
+   * 而台账里明明有 27 个门禁。**48 个单文件脚本里有 8 个命令名与脚本名不同**
+   * （`check:anchors` → `check-anchor-links.mjs`），**这就是那 8 个的来源**——
+   * 同一个坑，`check-command-scripts.mjs` 当初就是为它建的。
+   *
+   * 而 `NAME_DIVERGENCE` **就是那份权威对应表**，
+   * 它的注释里写着「照着命令名去 grep 脚本会落空，我今天因此 ENOENT 了两次」，
+   * 而 `check-command-scripts` 守着它。**用它，不要自己拼名字。**
+   */
+  const { NAME_DIVERGENCE } = await import('./lib/command-scripts.mjs');
+  const cmdOfScript = new Map(NAME_DIVERGENCE.map(([cmd, file]) => [file.replace(/^scripts\//, ''), cmd]));
+
+  /** 编排里的门禁命令名 → 它的脚本文件名。 */
+  const scriptOfCmd = new Map(
+    Object.entries(scripts)
+      .map(([c, v]) => [c, (/node (scripts\/[\w.-]+\.mjs)/.exec(v ?? '') ?? [])[1]])
+      .filter(([, f]) => f),
+  );
+
+  /** 这道门禁在台账里有没有一行。 */
+  const recorded = (f) => {
+    const cmd = cmdOfScript.get(f) ?? [...scriptOfCmd].find(([, v]) => v.replace(/^scripts\//, '') === f)?.[0];
+    return cmd !== undefined && inLedger.has(cmd);
+  };
+
+  const uncovered = gateScripts.filter((f) => !covered(f) && !recorded(f) && !NO_MUTATION.has(f));
+  console.log('');
+  console.log('编排门禁的负向验证覆盖（4c：从文件系统推导，不手写清单）');
+  console.log('─'.repeat(64));
+  const viaScript = gateScripts.filter(covered).length;
+  const viaLedger = gateScripts.filter((f) => !covered(f) && recorded(f)).length;
+  console.log(
+    `  ${gateScripts.length} 道编排门禁：${viaScript} 道有变异脚本、`
+    + `${viaLedger} 道在台账里有记录、${NO_MUTATION.size} 道登记了理由`,
+  );
+  for (const [f, why] of NO_MUTATION) {
+    console.log(`  – ${f}：${why}`);
+  }
+  if (uncovered.length > 0) {
+    problems.push(
+      `这些编排门禁**既没有变异脚本、台账里也没有一行**：\n`
+      + uncovered.map((f) => `        scripts/${f}`).join('\n') + '\n'
+      + '    → 补一个变异脚本、在台账里记一行、或在 `NO_MUTATION` 里写明为什么。\n'
+      + '    **沉默不是理由**——「没登记」与「核过了」在输出上完全一样。',
+    );
+    console.log(`  ✗ ${uncovered.length} 道三样都没有：${uncovered.join('、')}`);
+  } else {
+    console.log('  ✓ 每道编排门禁都有变异脚本、台账记录、或登记过的理由');
   }
 }
 
