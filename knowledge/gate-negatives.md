@@ -112,32 +112,36 @@ CI 上「知识层门禁（子进程）」连续三次红。定位过程本身�
 **依赖一个没人声明的前置条件**。区别是那次写在注释里，
 这次**连注释都没有**——它只是「碰巧在本地成立」。
 
-## 「接了线」不等于「线通了」——`full-gates` job 生下来就是红的（2026-09-28）
+## 一个**被推翻的发现**：`full-gates` job「生下来就是红的」（2026-09-28，已推翻）
 
 `origin/test` 上有一个 2026-09-26 的提交 `4f75c77`「ci: 在 test 分支运行完整门禁」，
 加了个 `full-gates` job 直接跑 `npm run verify:all`，并带了 `scripts/ci-wiring.mjs`
 守着接线（含三条自测）。**与本轮我做的 `knowledge-gates` 是同一个问题的两种解法。**
 
-合并后查出一件事：**那个 job 从被加上那天起就是红的。**
+合并后我**断定那个 job 从被加上那天起就是红的**，理由是：
+「`verify:all` 第 4 步 `npm run verify` 打在 `dist` 上，而 CI 是全新 checkout」。
+我据此给它补了 `npm run build`，又给 `ci-wiring.mjs` 加了一条判据
+「`verify:all` 之前必须存在一次 build」，并配了两条自测。
 
-`verify:all` 第 4 步 `npm run verify` **打在 `dist` 上**（数页数、量 token、查响应头），
-而 CI 是全新 checkout——**没有 `dist`**。实测把 `dist` 移走再跑 `verify`：**退出码 2**。
+**⚠️ 那个判断是错的，2026-09-28 当天推翻：**
 
-> **它接得整齐、`ci-wiring` 也认它，而它跑起来是红的。**
-> 没人推过那个分支，所以从没暴露。
+- `package.json` 里 `verify` = `npm run clean && npm run build && node scripts/bundle-and-verify.mjs`
+  ——**它自己先 clean 再 build**。我**没读那条定义**就下了结论。
+- 证据：加之前 `full-gates` 在 CI 上就是 **success**（run 36171364455，
+  job「完整门禁」）。
+
+已撤销：build 步骤、`ci-wiring.mjs` 里那条判据、`check-gate-list.mjs` 里那两条自测，
+三处都留下了「不要重新加」的记述。
+
+> **症状是「本地绿 / CI 红」，而我当时先假设了平台差异。**
+> 方向错，害我查了六类全都不是原因的东西（行尾、大小写、`/tmp`、locale/排序/时区、
+> `e.stdout` 类型、git 对象与工作区的字节）。
 >
-> **「接线在不在」和「它跑起来是什么结果」是两个问题**，
-> 而门禁守的往往是前者。缺口在于**没有任何东西真的执行过那个 job**。
-
-已处置：① `full-gates` 补 `npm run build`（必须是 `verify:all` 自己那套，
-不能用 `verify:base`——后者用假 base 重建且跑完清空产物）；② `ci-wiring.mjs`
-加判据「`verify:all` 之前必须存在一次 build」，并接进 `check-gate-list` 的自测表
-（补两条：删掉 build / 把 build 挪到 `verify:all` 之后，两条都已验会红）。
-
-⚠️ 加判据时**它自己先红了一次**：正则只认 `- run: npm run build`，
-而实际写法是 `- name: …` + 换行 + `run: npm run build`——
-**判据自己红了而被测对象是对的**，那是最坏的一种失败。
-两种写法现在都认（`^\s*(?:- run: |run: )npm run build\s*$`）。
+> 而真正的原因在另一处：`verify:migrate` 依赖一个**被 `.gitignore` 掩盖的目录**
+> （见上一节）。**假设先定，证据后找——被推翻的几乎总是假设。**
+>
+> 记在这里而不是删掉，因为**「我曾这么想过、并且是错的」本身就是有用的**：
+> 下次看到「本地绿 CI 红」，先问「我这次假设的是什么」，而不是直接开始排查。
 
 ## 剩下的一条「未验」
 

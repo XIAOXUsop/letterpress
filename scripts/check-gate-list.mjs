@@ -79,16 +79,9 @@ for (const [name, changed] of [
   ['移除 test 分支', ciWorkflow.replace('branches: [main, master, test]', 'branches: [main, master]')],
   ['移除完整门禁 job', ciWorkflow.replace('  full-gates:', '  full-gates-disabled:')],
   ['移除完整门禁命令', ciWorkflow.replace('run: npm run verify:all', 'run: npm run check')],
-  // ⚠️ 下面两条是 2026-09-28 加的：full-gates 这个 job **从被加上那天起就是红的**
-  // （全新 checkout 没有 dist，而 verify:all 第 4 步打在产物上，实测退出码 2）。
-  ['把 build 排在 verify:all 之后', ciWorkflow.replace(
-    /(- name: 先构建[^\n]*\n\s+run: npm run build\n)([\s\S]*?)(- run: npm run verify:all)/,
-    '$2$3$1',
-  )],
-  ['完全移除 full-gates 前的 build', ciWorkflow.replace(
-    /- name: 先构建[^\n]*\n\s+run: npm run build\n/,
-    '',
-  )],
+  // ⚠️ **下面**不要**为「full-gates 需要先 build」加自测**——
+  // 那条判据的依据是错的（`verify` 自己会 `clean && build`），
+  // 2026-09-28 加过又撤掉了。见 scripts/ci-wiring.mjs 里的记述。
 ]) {
   if (changed === ciWorkflow || checkCiWiring(changed).length === 0) {
     problems.push(`CI 接线自测失效：${name} 后没有报错`);

@@ -18,20 +18,19 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # ⚠️ **2026-09-28 补的：这一步原先不存在，而这个 job 必然因此变红。**
+      # ⚠️ **不要在这里加 build。**
       #
-      # `verify:all` 的第 4 步 `npm run verify` **打在 `dist` 上**
-      # （它要数页数、量 token、查响应头契约）。而这个 job 是全新 checkout，
-      # `dist` 根本不存在——实测：把 `dist` 移走再跑 `verify`，**退出码 2**。
+      # 2026-09-28 我加过一次，理由是「`verify:all` 第 4 步 `npm run verify`
+      # 打在 `dist` 上，而 CI 是全新 checkout」。**那个理由是错的**：
+      # `package.json` 里 `verify` = `clean && build && node scripts/bundle-and-verify.mjs`
+      # ——**它自己先 build**。我当时没读那条定义就下了结论。
       #
-      # > 也就是说：**这个 job 从加进来那天起就是红的**，而没人推过它所以没发现。
-      # > 「接了线」不等于「线通了」——要问的是「它跑起来是什么结果」。
+      # 证据：加之前这个 job 在 CI 上就是 **success**（run 36171364455）。
+      # > 症状是「本地绿 / CI 红」，而我当时**先假设了平台差异**——
+      # > 方向错，害我查了六类全都不是原因的东西。
       #
-      # ⚠️ **必须是 `verify:all` 自己那套 build，不能改成 `verify:base`**：
-      # 后者用假 base 重建、且跑完会清空产物，产物形状与 `verify` 期望的不一致。
-      - name: 先构建（verify:all 第 4 步打在产物上）
-        run: npm run build
-
+      # 加一次 build 只是让 CI 多花一分多钟，且**制造了一个假的"它需要 build"**
+      # 前提——下次有人照着它再加别的，就更没地方问「原本是什么样」了。
       - run: npm run verify:all
 
   build:

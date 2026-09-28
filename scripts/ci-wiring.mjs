@@ -23,35 +23,20 @@ export function checkCiWiring(workflow) {
   }
 
   /*
-   * ⚠️ **2026-09-28 加：full-gates 必须在 verify:all 之前 build。**
+   * ⚠️ **不要加「full-gates 必须在 verify:all 之前 build」这条判据。**
    *
-   * `verify:all` 第 4 步 `npm run verify` **打在 `dist` 上**，而 CI 是全新
-   * checkout——没有 `dist`。实测把 `dist` 移走再跑 `verify`，**退出码 2**。
+   * 2026-09-28 我加过，理由是「`verify:all` 第 4 步 `npm run verify`
+   * 打在 `dist` 上，而 CI 是全新 checkout」。**那个理由是错的**——
+   * `package.json` 里 `verify` = `clean && build && node scripts/bundle-and-verify.mjs`，
+   * **它自己先 build**。我当时没读那条定义就下了结论，
+   * 还为它配了两条自测（删 build / build 挪后）。
    *
-   * 也就是说：**`full-gates` 这个 job 从被加上那天起就是红的。**
-   * 它一直没被发现，是因为没人推过那个分支——
-   * **「接了线」不等于「线通了」**，要问的是「它跑起来是什么结果」。
+   * **证据**：加之前 `full-gates` 在 CI 上就是 success（run 36171364455）。
    *
-   * ⚠️ 判据是「在 `verify:all` 那一步**之前**存在一次 build」，
-   * 不是「文件里出现过 build」——顺序反了同样会红。
+   * > 这条记在这里，是因为**错误的判据比没有判据更坏**：
+   * > 它会让人以为「原来设计上就需要 build」，于是照着它继续加东西。
+   * > 判据的依据必须能指到**一份产物或一次运行**，
+   * > 「我以为」不构成依据。
    */
-  if (fullGatesLines.length > 0) {
-    const verifyAllAt = fullGatesLines.findIndex((l) => /^\s+- run: npm run verify:all\s*$/.test(l));
-    /*
-     * ⚠️ **两种写法都要认**：`- run: npm run build`（行内式）
-     * 与 `- name: …\n  run: npm run build`（带名字式）。
-     * 第一版只认前者，于是「文件里明明有 build」被判成没有——
-     * **判据自己红了，而被测对象是对的**。那正是最坏的一种失败。
-     */
-    const buildAt = fullGatesLines.findIndex((l) => /^\s*(?:- run: |run: )npm run build\s*$/.test(l));
-    if (verifyAllAt >= 0 && buildAt < 0) {
-      problems.push(
-        'full-gates job 在 `verify:all` 之前没有 build，而 `verify:all` 第 4 步 `npm run verify` '
-        + '**打在 `dist` 上**——全新 checkout 里没有产物，那一步必然红（实测退出码 2）。',
-      );
-    } else if (verifyAllAt >= 0 && buildAt > verifyAllAt) {
-      problems.push('full-gates job 的 build 排在 `verify:all` 之后——顺序不对，等于没 build。');
-    }
-  }
   return problems;
 }
