@@ -38,7 +38,7 @@
  *
  * 用法：`node scripts/check-portability.mjs`
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -59,17 +59,28 @@ const LIB = join(ROOT, 'src', 'lib', 'wiki');
  * 它把「每个站点都要重写一遍的接线」收进核心（实测 27 行适配层里
  * 22 行是它）。**它零 import**，所以天然满足可加载性——
  * 但**「天然满足」不等于「被检查过」**，所以它必须进这份名单。
+ *
+ * ⚠️ **2026-09-28：这份名单改为「能加载的模块集合」，从文件系统推导。**
+ *
+ * 原先是**手写的 8 个**，而实测 `src/lib/wiki/` 下**裸 Node 能加载的有 13 个**——
+ * 漏掉的 5 个是 `read-page` / `frontmatter` / `sources` / `verify` / `wikilink`。
+ *
+ * > 漏掉的后果很具体：**这五个模块里任何一个被加上 `.js` 后缀 import，
+ * > 门禁都不会报**——而那正是本门禁第一条要治的病。
+ * > 手写名单必然漏，而**漏掉的东西等于没被检查**。
+ *
+ * 推导方式：**真的 import 一遍**（不按名字猜），能加载的就是核心。
+ * 加载不了的（`llms` / `remark-wikilink` / `verify-run`）是**构建期专用**——
+ * 它们由 `astro.config.mjs` 加载，走 Vite，所以 `.js` 后缀没问题。
+ * **但那条边界必须有人守着**，所以下面另有第三类检查：
+ * 「加载不了的模块**必须**被 `astro.config.mjs` 或某个构建期文件引用」。
  */
-const CORE = [
-  'graph.ts',
-  'lint.ts',
-  'retrieve.ts',
-  'impact.ts',
-  'slug.ts',
-  'digest.ts',
-  'context-pack.ts',
-  'page-to-doc.ts',
-];
+const CORE = (() => {
+  const files = readdirSync(LIB)
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+    .sort();
+  return files;
+})();
 
 /** 会被误写成「可选链 + 直接调方法」的字段名。 */
 const OPTIONAL_FIELDS = [
@@ -88,6 +99,12 @@ const OPTIONAL_CHAIN_TRAP = new RegExp(
 );
 
 const problems = [];
+/** 裸 Node 加载不了、但被构建期文件引用的模块（合法形态）。 */
+const buildOnly = [];
+/** file → 实际加载到的模块（用它取真实导出名，而不是按文件名猜）。 */
+const loaded = new Map();
+/** 构建期链上的模块（只被 buildOnly 里的模块引用），第三条也要排除。 */
+const buildChain = [];
 
 console.log('核心模块可加载性（裸 Node）');
 console.log('─'.repeat(64));
@@ -131,16 +148,44 @@ for (const file of CORE) {
       console.log(`  ✗ ${file}（缺导出：${missing.join('、')}）`);
       continue;
     }
+    loaded.set(file, mod);
     console.log(`  ✓ ${file}`);
   } catch (error) {
     const msg = error instanceof Error ? error.message.split('\n')[0] : String(error);
-    problems.push(
-      `${file} 不能被裸 Node 加载：${msg}\n` +
-        `    它是核心纯逻辑模块，应当零耦合。内部用 '.js' 后缀 import 的话，` +
-        `bundler 能解析而裸 Node 不能——于是 scripts/*.mjs 用不了它。` +
-        `改成 '.ts' 后缀即可（Node 22+ 原生剥离类型；**无后缀不行**）。`,
-    );
-    console.log(`  ✗ ${file}`);
+    /*
+     * ⚠️ **加载不了不一定是缺陷**——`llms.ts` / `remark-wikilink.ts` /
+     * `verify-run.ts` 内部用 `.js` 后缀 import，而它们**只被 `astro.config.mjs`
+     * 加载**（走 Vite，`.js` → `.ts` 能解析）。
+     *
+     * 那是**构建期专用**的合法形态。所以这里不直接报红，而是问：
+     * **有没有人在用它？** 没人用而加载不了 = 死代码，那才该报。
+     */
+    const stem = file.replace(/\.ts$/, '');
+    const users = [];
+    for (const probe of [
+      join(ROOT, 'astro.config.mjs'),
+      join(ROOT, 'src', 'content.config.ts'),
+    ]) {
+      if (!existsSync(probe)) continue;
+      if (readFileSync(probe, 'utf8').includes(stem)) users.push(probe.split(/[\\/]/).pop());
+    }
+    if (users.length > 0) {
+      // 记下它 import 的**本地**模块——它们是同一条构建期链上的一环，
+      // 第三条也要排除（见下面那处递归判断）。
+      const deps = [...readFileSync(full, 'utf8').matchAll(/from '\.\/([a-z-]+)\.js'/g)]
+        .map((m) => `${m[1]}.ts`);
+      buildOnly.push({ file, why: `只被 ${users.join(' / ')} 加载（构建期，走 Vite）`, chain: deps });
+      console.log(`  · ${file}：构建期专用（${users.join(' / ')}），裸 Node 加载不了是预期的`);
+    } else {
+      problems.push(
+        `${file} **裸 Node 加载不了，而没有任何构建期文件引用它**——两头都不沾。\n` +
+          `    加载失败：${msg}\n` +
+          '    这要么是死代码（该删），要么是漏接线（该被 `astro.config.mjs` 用上）。\n' +
+          "    若是核心纯逻辑模块，另有一个更常见的成因：内部用 '.js' 后缀 import——" +
+          '改成 `.ts` 后缀即可（Node 22+ 原生剥离类型；**无后缀不行**）。',
+      );
+      console.log(`  ✗ ${file}：加载不了，且无人引用`);
+    }
   }
 }
 
@@ -281,7 +326,23 @@ if (files.length === 0) {
  * `.test.ts` 与 `scripts/check-*.mjs` 引用不算——否则这道闸恒真
  * （任何单测都必然 import 它要测的模块）。
  */
+/*
+ * ⚠️ **2026-09-28：加上 `astro.config.mjs` 与 `src/content.config.ts`。**
+ *
+ * 原来只扫 `scripts` 与 `src`——而 `astro.config.mjs` **import 了三个模块**
+ * （`remark-wikilink` / `verify-run` / `frontmatter`）。它们因此在第三条里
+ * 「没有真实调用方」，而处置会误导人**把正确的构建期模块删掉**。
+ *
+ * 变异验证抓到的：把 `verify-run` 改成 `.ts` 后缀（于是它可被裸 Node 加载、
+ * 不再算「构建期专用」）→ 门禁立刻报它「没有真实调用方」——
+ * **而唯一用它的地方就是 `astro.config.mjs`，正在扫描范围之外。**
+ *
+ * > **「谁在用它」这个问题，扫描范围本身就是答案的一部分。**
+ * > 范围外的文件不是「没有调用方」，是**没量到**。
+ */
 const PROD_CALLERS = ['scripts', 'src'];
+/** 配置文件在仓库根 / src 下，不在 PROD_CALLERS 的目录里，逐个列出。 */
+const CONFIG_FILES = ['astro.config.mjs', 'src/content.config.ts'].map((f) => join(ROOT, f));
 
 console.log('');
 console.log('核心模块有没有真实调用方（排除测试与变异注入；检查脚本**算**调用方）');
@@ -305,6 +366,31 @@ console.log('─'.repeat(64));
 const INSPECTOR = /^scripts[/\\](check-|verify-)/;
 
 for (const file of CORE) {
+  /*
+   * ⚠️ **2026-09-28：排除规则按「是不是构建期链的一环」，而不是「能不能被裸 Node 加载」。**
+   *
+   * 第一版按后者排除（buildOnly 加上它的 chain）。变异验证立刻暴露它错得离谱：
+   * 把 `verify-run` 改成 `.ts` 后缀（于是它**能**被裸 Node 加载了），
+   * 门禁改而报它「只有一个调用方：`astro.config.mjs`」——
+   * **而它本来就只该被 `astro.config.mjs` 用**，那是它的职责。
+   *
+   * > **「能否被裸 Node 加载」是运行环境的属性，
+   * > 「是不是构建期链的一环」才是角色的属性。** 用前者判后者，
+   * > 就等于「一个人今天在办公室所以他不是工程师」。
+   *
+   * 所以判据是：**它的调用方全部落在配置文件里**（astro.config.mjs /
+   * content.config.ts）。那样的模块只服务于构建期，「≥2」这条对它不适用。
+   *
+   * ⚠️ 而配置文件**必须在扫描范围内**——否则「只被配置用」与「没人用」分不开，
+   * 而前者是合法形态、后者是死代码。
+   */
+  // ⚠️ **构建期专用的模块整条跳过**——它们裸 Node 加载不了（第一条已认定），
+  // 所以 `loaded` 里没有它们、第三条也取不到导出名。
+  // 跳过**不是放行**：第一条已经核对过「有构建期文件在用它」，两头不沾的会报红。
+  if (buildOnly.some((b) => b.file === file)) {
+    console.log(`  · ${file}：构建期专用，第三条不适用（理由见第一条）`);
+    continue;
+  }
   const exports = REQUIRED_EXPORTS[file] ?? [];
   /*
    * ⚠️ **导出名取自上表的 `REQUIRED_EXPORTS`，不按文件名推导。**
@@ -316,21 +402,71 @@ for (const file of CORE) {
    * > 靠命名规律猜导出名，必然在「文件名与导出名对不上」时错。
    * > 而 `REQUIRED_EXPORTS` 是**已经断言过的**导出名，直接用它。
    */
-  const names = exports.length > 0 ? exports : [file.replace(/\.ts$/, '')];
+  /*
+   * ⚠️ **2026-09-28 改成从「实际加载到的模块」取导出名，不再按文件名猜。**
+   *
+   * 第一版是 `file.replace(/\.ts$/, '')`——于是 `read-page.ts` 被当成
+   * 导出叫 `read-page` 的模块，而它真实导出 `readContentPage` / `readContentDirs`，
+   * **结果是「只有一个调用方」**（而真实有 12 个）。
+   *
+   * 那与 `contextPack` 那次是同一个错：**靠命名规律猜，必然在
+   * 「文件名与导出名对不上」时错。** 而判据自己红、被测对象对，
+   * 是最坏的一种失败。
+   */
+  const names = exports.length > 0 ? exports : Object.keys(loaded.get(file) ?? {});
+  if (names.length === 0) {
+    problems.push(
+      `${file} 取不到任何导出名（REQUIRED_EXPORTS 里没有它，也加载不出东西）——`
+      + '本门禁的第三条此刻量不到它。',
+    );
+    console.log(`  ✗ ${file}：取不到导出名，第三条判据失效`);
+    continue;
+  }
   const hits = new Set();
+  /** 扫一个文件，返回它是否 import 了那些导出名。 */
+  const probe = (p) => {
+    const rel = relative(ROOT, p).replace(/\\/g, '/');
+    if (rel === `src/lib/wiki/${file}`) return; // 自己
+    // ⚠️ **不再排除检查脚本**（理由见上面 `INSPECTOR` 的注释）。
+    // 只排除「故意弄坏核心」的那些——`*.mutations.mjs` 已在下面按文件名排除。
+    const text = readFileSync(p, 'utf8');
+    // 必须在 import 语句里出现，而不是正文里提到这个名字。
+    if (names.some((n) => new RegExp(`import[^;]*\\b${n}\\b[^;]*from`).test(text))) hits.add(rel);
+  };
   for (const sub of PROD_CALLERS) {
     for (const entry of readdirSync(join(ROOT, sub), { withFileTypes: true, recursive: true })) {
       if (!entry.isFile() || !/\.(ts|mjs|astro)$/.test(entry.name)) continue;
       if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.mutations.mjs')) continue;
-      const p = join(entry.parentPath ?? entry.path, entry.name);
-      const rel = relative(ROOT, p).replace(/\\/g, '/');
-      if (rel === `src/lib/wiki/${file}`) continue; // 自己
-      // ⚠️ **不再排除检查脚本**（理由见上面 `INSPECTOR` 的注释）。
-      // 只排除「故意弄坏核心」的那些——`*.mutations.mjs` 已在上面按文件名排除。
-      const text = readFileSync(p, 'utf8');
-      // 必须在 import 语句里出现，而不是正文里提到这个名字。
-      if (names.some((n) => new RegExp(`import[^;]*\\b${n}\\b[^;]*from`).test(text))) hits.add(rel);
+      probe(join(entry.parentPath ?? entry.path, entry.name));
     }
+  }
+  /*
+   * ⚠️ **2026-09-28：排除规则按「是不是构建期链的一环」，而不是「能不能被裸 Node 加载」。**
+   *
+   * 第一版按后者排除，变异验证立刻暴露它错得离谱：
+   * 把 `verify-run` 改成 `.ts` 后缀（于是它**能**被裸 Node 加载了），
+   * 门禁改而报它「只有一个调用方：`astro.config.mjs`」——
+   * **而它本来就只该被 `astro.config.mjs` 用**，那是它的职责。
+   */
+  // 配置文件**不在 `PROD_CALLERS` 的目录里**，`probe` 里单独扫过了（见 CONFIG_FILES）。
+  // 现在判断「它是否只服务于构建期」——两种形态都算：
+  //   ① 它的调用方**全部**落在配置文件里；
+  //   ② 它的调用方**全部**是构建期专用模块（链上的下一环，如 `verify.ts` ← `verify-run.ts`）。
+  // 那样的模块「≥2 个消费者」这条不适用（它本来就只该被构建期用）。
+  const configPaths = CONFIG_FILES.map((c) => c.replace(/\\/g, '/'));
+  const buildFiles = new Set(buildOnly.map((b) => b.file));
+  const configOnly =
+    hits.size > 0 &&
+    [...hits].every(
+      (h) =>
+        configPaths.some((n) => h.endsWith(n)) ||
+        // 链上的下一环：`src/lib/wiki/verify-run.ts` 这种
+        [...buildFiles].some((bf) => h.endsWith(`lib/wiki/${bf}`)),
+    );
+  if (configOnly) {
+    buildChain.push(file);
+    console.log(`  · ${file}：只服务于构建期（${[...hits].join(' / ')}），「≥2 消费者」不适用`);
+    continue;
   }
   if (hits.size === 0) {
     problems.push(
