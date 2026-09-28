@@ -1303,7 +1303,7 @@ spawnSync('npm.cmd', ['run','build'])
 「五道检索闸每道有专属用例」那句话**曾经是假的**，由 `verify:retrieval-gates` 揭穿。
 
 **语料一扩、判据一改，遮住关系就变了。** 已固化为
-`scripts/new-gates.mutations.mjs`（**共 64 条变异** / 13 道门禁），每次 CI 都跑：
+`scripts/new-gates.mutations.mjs`（**共 65 条变异** / 13 道门禁），每次 CI 都跑：
 
 | 被测门禁 | 变异 |
 |---|---|
@@ -2440,3 +2440,70 @@ README 那句**逐字相同**（`check:package-files`）。
    而**拆分的前提正是「下游已经依赖了某个形状」**。
 
 > **「四项做完」与「可以拆」是两件事。**
+## 「模板」还是「包」——两套准备，只有一处承诺（2026-09-29）
+
+### 量出来的
+
+| | 事实 |
+|---|---|
+| `main` / `exports` / `types` / `peerDependencies` | **全缺** |
+| README 承诺 | 「**这是模板**，所以第一步是 clone 而不是 install」（第 55 行） |
+| `git clone` 拿到 | **227 个文件**（含 `scripts/` 62、`knowledge/` 15、`docs/` 11） |
+| `npm pack` 拿到 | **124 个文件**（`files` 白名单之后） |
+
+而 `package.json` 里**已经有一整套「当包发」的装备**：
+
+| 装备 | 为谁准备 |
+|---|---|
+| `files` 白名单 | `npm pack` / `npm publish` |
+| `prepublishOnly` 护栏 | `npm publish` |
+| `keywords` / `repository` / `homepage` | npm 页面 |
+| `description`（英文） | npm 搜索结果 |
+
+> **而 README 只承诺了 clone**——那一整套装备**没有一句承诺**。
+> **没有承诺的准备工作是自说自话**：门禁在守一个没人承诺过的流程。
+
+### 两种定位的**要求不同**（不是「加不加字段」的问题）
+
+| | 模板（clone 改） | 包（`npm i`） |
+|---|---|
+| 要 `files` 白名单吗 | 不要（clone 整个仓库） | **要** |
+| 要 `peerDependencies` 吗 | 不要 | **要**（否则锁死使用者的 astro） |
+| 别人拿到的是什么 | 一整个能改的站点 | 一个依赖 |
+
+### 对照生态里最热的那个（`@xingwangzhe/stalux`，3783 次/月）
+
+| 字段 | 它的写法 |
+|---|---|
+| `peerDependencies` | **`astro: ^7.3.5`** ← astro 在这儿，不在 `dependencies` |
+| `dependencies` | temml、parse5、pagefind、@astrojs/rss …（**不含 astro**） |
+| `exports` | 有多入口（`.` / `./config` / `./i18n/*`） |
+
+**而 letterpress 现在把 `astro` 放在 `dependencies` 里**——
+若它真是被安装的包，**使用者的 Astro 版本会被锁死**（或装出两份 astro）。
+而**它现在不是包，是模板**——所以那**不是缺陷，是定位还没写下的后果**。
+
+### 判据④：**不主张哪一种，只要求写明且自洽**
+
+- 说「模板」→ 护栏必须在（为将来发）、`peerDependencies` 必须不在
+- 说「包」→ 两者的反之
+- **两处都没写** → **报**（「准备工作成了自说自话」）
+
+⚠️ 而它**不会**被 `npm install && npm run dev` 误触发——
+**「clone 之后装依赖」与「把这个包当依赖装」是两件事**
+（正则要 `npm i/install letterpress`）。
+
+### 顺带排除了一个**假警报**：`git ls-files` 的中文路径引号
+
+`git ls-files` 输出里那 8 个 fixture（`审计日志.md`、`导出-总览.md` 等）
+是**带双引号并按八进制转义**的——那是 `core.quotePath` 的默认行为，
+**不是缺陷**（clone 下来文件名是对的）。
+
+> 而**任何按 `git ls-files` 输出直接读文件的脚本都会 ENOENT**
+> （**它拿到的不是文件名**）。
+> 核实：本项目的 `check-single-source` 用的是 **`readdirSync` 而不是 `git ls-files`**，
+> 所以**扫得到中文文件**——而那 8 个 fixture 是 `.md`，
+> 本来就不在它的扩展名白名单里（`ts` / `mjs` / `js` / `astro`）。
+
+---
+

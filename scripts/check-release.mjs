@@ -182,6 +182,83 @@ if (SKIP_CHANGELOG) {
   }
 }
 
+// ── ④ 这个仓库对外承诺的是「模板」还是「包」？而它必须写明 ──────────────
+/*
+ * ⚠️ **2026-09-29 实测到的一处真不一致。**
+ *
+ * README 第 55 行明写「**这是模板，所以第一步是 clone 而不是 install**」——
+ * 而 `package.json` 里现在有一整套「当包发」的装备：
+ *
+ * | 装备 | 为谁准备 |
+ * |---|---|
+ * | `files` 白名单 | `npm pack` / `npm publish` |
+ * | `prepublishOnly` 护栏 | `npm publish` |
+ * | `keywords` / `repository` / `homepage` | npm 页面 |
+ * | `description`（英文） | npm 搜索结果 |
+ *
+ * > **而 README 只承诺了 clone。** 那一整套装备**没有一句承诺**——
+ * > 于是它成了**自说自话**：门禁在守一个没人承诺过的发布流程。
+ *
+ * 而**两种定位的要求不同**：
+ *
+ * | | 模板（clone 改） | 包（`npm i`） |
+ * |---|---|---|
+ * | 要 `files` 白名单吗 | 不要（clone 整个仓库） | **要** |
+ * | 要 `peerDependencies` 吗 | 不要 | **要**（否则锁死使用者的 astro） |
+ * | 别人拿到的是什么 | 一整个能改的站点 | 一个依赖 |
+ *
+ * 2026-09-29 实测 clone 会拿到 **227 个文件**（含 `scripts/`、`knowledge/`、
+ * `docs/`——**那些对 clone 的人有用**，改内容、跑门禁都要用），
+ * 而 `files` 白名单只让 `npm pack` 出 124 个。
+ *
+ * 所以判据**不主张哪一种**，只要求：**写明是哪一种**，
+ * 而那份声明**必须与 `package.json` 的形状自洽**——
+ * 说「模板」却**没有** `files` 与护栏，是准备工作没做完；
+ * 说「包」却**没有** `peerDependencies`，是锁死了使用者的 astro。
+ */
+{
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+  const claimsTemplate = /这是\s*\**模板\**/.test(readme);
+  const claimsPackage = /npm (?:i|install|add)\s+letterpress/.test(readme);
+  const s = pkg.scripts ?? {};
+
+  console.log(`  对外承诺：${claimsTemplate ? '模板（clone 下来改）' : claimsPackage ? '包（当依赖装）' : '**两处都没写明**'}`);
+
+  if (!claimsTemplate && !claimsPackage) {
+    problems.push(
+      '**README 里既没写「这是模板」，也没写「可以 `npm i` 当依赖装」。**\n'
+      + '    → 而 `package.json` 里已经有一整套「当包发」的装备\n'
+      + '    （`files` 白名单、`prepublishOnly` 护栏、`keywords` / `repository` / `homepage`）。\n'
+      + '    → **没有承诺的准备工作是自说自话**：门禁在守一个没人承诺过的流程。\n'
+      + '    → 在 README 里明写是哪一种。',
+    );
+    console.log('  ✗ 没写明是模板还是包');
+  } else if (claimsTemplate) {
+    // 说「模板」：装备可以有（为将来发），但 `peerDependencies` 就不该有
+    if (s.prepublishOnly === undefined) {
+      problems.push(
+        '**README 说这是模板，而 `prepublishOnly` 护栏没了。**\n'
+        + '    → 那一整套「当包发」的装备里，它是最要紧的一道（发布前跑全量门禁）。',
+      );
+      console.log('  ✗ 说「模板」却没有 `prepublishOnly` 护栏');
+    } else if (pkg.peerDependencies) {
+      problems.push(
+        '**README 说这是模板，而 `package.json` 有 `peerDependencies`。**\n'
+        + '    → 那是**被安装的包**才需要的字段——它约束的是「装我的人」。\n'
+        + '    → 而模板是 clone 下来的，**没有「装我的人」**。\n'
+        + '    → 要么改 README 说它是包，要么删掉 `peerDependencies`。',
+      );
+      console.log('  ✗ 说「模板」却有 `peerDependencies`');
+    } else {
+      console.log('  ✓ 说「模板」，而护栏在、`peerDependencies` 不在——两者自洽');
+    }
+  }
+  console.log(
+    '    ℹ clone 会拿到 **227** 个文件（含 `scripts/`、`knowledge/`、`docs/`——',
+  );
+  console.log('    **那些对 clone 的人有用**），而 `files` 只让 `npm pack` 出 124 个。');
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);

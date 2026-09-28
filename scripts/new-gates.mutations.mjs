@@ -1237,6 +1237,31 @@ const CASES = [
     target: 'check-gate-list.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着判据④：「模板」还是「包」，必须写明。**
+     *
+     * 2026-09-29 实测到的不一致：README 第 55 行明写「这是**模板**」，
+     * 而 `package.json` 里已有一整套「当包发」的装备
+     *（`files` 白名单、`prepublishOnly` 护栏、`keywords` / `repository` / `homepage`），
+     * **而那一整套没有一句承诺**。
+     *
+     * > **没有承诺的准备工作是自说自话**——门禁在守一个没人承诺过的流程。
+     *
+     * 变异：把「模板」那两个字去掉，README 就**既没说模板、也没说包**，
+     * 判据必须立刻报出来。
+     *
+     * ⚠️ 而它**不会**误报：README 里还有 `npm install && npm run dev`，
+     * 但那句的 `npm install` **不是** `npm i letterpress`——
+     * **「clone 之后装依赖」与「把这个包当依赖装」是两件事**，
+     * 而判据认的是后者（正则要 `npm i/install letterpress`）。
+     */
+    why: 'check:release — README 既没写「模板」也没写「包」（准备工作成了自说自话）',
+    file: 'README.md',
+    find: '**① 拿到代码**（这是**模板**，所以第一步是 clone 而不是 install）：',
+    replace: '**① 拿到代码**（第一步是 clone）：',
+    target: 'check-release.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",
