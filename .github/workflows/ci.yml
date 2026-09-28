@@ -220,7 +220,8 @@ jobs:
           check:single-literal
           check:adapter-size
           check:not-a-demo
-          check:no-duplicate-lists"
+          check:no-duplicate-lists
+          check:command-scripts"
           total="$(printf '%s\n' "$steps" | grep -c .)"
           for step in $steps; do
             printf '::group::%s\n' "$step"

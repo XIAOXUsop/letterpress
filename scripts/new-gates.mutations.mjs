@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的七道门禁的负向验证。**
+ * **2026-09-28 新增的八道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那七道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
- * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists` / `check:onboarding-doc`。
+ * 那八道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
+ * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists` /
+ * `check:onboarding-doc` / `check:command-scripts`。
  * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
  * 语料一扩、判据一改，遮住关系就变了。
  *
@@ -114,10 +115,37 @@ function mutate({ file, find, replace, target, why }) {
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
-  'check-onboarding-doc.mjs',
+  'check-onboarding-doc.mjs', 'check-command-scripts.mjs',
 ];
 
 const CASES = [
+  {
+    // ⚠️ 主判据：分叉没登记。
+    // 少了这一条，「加一个命令名与脚本名不同的脚本」什么都不会报——
+    // 而那张册子的全部价值就是「照着它一定找得到脚本」。
+    why: 'check:command-scripts — 加一个未登记的分叉命令',
+    file: 'package.json',
+    find: '"check:staged": "node scripts/check-staged.mjs",',
+    replace: '"check:staged": "node scripts/check-staged.mjs",\n    "check:brand-new-thing": "node scripts/some-other-name.mjs",',
+    target: 'check-command-scripts.mjs',
+  },
+  {
+    why: 'check:command-scripts — 册子登记的脚本被改名（两份事实分叉）',
+    file: 'package.json',
+    find: 'node scripts/check-gate-list.mjs',
+    replace: 'node scripts/renamed-gate-check.mjs',
+    target: 'check-command-scripts.mjs',
+  },
+  {
+    // ⚠️ 这条断言有**两层守卫**：「逐字一致」会先挡住「脚本被改名」，
+    // 所以要单独触发它，必须登记一条**本不该登记的**（对得上的名字）。
+    // 我一度以为它是死代码——推演之后发现可达，实测确实红了。
+    why: 'check:command-scripts — 册子里有一条「本不该登记的」（已不再分叉）',
+    file: 'scripts/lib/command-scripts.mjs',
+    find: "  ['verify:only', 'scripts/bundle-and-verify.mjs',",
+    replace: "  ['check:staged', 'scripts/check-staged.mjs', '误登记：这条其实对得上'],\n  ['verify:only', 'scripts/bundle-and-verify.mjs',",
+    target: 'check-command-scripts.mjs',
+  },
   {
     // ⚠️ **变异的是文档，不是源码。**
     // `check:onboarding-doc` 声称核的是「文档里的实测数字与现在跑出来的一致」，
