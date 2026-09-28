@@ -152,7 +152,11 @@ const inAll = new Set(
 const NOT_IN_ALL = new Map([
   // 编排自身
   ['verify:all', '它就是编排本身，不能包含自己'],
-  ['verify:only', '被 verify:all 的第 3 步调用，单独跑没有产物可查'],
+  ['verify:only', '**`verify` 的别名**——两者都跑 `scripts/bundle-and-verify.mjs`；'
+    + '留着是因为它表达了「只跑契约、不跑别的」这个意图。'
+    + '⚠️ 2026-09-28 修正：本条原先写的是「被 verify:all 的第 3 步调用」——'
+    + '**而第 3 步现在是 `npm test`，它早就不被任何地方调用了。** '
+    + '理由过时而没人发现，正是因为**没有东西核「理由是否还成立」**。'],
   // 需要外部环境的
   ['verify:online', '对着 GitHub Pages 上的 Demo 跑；Pages 跑不了内容协商，'
     + '基线本身就是红的（README 已写明是限制），不适合做门禁'],
