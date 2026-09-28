@@ -227,6 +227,36 @@ checkMention('README 的 fixture 篇数', readmeText, new RegExp(`\\*\\*${fixtur
 checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount} 条断言`), assertionCount);
 
 /*
+ * ⚠️ **2026-09-28 加：检索金标的条数。**
+ *
+ * `docs/cli.md` 与 `README.md` 都写着「23 条问题」——而**没有任何东西核它**。
+ * 我今天为同类数字建了三道门禁（测试条数、fixture 篇数与断言数），唯独漏了这个。
+ *
+ * 数法必须与 `check-questions.mjs` 一致：**逐行扫、跳过代码围栏**。
+ * 那个文件开头「怎么写一条」那一节里就有一份 `### 问题的原话` 的格式示例——
+ * **不跳过围栏就会把它算成一条真题**（那正是它第一次跑就红的原因）。
+ *
+ * 顺带核「无依据」那一类（cli.md 写着 8 条）——**那是金标最关键的一类**：
+ * 一个永远给得出答案的检索器只会在它们上面失败。
+ */
+{
+  const raw = readFileSync(join(ROOT, 'knowledge', 'questions.md'), 'utf8');
+  let inFence = false;
+  let total = 0;
+  let noAnswer = 0;
+  for (const line of raw.split('\n')) {
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    if (/^### /.test(line)) { total++; continue; }
+    if (/^期望判定：无依据/.test(line)) noAnswer++;
+  }
+  checkMention('docs/cli.md 的金标条数', cliText, new RegExp(`${total} 条问题`), total);
+  checkMention('README 的金标条数', readmeText, new RegExp(`\\*\\*${total} 条\\*\\*`), total);
+  checkMention('docs/cli.md 的「无依据」条数', cliText, new RegExp(`${noAnswer} 条`), noAnswer);
+  console.log(`  ✓ 金标实测 ${total} 条，其中 ${noAnswer} 条期望「无依据」`);
+}
+
+/*
  * ⚠️ **2026-09-28 加：文档提到的每个 `npm run <名字>` 都必须真的存在。**
  *
  * 实测抓到一处：`docs/cli.md` 那一行写的是 `npm run check:portability`，
