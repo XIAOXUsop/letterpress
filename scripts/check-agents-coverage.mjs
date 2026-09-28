@@ -170,6 +170,101 @@ console.log(
   + `${withClaims - unowned.length} 个有门禁核。`,
 );
 
+/*
+ * ── 自测：**三个方向各一个已知样本** ──────────────────────────────────
+ *
+ * ⚠️ **2026-09-29 补的。** 本检查原来**只有正例**（7 个 `✓`），
+ * **没有一条「不该红」的样本**——而**它今天正好骗过我一次**：
+ * 第一版 `OWNERS` 里没有 `frontmatter 字段` 那一类，于是两节被判成
+ * `✓ …：frontmatter 字段 → `，**箭头后面什么都没有而那行读起来像「已核」**。
+ *
+ * 三个方向：
+ * ① **散文小节**（一个标记都不匹配）→ **不该报**（豁免机制本身）
+ * ② **有归属的声明** → **不该报**
+ * ③ **无归属的声明** → **必须报**（第一版漏的那条）
+ *
+ * ⚠️ **① 最容易被静默通过**：加一条新标记若写错，那一节就被当成散文跳过——
+ * **而「豁免机制失效」与「没有豁免必要」在输出上完全一样**。
+ * 所以 ① 也要有样本。
+ */
+{
+  /** 把一份假 AGENTS.md 喂给同一套判据，返回「报了几处」。 */
+  const judge = (doc, ownersTable = OWNERS) => {
+    const ls = doc.split('\n');
+    const secs = [];
+    ls.forEach((l, i) => {
+      const m = /^(##|###) (.+)$/.exec(l);
+      if (m) secs.push({ title: m[2], start: i + 1, end: Infinity });
+    });
+    for (let i = 0; i < secs.length - 1; i++) secs[i].end = secs[i + 1].start - 1;
+    if (secs.length > 0) secs[secs.length - 1].end = ls.length;
+    let bad = 0;
+    for (const s of secs) {
+      const body = ls.slice(s.start - 1, s.end).join('\n');
+      const hit = MARKERS.filter((m) => m.re.test(body));
+      if (hit.length === 0) continue;
+      const owners = ownersTable.filter((o) => hit.some((h) => h.re.source === o.re.source));
+      const missing = owners.filter((o) => !defined.has(o.gate));
+      const unclaimed = hit.filter((h) => !owners.some((o) => o.re.source === h.re.source));
+      if (missing.length > 0 || unclaimed.length > 0) bad++;
+    }
+    return bad;
+  };
+
+  const CASES = [
+    {
+      why: '散文小节（一个标记都不匹配）不该被报成缺口',
+      doc: '## 你可以做而机械检查做不到的事\n\n发现矛盾、建立连接、拆分过长的条目。\n',
+      want: 0,
+    },
+    {
+      why: '有归属的声明不该被报',
+      doc: '## 断链会让构建失败\n\n引用不存在的目标会报 `broken-wikilink`，会让构建失败。\n',
+      want: 0,
+    },
+    {
+      /*
+       * ⚠️ **这一条就是 2026-09-28 第一版的漏洞**：
+       * 「OWNERS 命中、但那个门禁在 package.json 里不存在」时**必须报**——
+       * 而第一版**只在「OWNERS 里压根没有那一类」时报**，
+       * 于是「认领了一个不存在的门禁」**静默通过**。
+       *
+       * > 判据：**换一张 OWNERS 表**（指向一个不存在的门禁），
+       * > 同一份文档就该**从 0 处变成 1 处**——
+       * > **那才证明「已核」这件事不是自己说的。**
+       */
+      why: 'OWNERS 认领了一个不存在的门禁时必须报（「已核」是自己说的）',
+      doc: '## 断链会让构建失败\n\n引用不存在的目标会报 `broken-wikilink`，会让构建失败。\n',
+      owners: [{ re: /会让构建失败/, gate: 'check:nonexistent-gate', why: '自测用' }],
+      want: 1,
+    },
+    {
+      /*
+       * ⚠️ **第四个方向：标记匹配到、而 OWNERS 里压根没有那一类。**
+       * 那正是 2026-09-28 我踩的那次（`frontmatter 字段` 无归属而静默通过）。
+       */
+      why: '标记匹配到、而 OWNERS 里没有那一类时必须报（无主）',
+      doc: '## 某节\n\n\n  key: 值\n',
+      owners: [], // 一条都不认领 → 全部 unclaimed
+      want: 1,
+    },
+  ];
+
+  for (const c of CASES) {
+    const got = judge(c.doc, c.owners ?? OWNERS);
+    if (got === c.want) console.log(`    ✓ ${c.why}`);
+    else {
+      problems.push(
+        `**自测不通过**（${c.why}）：期望 ${c.want} 处，实际 ${got} 处。\n`
+        + '    → 而**判据在正常状态下就分不清「该报」与「不该报」**时，'
+        + '**它的每一次通过都不能证明它在工作**。',
+      );
+      console.log(`    ✗ ${c.why}（期望 ${c.want}，实际 ${got}）`);
+    }
+  }
+  // 第三个方向（OWNERS 指向的门禁不存在）由上面那段 OWNERS 循环独立覆盖——
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
