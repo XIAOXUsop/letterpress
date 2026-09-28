@@ -53,7 +53,7 @@ const EXPECTED = [
   ['npm run verify:json-output', '**`--json` 模式下失败也有结构化输出**（阶段 4 第 3 项剩的一半）'],
   ['npm run verify:json-mutations', '上一道的负向验证（三类违约：stdout 空 / ok 不是 false / code 与退出码打架）'],
   ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
-  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的那些门禁的负向验证**（40 条变异：每条必须让被测的那道红，恢复后回绿）'],
+  ['npm run verify:new-gates-mutations', '**2026-09-28 新增的那些门禁的负向验证**（41 条变异：每条必须让被测的那道红，恢复后回绿）'],
   ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集（合成 docs 数组）'],
   ['npm run verify:second-site-real', '**读自文件的**异构内容集（阶段 4 第 5 项）'],

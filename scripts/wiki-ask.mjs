@@ -30,10 +30,9 @@
  *   node scripts/wiki-ask.mjs --all "…"      # 不截断，打全段
  */
 
-import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
-import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_USAGE } from '../src/lib/cli/exit-codes.mjs';
 import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
@@ -73,24 +72,39 @@ const WIKI_DIR = join(ROOT, 'src', 'content', 'wiki');
 const POSTS_DIR = join(ROOT, 'src', 'content', 'posts');
 
 function loadCorpus() {
-  const pages = [];
-  for (const dir of [WIKI_DIR, POSTS_DIR]) {
-    let files;
-    try {
-      files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f)).sort();
-    } catch {
-      failWithJson(asJson ? 'json' : 'text', EXIT_ENVIRONMENT, `读不到 ${dir}。`, {
+  /*
+   * ⚠️ **2026-09-29 改用 `readContentDirs`**（来自 `origin/main`）。
+   *
+   * 原先这里**自己**写了一遍「读两个目录」的循环——而那份：
+   * ① **不递归**（`readdirSync(dir)` 只读一层），而 **`readContentDirs` 现在递归了**
+   *    ——于是 `src/content/wiki/子目录/` 里那几篇**只有构建读得到、CLI 检索不到**，
+   *    而 `wiki:ask` 正是 **agent 读内容的主路径**；
+   * ② 与 `readContentPage` 的口径**可能漂开**（同一件事两处实现，本项目的老毛病）。
+   *
+   * > **症状是静默的**：agent 问了一个「答案在子目录里」的问题，
+   * > 检索返回「没有依据」——**而那看起来像内容没写全，不像 bug**。
+   *
+   * ⚠️ 下面那两个 `failWithJson` **不是多余的**：`readContentDirs` 不会因为
+   * 「某个目录是空的」而报错，而**半个语料**给出的答案是误导性的。
+   */
+  /** @type {ReturnType<typeof readContentDirs>} */
+  let corpus;
+  try {
+    corpus = readContentDirs([WIKI_DIR, POSTS_DIR]);
+  } catch (error) {
+    failWithJson(asJson ? 'json' : 'text', EXIT_ENVIRONMENT,
+      `读取内容失败：${error instanceof Error ? error.message : String(error)}`, {
         hint: '请在仓库根目录运行。',
       });
-    }
-    if (files.length === 0) {
+  }
+  for (const [dir, count] of corpus.counts) {
+    if (count === 0) {
       failWithJson(asJson ? 'json' : 'text', EXIT_EMPTY_INPUT, `${dir} 里一个条目都没有。`, {
         hint: '这个命令只能检索一半的内容——空的那一半会给出误导性的结果。',
       });
     }
-    for (const file of files) pages.push(readContentPage(dir, file));
   }
-  return pages;
+  return corpus.pages;
 }
 
 const docs = loadCorpus();

@@ -226,6 +226,42 @@ const checks = [
     } else {
       console.log('  ✓ readContentDirs 递归读子目录（与 Astro 的内容 glob 一致）');
     }
+
+    /*
+     * ⚠️ **同一个缺陷的第二处：`wiki-ask.mjs` 自己也写过一份那个循环。**
+     *
+     * 它原先是 `readdirSync(dir).filter(...)` **只读一层**——而
+     * `wiki:ask` 正是 **agent 读内容的主路径**。于是子目录里那几篇
+     * **只有构建读得到、CLI 检索不到**，症状是 agent 问一个问题得到
+     * 「没有依据」——**而那看起来像内容没写全，不像 bug**。
+     *
+     * > ⚠️ **没有任何门禁能看见这一处**，而这不是偶然：
+     * > `check-answers`（`verify:answers`）**自己调 `readContentDirs`**，
+     * > **它压根不跑 `wiki-ask.mjs`**；而 grep 得到 `wiki-ask` 的那几道
+     * > （`check-exit-codes` / `check-json-output` / `check-not-a-demo` /
+     * > `check-portability`）**只查退出码、JSON 形状与调用方**。
+     * >
+     * > **「所有门禁都绿，而这一处没人守」不是运气，是形状决定的**——
+     * > 只要一个调用方不经过被测的那条路，任何行为判据都看不见它。
+     * > 所以这一条只能**查它调的是哪个函数**。
+     */
+    const askSrc = readFileSync(join(ROOT, 'scripts', 'wiki-ask.mjs'), 'utf8');
+    const usesShared = /readContentDirs\(\[WIKI_DIR, POSTS_DIR\]\)/.test(askSrc);
+    const ownLoop = /readdirSync\(dir\)\s*\n?\s*\.filter/.test(askSrc);
+    if (!usesShared || ownLoop) {
+      problems.push(
+        `\`wiki-ask.mjs\` **没有走 \`readContentDirs\`**`
+        + `（它在用自己那份循环：${ownLoop}）。\n`
+        + '    → 那个循环**只读一层**，所以 `src/content/子目录/` 里那几篇'
+        + '**只有构建读得到、CLI 检索不到**；\n'
+        + '    症状是 agent 问一个问题得到「没有依据」——**而那不像 bug**。\n'
+        + '    而**没有任何行为门禁能看见它**：`verify:answers` 自己调'
+        + '`readContentDirs`，**不跑 `wiki-ask.mjs`**。',
+      );
+      console.log('  ✗ wiki-ask.mjs 没有走 readContentDirs（自己那份只读一层）');
+    } else {
+      console.log('  ✓ wiki:ask 走的是同一个 readContentDirs（不是自己那份循环）');
+    }
   } finally {
     rmSync(nested, { recursive: true, force: true });
   }

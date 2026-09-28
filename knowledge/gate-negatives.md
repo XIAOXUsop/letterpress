@@ -458,6 +458,37 @@ MD 侧实测 `2852 / 3919 / 1106`，与 docs 的表格和输出块**逐字一致
 于是报「产物不存在」——**而那一句与「实测为 0」在结果上无法区分**。
 改成**按 slug 在 dist 里找**，且报「找到几份」而不是「我猜的路径对不对」。
 
+## 同一个缺陷的第二处：`wiki-ask` 也自建了那个循环，而**没有任何门禁能看见**（2026-09-29）
+
+`origin/main` 把 `wiki-ask.mjs` 里**自己那份「读两个目录」的循环**换成了
+`readContentDirs` —— 而 `test` 侧还在用自己那份 **`readdirSync(dir)` 只读一层**。
+
+症状：`src/content/wiki/子目录/` 里那几篇**只有构建读得到、CLI 检索不到**，
+而 **`wiki:ask` 正是 agent 读内容的主路径**——
+agent 问一个「答案在子目录里」的问题，得到「没有依据」，
+**而那看起来像内容没写全，不像 bug**。
+
+已换掉（`verify:answers` 20/20、`verify:questions` 20/23 都没变——
+**那正是「两处实现给出同一结果」的表现**）。
+
+### 而「所有门禁都绿，这一处没人守」**不是运气，是形状**（2026-09-29）
+
+我为这个改动找变异时**连着两次选错 target**：`verify:answers`
+（`check-answers.mjs` **自己调 `readContentDirs`，压根不跑 `wiki-ask.mjs`**）
+与 `bundle-and-verify.mjs`（内容协商的端到端契约，**也不跑它**）。
+两次的症状都是「仍绿」——**与「判据有盲区」完全一样**。
+
+而 grep 得到 `wiki-ask` 的那四道（`check-exit-codes` / `check-json-output` /
+`check:not-a-demo` / `check-portability`）**只查退出码、JSON 形状与调用方**。
+
+> **只要一个调用方不经过被测的那条路，任何行为判据都看不见它。**
+> 所以这一条只能**查它调的是哪个函数**——
+> 而那**又是「字面匹配」**，只是这次它对着**一个具体的函数名**，
+> 而不是「有哪些实现」那种量不到的东西。
+
+**这是「先改后看」的第五次**（前四次见 `check-single-literal` 那节）：
+症状每次都是「仍绿」，而真因每次都不同（一次是变异无效、两次是 target 选错）。
+
 ## 搬 `main` 的递归读子目录，以及**同一个错误在同一段注释里犯了两次**（2026-09-29）
 
 `main` 那个提交里还有一处能力差异：`readContentDirs` **递归**读子目录，
@@ -1084,7 +1115,7 @@ spawnSync('npm.cmd', ['run','build'])
 「五道检索闸每道有专属用例」那句话**曾经是假的**，由 `verify:retrieval-gates` 揭穿。
 
 **语料一扩、判据一改，遮住关系就变了。** 已固化为
-`scripts/new-gates.mutations.mjs`（40 条变异 / 13 道门禁），每次 CI 都跑：
+`scripts/new-gates.mutations.mjs`（41 条变异 / 13 道门禁），每次 CI 都跑：
 
 | 被测门禁 | 变异 |
 |---|---|
