@@ -142,6 +142,16 @@ const LEDGER_ONLY_ROW = "| `verify:base` | 在组件里注入绕过 `path()` 的
  */
 const STAGED_STEP_LINE = "  ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],\n";
 
+/**
+ * 判据 3 与判据 5 的变异锚点——**从目标文件切出来，不手写**。
+ *
+ * ⚠️ **切出来而不是手写**：2026-09-29 手写过一次，
+ * 而那行里的中文与换行经过几层转义全变了，报「锚点出现 0 次」。
+ */
+const FORMATS_CMD_LINE = "\"verify:formats\": \"node scripts/check-formats.mjs\"";
+/** README 里「门禁编排 | **N 步**」那一行（**含 N**，因为 N 会变**）。 */
+const README_STEPS_LINE = "| 门禁编排 | **45 步**";
+
 const MUT_COUNT = (() => {
   const src = readFileSync(import.meta.filename, 'utf8');
   // ⚠️ **`lastIndexOf`**：这段自省代码**自己就含** `const CASES = [`，
@@ -1416,6 +1426,48 @@ const CASES = [
     file: 'scripts/check-gate-list.mjs',
     find: STAGED_STEP_LINE,
     replace: '',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着判据 3：「每一步引用的脚本存在」——而它此前零覆盖。**
+     *
+     * 判据 3 核三件事：命令在 package.json 里有定义、步骤形态认识、
+     * 而**它指向的脚本文件真在磁盘上**。
+     *
+     * 而**「脚本被删了而 package.json 还指着它」是零覆盖的那一类**——
+     * 它会在 CI 上表现为「本地好好的，一到干净 checkout 就找不到文件」。
+     *
+     * ⚠️ **第一版选的是 `clean`——而它不在 `verify:all` 里**，
+     * **而判据 3 只遍历编排里的步骤**，于是那条变异压根走不到它（门禁仍绿）。
+     * 而**「变异无效」与「判据失效」在输出上完全一样**（形态十二）。
+     *
+     * 现在选 `verify:formats`——**它在编排里、且直接指向 .mjs**。
+     */
+    why: 'check:gate-list — 某一步指向的脚本文件不存在（判据 3 必须报）',
+    covers: ['3'],
+    file: 'package.json',
+    find: FORMATS_CMD_LINE,
+    replace: '"verify:formats": "node scripts/这个文件不存在.mjs"',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着判据 5：「文档里转述的步数」——而它此前零覆盖。**
+     *
+     * 判据 5 核 `README.md` 与 `docs/cli.md` 里写的「N 步」与实际一致——
+     * 而**这两个数正是本项目栽过最多次的形状**
+     *（README 的测试条数漂过三次、编排步数漂过四次）。
+     *
+     * 变异：把 README 里的那个数改成 99。
+     * ⚠️ 而判据 5 **逐份文档查**（`for (const docPath of DOCS_WITH_STEP_COUNT)`），
+     * 所以**只改一份就够触发**——而 cli.md 那份保持正确，**正好验证「逐份」是真的**。
+     */
+    why: 'check:gate-list — README 里的步数漂了（判据 5 必须报，而 cli.md 那份是对的）',
+    covers: ['5'],
+    file: 'README.md',
+    find: README_STEPS_LINE,
+    replace: README_STEPS_LINE.replace(/\d+/, '99'),
     target: 'check-gate-list.mjs',
   },
   {

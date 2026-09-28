@@ -64,6 +64,25 @@ const scriptOf = (cmd) => {
  * **报「此刻核不到任何东西」**，不是默默放过。
  * **「查不动 ≠ 通过」**：形态四的变体。
  */
+/**
+ * 从一条 npm 脚本的定义里**抽出它指向的那个 `.mjs` 文件名**。
+ *
+ * ⚠️⚠️ **这个形状在 2026-09-29 之前被写了 4 遍**（判据 3、4c、4i、scriptOf 各一份），
+ * 而**它们 4 处都不认中文文件名**——
+ * `/node (scripts/[w.-]+.mjs)/` 里的 `w` **是 ASCII**。
+ *
+ * > 我为判据 3 写的那条变异注入了一个**中文**的假路径，
+ * > 门禁**照样绿**——而我先读成「判据失效」，
+ * > 真相是**它压根没看见那个路径**（形态四：「查不到」≠「没有」）。
+ * >
+ * > **而那不是变异的问题，是判据的真盲点**：
+ * > 判据 3 声称核「脚本文件存在」，**而一个中文名的脚本它核不了**。
+ *
+ * 所以：**路径段用「非引号、非空白」来界**，不用 `w`。
+ */
+const scriptPathOf = (def) =>
+  /node (scripts\/[^\s"']+\.mjs)/.exec(def ?? '')?.[1];
+
 const CMD_SCRIPTS_OUT = () =>
   /(\d+)\s*个命令，(\d+)\s*个与脚本名对不上/.exec(run(scriptOf('check:command-scripts')));
 
@@ -181,9 +200,11 @@ for (const step of steps) {
     continue;
   }
   // 形如 `node scripts/check-x.mjs` 的，检查文件真的在
-  const fileMatch = /node (scripts\/[\w.-]+\.mjs)/.exec(scripts[name]);
-  if (fileMatch && !existsSync(join(ROOT, fileMatch[1]))) {
-    problems.push(`「${name}」指向的脚本文件不存在：${fileMatch[1]}`);
+  // ⚠️ **走 `scriptPathOf` 而不是自己再写一遍正则**——2026-09-29 实测
+  // 这一处曾单独保留旧写法，于是中文文件名它看不见（而门禁照样绿）。
+  const file = scriptPathOf(scripts[name]);
+  if (file && !existsSync(join(ROOT, file))) {
+    problems.push(`「${name}」指向的脚本文件不存在：${file}`);
   }
 }
 
