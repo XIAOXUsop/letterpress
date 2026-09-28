@@ -344,33 +344,20 @@ const GATES = [
 
 const CASES = [
   {
-    // ⚠️ 守着 `wiki:ask` 改用 `readContentDirs` 那个改动（2026-09-29，来自 origin/main）。
-    // 它原先**自己**写了一遍「读两个目录」的循环，而那份不递归——
-    // 于是子目录里那几篇**只有构建读得到、CLI 检索不到**，
-    // 而 `wiki:ask` 正是 **agent 读内容的主路径**。
-    // 症状：agent 问「答案在子目录里」的问题，检索返回「没有依据」——
-    // **而那看起来像内容没写全，不像 bug。**
+    // ⚠️ 守着 2026-09-29 那条**generalize 后**的判据：扫所有 scripts/*.mjs，
+    // 凡是自己 readdirSync 一个内容目录的都要登记理由。
+    // **不给 `wiki-ask` 单独写**——一个个补，下一个自建循环照样能溜进来。
     //
-    // ⚠️ **被测门禁是 `check:field-coverage`，不是 `verify:answers`。**
-    // 我先试过 `verify:answers` 与 `bundle-and-verify.mjs`，两次都「仍绿」——
-    // 而真相是：**这两个都不跑 `wiki-ask.mjs`**（前者自己调 `readContentDirs`，
-    // 后者是内容协商的端到端契约）。grep 得到 `wiki-ask` 的那几道
-    // （`check-exit-codes` / `check-json-output` / `check:not-a-demo` /
-    // `check-portability`）**只查退出码、JSON 形状与调用方**。
-    //
-    // > **「所有门禁都绿，而这一处没人守」不是运气，是形状决定的**——
-    // > 只要一个调用方不经过被测的那条路，任何行为判据都看不见它。
-    // > 所以只能**查它调的是哪个函数**。
-    //
-    // ⚠️ 我为这条变异**改过两次 target 都是错的**——
-    // 而症状每次都是「仍绿」，**与「判据有盲区」完全一样**。
-    // **那已经是「先改后看」的第五次**。
-    why: 'check:field-coverage — wiki:ask 退回自己那份只读一层的循环（agent 读不到子目录）',
-    file: 'scripts/wiki-ask.mjs',
-    find: '    corpus = readContentDirs([WIKI_DIR, POSTS_DIR]);',
-    replace: "    corpus = readContentDirs([WIKI_DIR]); // MUTATION：不读 posts",
+    // 三个真实缺陷是同一天找到的：`readContentDirs` 本身、`wiki-ask.mjs`、
+    // `wiki-review.mjs`（后两个都是「只读一层」，而 Astro 的内容 glob 是递归的）。
+    // 症状都**不像 bug**：检索说「没有依据」、`--list` 不列出那几篇。
+    why: 'check:field-coverage — wiki-review 退回只读一层（--list 不列出子目录里的页）',
+    file: 'scripts/wiki-review.mjs',
+    find: '  files = listWikiFiles();',
+    replace: '  files = readdirSync(WIKI).filter((f) => /\\.mdx?$/.test(f)); // MUTATION：只读一层',
     target: 'check-field-coverage.mjs',
   },
+
   {
     // ⚠️ 守着 2026-09-29 从 `origin/main` 搬来的**递归读子目录**。
     // 本站 src/content/ 下恰好没有子目录，所以这个差异**从未发作**——

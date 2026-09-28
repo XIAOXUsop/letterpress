@@ -103,9 +103,37 @@ function parse(file) {
   };
 }
 
+/**
+ * **列出 `WIKI` 下全部知识页（相对路径），递归。**
+ *
+ * ⚠️ **2026-09-29 从 `readdirSync(WIKI)` 换成递归**。
+ *
+ * 原先只 `readdirSync(WIKI).filter(...)` 读**一层**——而
+ * **Astro 的内容 glob 是递归的**，于是 `src/content/wiki/子目录/` 里
+ * 那几篇**只有构建读得到、`wiki:review` 读不到**。
+ *
+ * > 症状：`wiki:review --list` **不列出**那几篇，
+ * > 而 `npm run check:review` 又**只对 `--list` 里的那些做对账**——
+ * > 于是**没被列出来的页，复核状态就没人核**。
+ * > **而那比「多列了几篇」危险**：前者是一处没人守的空白。
+ *
+ * ⚠️ **别写类型标注**——这是 `.mjs`，Node **不做类型剥离**（`.ts` 才做）。
+ * 我第一版写了 `): string[]`，于是 `SyntaxError: Unexpected token ':'`，
+ * **而那报错不指向「类型标注」这个原因**（它指向函数定义那一行）。
+ */
+function listWikiFiles(dir = WIKI, prefix = '') {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...listWikiFiles(join(dir, entry.name), rel));
+    else if (entry.isFile() && /\.mdx?$/.test(entry.name)) out.push(rel);
+  }
+  return out.sort();
+}
+
 let files;
 try {
-  files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f));
+  files = listWikiFiles();
 } catch {
   console.error(`读不到 ${WIKI}——请在仓库根目录运行。`);
   process.exit(EXIT_ENVIRONMENT);

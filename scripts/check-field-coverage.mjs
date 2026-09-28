@@ -26,7 +26,7 @@
  *
  * 用法：`node scripts/check-field-coverage.mjs`
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readContentPage, readContentDirs } from '../src/lib/wiki/read-page.ts';
@@ -245,22 +245,60 @@ const checks = [
      * > 只要一个调用方不经过被测的那条路，任何行为判据都看不见它。
      * > 所以这一条只能**查它调的是哪个函数**。
      */
-    const askSrc = readFileSync(join(ROOT, 'scripts', 'wiki-ask.mjs'), 'utf8');
-    const usesShared = /readContentDirs\(\[WIKI_DIR, POSTS_DIR\]\)/.test(askSrc);
-    const ownLoop = /readdirSync\(dir\)\s*\n?\s*\.filter/.test(askSrc);
-    if (!usesShared || ownLoop) {
+    /*
+     * ⚠️ **同一个缺陷的第三处，而这一条是 generalize 后的判据。**
+     *
+     * 2026-09-29 依次发现三处「只读一层」的实现：
+     * ① `readContentDirs` 本身（已修，来自 `origin/main`）
+     * ② `wiki-ask.mjs` 自建的那个循环（已换，它自己 import `readContentDirs`）
+     * ③ `wiki-review.mjs` 的 `readdirSync(WIKI)`（已换成递归的 `listWikiFiles`）
+     *
+     * **而 ② 那条判据是给 `wiki-ask` 单独写的**——一个个补，
+     * 下一个自建循环照样能溜进来。所以改成**扫所有 `scripts/*.mjs`**：
+     * **凡是自己 `readdirSync` 一个内容目录的，都要显式登记理由。**
+     *
+     * > 判据是**「必须登记理由」而不是「不许有」**——
+     * > 因为确实有正当理由（`check-*.mjs` 要造语料、要拿文件名而不只是 page）。
+     * > **而「正当理由」与「只是懒得 import」在代码里长得一样**，
+     * > 所以要求**写下来**，好让下一个人能判断。
+     *
+     * ⚠️ **本门禁自己也在被扫范围内**——它造语料，所以它在 `ALLOWED` 里。
+     */
+    const ALLOWED = new Map([
+      ["check-anchor-links.mjs", "它核文档里的锚点链接，需要文件名而不只是 page"],
+      ["check-anchors.mjs", "它核产物里的锚点，需自己遍历 dist"],
+      ["check-doc-refs.mjs", "它核文档里提到的路径，读的就是内容目录本身"],
+      ["check-onboarding-doc.mjs", "它要对比单读与多读，必须自己遍历两个目录"],
+      ["check-portability.mjs", "它核裸 Node 能否 import，读真实内容目录才有意义"],
+      ["check-review-status.mjs", "它要与 wiki:review --list 对账，而那需要文件名"],
+      ["check-single-source.mjs", "它扫全仓找版本号字面量，内容目录也在范围内"],
+      ["check-two-paths.mjs", "它要比单读与多读，必须自己遍历"],
+      ["check-field-coverage.mjs", "**它自己造语料**（本条判据就在这里）"],
+    ]);
+    const scriptDir = join(ROOT, 'scripts');
+    const selfBuilding = [];
+    for (const name of readdirSync(scriptDir).filter((f) => f.endsWith('.mjs'))) {
+      if (ALLOWED.has(name)) continue;
+      const src = readFileSync(join(scriptDir, name), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      // 「自己 readdirSync 一个看起来像内容目录的东西」
+      if (/readdirSync\(\s*(?:WIKI|POSTS|WIKI_DIR|POSTS_DIR|join\([^)]*content)/.test(src)) {
+        selfBuilding.push(name);
+      }
+    }
+    if (selfBuilding.length > 0) {
       problems.push(
-        `\`wiki-ask.mjs\` **没有走 \`readContentDirs\`**`
-        + `（它在用自己那份循环：${ownLoop}）。\n`
-        + '    → 那个循环**只读一层**，所以 `src/content/子目录/` 里那几篇'
-        + '**只有构建读得到、CLI 检索不到**；\n'
-        + '    症状是 agent 问一个问题得到「没有依据」——**而那不像 bug**。\n'
-        + '    而**没有任何行为门禁能看见它**：`verify:answers` 自己调'
-        + '`readContentDirs`，**不跑 `wiki-ask.mjs`**。',
+        '这些脚本**自己 readdirSync 一个内容目录**，而没走 `readContentDirs`：\n'
+        + selfBuilding.map((n) => '      ' + n).join('\n') + '\n'
+        + '    → **只读一层**时，`src/content/<x>/子目录/` 里那几篇'
+        + '**只有构建读得到、CLI 读不到**；\n'
+        + '    症状是「检索说没有依据」/「--list 不列出」——**那不像 bug，像内容没写全**。\n'
+        + '    → 要么改用 `readContentDirs`，要么把理由写进本门禁的 `ALLOWED`。',
       );
-      console.log('  ✗ wiki-ask.mjs 没有走 readContentDirs（自己那份只读一层）');
+      console.log(`  ✗ ${selfBuilding.length} 个脚本自建读内容目录：${selfBuilding.join("、")}`);
     } else {
-      console.log('  ✓ wiki:ask 走的是同一个 readContentDirs（不是自己那份循环）');
+      console.log(`  ✓ 没有任何脚本自建读内容目录（${ALLOWED.size} 个已登记理由的除外）`);
     }
   } finally {
     rmSync(nested, { recursive: true, force: true });
