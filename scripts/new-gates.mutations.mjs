@@ -51,9 +51,32 @@ console.log('─'.repeat(64));
  * ⚠️ **这个 `Set` 必须定义在 `red()` 之前**：`const` 有暂时性死区，
  * 反过来写会 ReferenceError——而**那正是「注释里写了、代码没实现」的形状**。
  */
-// ⚠️ **Windows 上是 npm.cmd，不是 npm**——而加 shell:true 会引入 DEP0190 警告，
-// 那正是 docs/cli.md 里记着要消除的一条。**别为了跑通一个门禁引入新警告。**
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+/*
+ * ⚠️ **2026-09-28 第三次：为了避开 `shell: true` 的 DEP0190，我改用 `npm.cmd`
+ * —— 而那换成了一个更隐蔽的失败。**
+ *
+ * `npm.cmd` 是**批处理文件**，Node 在 `shell: false` 下**起不来它**：
+ * `spawnSync` 返回 **`status: null` + `error: EINVAL`**，**子进程压根没运行**。
+ *
+ * 而我原来的判据是 `r.status !== 0` —— `null !== 0` 为真，
+ * 于是**每一次都被报成「build 失败」**，而真相是「它没跑」。
+ *
+ * > **这是我今天第四次让自己的检查骗自己**（前三次：grep U+FFFD 把门禁自己的
+ * > 字面量当残缺、grep 空括号把 `process.cwd()` 当残缺、探针把变异门禁报成「没覆盖」）。
+ * > 而这一次的代价是**34 条变异里有 2 条一直假红**。
+ *
+ * 处置两件事：
+ * ① **Windows 上用 `cmd /c npm`**（实测 status=0）——**不用 `shell: true`**，
+ *    所以 DEP0190 不会回来；
+ * ② **`error` 存在时不能说「build 失败」**——那是「压根没起来」，
+ *    与「跑���了且失败」是两件事（形态十一）。
+ */
+const NPM_CMD = process.platform === 'win32'
+  ? { cmd: 'cmd.exe', args: ['/c', 'npm'] }
+  : { cmd: 'npm', args: [] };
+const runNpm = (script) => spawnSync(NPM_CMD.cmd, [...NPM_CMD.args, 'run', script], {
+  cwd: ROOT, encoding: 'utf8', timeout: 600_000,
+});
 
 const BUNDLED = new Set(['verify']);
 
@@ -107,11 +130,22 @@ function distLooksConsistent() {
 
 function ensureDist() {
   if (distLooksConsistent()) return;
-  const r = spawnSync(NPM, ['run', 'build'], {
-    cwd: ROOT, encoding: 'utf8', timeout: 600_000,
-  });
+  const r = runNpm('build');
+  // ⚠️ **`r.error` 存在 = 子进程压根没起来**，那与「跑完且失败」是两件事。
+  // 而 `status` 在这种情况下是 `null`，**`null !== 0` 会把它读成「失败」**——
+  // 2026-09-28 因此把 34 条变异里的 2 条一直报成假红。
+  if (r.error) {
+    console.log(
+      `  ⚠ **子进程压根没起来**（${r.error.code}）——`
+      + `所以 build 没跑，下面依赖产物的门禁结果**不可信**，而那不是变异造成的。`,
+    );
+    return;
+  }
   if (r.status !== 0) {
-    console.log('  ⚠ build 失败，下面依赖产物的门禁结果不可信（那不是变异造成的）');
+    console.log(
+      `  ⚠ build 失败（退出码 ${r.status}），下面依赖产物的门禁结果不可信`
+      + '（那不是变异造成的）。',
+    );
   }
 }
 
@@ -126,9 +160,16 @@ function ensureDist() {
 const red = (script) => {
   if (NEEDS_DIST.has(script)) ensureDist();
   if (BUNDLED.has(script.replace(/\.mjs$/, ''))) {
-    const r = spawnSync(NPM, ['run', 'verify'], {
-      cwd: ROOT, encoding: 'utf8', timeout: 600_000,
-    });
+    const r = runNpm('verify');
+    // ⚠️ 同一个坑的第二处：**`error` 存在时 `status` 是 `null`**，
+    // 而 `null !== 0` 恒真 —— 那会让这道门禁**永远被报成红**。
+    // 它现在没发作只因为没有变异以 `verify` 为 target，**那是埋着的雷**。
+    if (r.error) {
+      return {
+        red: true,
+        out: `子进程压根没起来（${r.error.code}）——这是环境问题，不是门禁的结论。`,
+      };
+    }
     return { red: r.status !== 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
   }
   const r = spawnSync('node', [join('scripts', script)], {
