@@ -90,6 +90,19 @@ const REQUIREMENTS = [
     ],
     allowLiteral: /DEFAULT_RESERVED_POST_ROUTES/,
   },
+  {
+    // ⚠️ **2026-09-28 新增。** 见下面的「为什么它是两半」注释。
+    file: '../content.ts',
+    what: '关系声明的字段名（构建侧那一半）',
+    mustMatch: [
+      {
+        pattern: /\[site\.wiki\.relationField\]/,
+        why: 'toDoc 必须**按配置的名字**读关系，'
+          + '否则「换一个站点换个字段名」在构建侧仍要改核心源码——'
+          + '那正是读路径已经解决（`relationField` 参数）、构建侧还没解决的那一半。',
+      },
+    ],
+  },
 ];
 
 const problems = [];
@@ -100,25 +113,28 @@ console.log('─'.repeat(64));
 for (const req of REQUIREMENTS) {
   const full = join(process.cwd(), 'src', 'lib', 'wiki', req.file);
   const text = readFileSync(full, 'utf8');
+  // ⚠️ **显示用 `label` 而不是 `req.file`**——`../content.ts` 是路径技巧
+  // （让 join 解析到 `src/lib/content.ts`），对读输出的人不可读。
+  const label = req.file.replace(/^\.\.\//, '');
 
   for (const { pattern, why } of req.mustMatch) {
     if (pattern.test(text)) {
-      console.log(`  ✓ ${req.file}  ${req.what}：可注入`);
+      console.log(`  ✓ ${label}  ${req.what}：可注入`);
     } else {
       problems.push(
-        `${req.file}  ${req.what}：**没有注入口**\n` +
+        `${label}  ${req.what}：**没有注入口**\n` +
           `    ${why}\n` +
           `    期望匹配：${pattern}\n` +
           `    ——这条正是路线图阶段 4 第 6 项要剥离的东西。`,
       );
-      console.log(`  ✗ ${req.file}  ${req.what}：没有注入口`);
+      console.log(`  ✗ ${label}  ${req.what}：没有注入口`);
     }
   }
 
   // 兜底默认值必须仍以 DEFAULT_ 命名存在
   if (req.allowLiteral && !req.allowLiteral.test(text)) {
     problems.push(
-      `${req.file}  ${req.what}：兜底默认值不见了（${req.allowLiteral} 未匹配）\n` +
+      `${label}  ${req.what}：兜底默认值不见了（${req.allowLiteral} 未匹配）\n` +
         `    可以不给默认值，但**别悄悄改成别的名字**——\n` +
         `    「DEFAULT_ 这个前缀」是「这可被覆盖」的唯一可见标记。`,
     );

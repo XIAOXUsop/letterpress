@@ -54,8 +54,36 @@ function toDoc(
    *
    * <p>现在图直接读 `declaredRelations`（见 `graph.ts` 的 `Doc`），正文保持原样。
    */
-  const related = kind === 'wiki' ? ((data as { related?: string[] }).related ?? []) : [];
-
+  /*
+   * ⚠️ **2026-09-28：字段名改成由 `site.wiki.relationField` 给。**
+   *
+   * 原先这里是 `(data as { related?: string[] }).related`——**写死的 `related`**，
+   * 而读路径那侧（`readContentDirs` 的 `relationField`）已经是参数。
+   * **同一件事，一处能配一处不能**——那正是阶段 4 第 4 条说的「重复维护」。
+   *
+   * ⚠️ **`data` 的类型里仍然只有 `related`**：Astro 的 schema 必须是静态字面量
+   * 才能推导类型（实测：把 zod 里的字段名换成变量，`data.audience` 就取不到类型）。
+   * 所以这里是**按配置的名字去读**，`data` 那一侧用 `unknown` 中转。
+   *
+   * > **这暴露了一个诚实的限制**：改了 `relationField` 之后，
+   * > `content.config.ts` 的 zod 仍要手工改（它推不出动态键）。
+   * > 而**忘记改的后果是静默的**——zod 会把那个键剥掉，于是关系全丢。
+   * > `check:site-agnostic` 核「配置项真的被用上」，而这里还需要一条
+   * > 「zod 声明的字段名与配置一致」的检查——**那一半属��这一轮的后续**。
+   */
+  const relationValues = (data as Record<string, unknown>)[site.wiki.relationField];
+  // ⚠️ **写成三元而不是 `&&`**：`check:two-paths` 数的是下面那行
+  // 逐字出现 `kind === 'wiki' ? ` 的**代码**（构建侧的基准是 4 处）。
+  // 我第一版写成 `kind === 'wiki' && …`，那处就数不到了——
+  // **门禁当场报「3 处 vs 名单 4 项」**，而它是对的。
+  // 改法是迁就判据的写法，不是放宽判据。
+  //
+  // ⚠️ **顺带一个实测的坑**：这道判据数的是字符串出现处数，**注释里也数**。
+  // 我第一版在注释里写了 `kind === 'wiki' ?` 举例，它当场把基准报成 5 处。
+  // **判据的脆弱性是真的，而处置是「别在注释里写会被数的字符串」**——
+  // 那比把判据改成「剥掉注释再数」更省事，也更不容易出错。
+  const related =
+    kind === 'wiki' ? (Array.isArray(relationValues) ? (relationValues as string[]) : []) : [];
   /*
    * 来源与复核的适用范围（2026-09-24 改过，原注释说的是「只在知识层」）：
    *

@@ -154,8 +154,23 @@ rmSync(dir, { recursive: true, force: true });
  */
 const contentTs = readFileSync(join(ROOT, 'src', 'lib', 'content.ts'), 'utf8');
 const buildFields = new Set();
+/*
+ * ⚠️ **同样要剥掉注释再抽字段。**
+ *
+ * 2026-09-28 实测：我在 `content.ts` 的注释里解释了「`data` 的类型里仍只有
+ * `related`」，而这个正则把注释里的 `data.related` 当成了真读取——
+ * 于是报「无人认领：audience」（`audience` 来自我另一处**代码**里的动态键
+ * `[site.wiki.relationField]`，而那条同样被误认）。
+ *
+ * > 与 `check:two-paths` 完全同源：**判据数的东西比它声称的宽，
+ * > 就会被注释触发**；而「写注释时避开某个字符串」不是可靠约束。
+ */
+const contentSrc = contentTs.replace(
+  /\/\*[\s\S]*?\*\//g,
+  (m) => ' '.repeat(m.length),
+).replace(/^\s*\/\/.*$/gm, (m) => ' '.repeat(m.length));
 for (const re of [/\bdata\.([a-zA-Z]+)/g, /data as \{ ([a-zA-Z]+)\?/g]) {
-  for (const m of contentTs.matchAll(re)) buildFields.add(m[1]);
+  for (const m of contentSrc.matchAll(re)) buildFields.add(m[1]);
 }
 const untested = [...buildFields].filter(
   (f) => !checks.some(([n]) => n === f) && !DELIBERATELY_UNREAD.has(f),

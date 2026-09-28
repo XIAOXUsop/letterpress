@@ -65,7 +65,24 @@ console.log('─'.repeat(64));
  */
 const WIKI_ONLY = ['wikiKind', 'review', 'declaredRelations', 'original'];
 
-const contentTs = readFileSync(join(ROOT, 'src', 'lib', 'content.ts'), 'utf8');
+const contentTsRaw = readFileSync(join(ROOT, 'src', 'lib', 'content.ts'), 'utf8');
+/*
+ * ⚠️ **数「代码里的出现处数」，不数注释里的。**
+ *
+ * 2026-09-28 实测：我在 `content.ts` 的注释里**解释**了一句
+ * 「这里必须写成 `kind === 'wiki' ?` 而不能是 `&&`」，
+ * 而这道判据数的是字符串出现处数——**于是基准从 4 变成 6，它当场报红**。
+ *
+ * > **判据数的东西比它声称的宽，就会被注释触发。**
+ * > 而「写注释时避开某个字符串」是不可靠的约束——我控制不住自己会解释那句话。
+ *
+ * 所以：**先把注释剥掉再数**（用空格替换，保留行结构）。
+ * 另一个同源问题：`check:onboarding-doc` 里数 `✓` 用的是**输出**，
+ * 而输出里不会有注释——**那才是可靠的方向：数产物，不数源码。**
+ */
+const contentTs = contentTsRaw
+  .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+  .replace(/^\s*\/\/.*$/gm, (m) => ' '.repeat(m.length));
 const gates = [...contentTs.matchAll(/kind === 'wiki' \?/g)].length;
 
 /**

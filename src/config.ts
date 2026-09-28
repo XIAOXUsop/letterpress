@@ -67,6 +67,22 @@ export interface SiteConfig {
     readonly label: string;
     /** 是否对中文标题却未显式指定 slug 的文章给出提示 */
     readonly hintCjkSlugs: boolean;
+    /**
+     * **关系声明在 frontmatter 里的字段名。**
+     *
+     * ⚠️ **2026-09-28 加**：此前它是**写死的** `related`（`content.config.ts`
+     * 的 zod 与 `content.ts` 的读取各一处），而读路径那侧已经是 `relationField`
+     * 参数（`readContentDirs`）——**同一件事，一处能配一处不能**。
+     *
+     * 第二个站点把关系声明叫 `audience` 时，构建侧要改两处代码，
+     * 读路径只要传一个参数。**那就是「重复维护」的最小可见单位。**
+     *
+     * ⚠️ **改这个值要同时改两处**：`content.config.ts` 的 zod schema
+     * 与 `content.ts` 的读取——因为 Astro 的 schema 必须是**静态字面量**
+     * 才能推导 `data` 的类型（实测：把字段名换成变量后类型推导会退化）。
+     * `check:site-agnostic` 守着这一条——它核的正是「站点事实可由调用方覆盖」。
+     */
+    readonly relationField: string;
   };
   /** 每次构建输出知识库体检报告 */
   readonly lint: {
@@ -122,6 +138,7 @@ export const site: SiteConfig = {
     enabled: true,
     label: '知识库',
     hintCjkSlugs: false,
+    relationField: 'related',
   },
 
   lint: {

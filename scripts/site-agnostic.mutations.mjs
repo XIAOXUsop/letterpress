@@ -18,7 +18,7 @@
  *
  * 放在 `scripts/` 而不是 `.verify/`，因为后者被 `.gitignore` 忽略、
  * 也会被 `npm run clean` 清掉——**放那儿它就等于没写**，CI 上根本跑不到。
- * 退出码 0 = 四次变异都真的报出来了（这道负向验证才成立）。
+ * 退出码 0 = 每次变异都真的报出来了（这道负向验证才成立）。
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,15 +40,36 @@ const GATE = join(ROOT, 'scripts/check-site-agnostic.mjs');
  * > 而真凶是「写到了别处」。**查「量出来不对」时，第一反应应该是「尺子不对」。**
  */
 const lib = (name) => join(ROOT, 'src/lib/wiki', name);
+/**
+ * ⚠️ **2026-09-28 加 `content`：`src/lib/content.ts` 不在 `wiki/` 下面。**
+ *
+ * 它带着第三条「关系声明的字段名」判据（`toDoc` 要按 `site.wiki.relationField` 读），
+ * 而**每条判据都必须有对应的变异**——那是 `check-gate-list` 强制的。
+ */
+const libOf = (key) => (key === 'content'
+  ? join(ROOT, 'src/lib/content.ts')
+  : lib(`${key}.ts`));
 
 const original = {
   graph: readFileSync(lib('graph.ts'), 'utf8'),
   lint: readFileSync(lib('lint.ts'), 'utf8'),
+  content: readFileSync(join(ROOT, 'src/lib/content.ts'), 'utf8'),
 };
 
+/*
+ * ⚠️ **按 `original` 的键遍历还原，不要一个个写。**
+ *
+ * 第一版是 `writeFileSync(lib('graph.ts'), …); writeFileSync(lib('lint.ts'), …);`——
+ * 于是 2026-09-28 加了 `content` 这个 key 之后**还原漏了它**，
+ * 表现是「恢复后仍然红」，而那正是本脚本自己的判据在报警。
+ *
+ * > **加一个 key 时，改「读它的地方」而漏了「还原它的地方」**——
+ * > 与 2026-09-28 那次「CORE 名单加了模块但没加判据」是同一族。
+ */
 const restore = () => {
-  writeFileSync(lib('graph.ts'), original.graph, 'utf8');
-  writeFileSync(lib('lint.ts'), original.lint, 'utf8');
+  for (const key of Object.keys(original)) {
+    writeFileSync(libOf(key), original[key], 'utf8');
+  }
 };
 
 const runGate = () => {
@@ -69,7 +90,7 @@ const runGate = () => {
 
 const patch = (key, find, replace) => {
   if (!original[key].includes(find)) return null;
-  const target = lib(`${key}.ts`);
+  const target = libOf(key);
   const out = original[key].replace(find, replace);
   writeFileSync(target, out, 'utf8');
   if (process.env.MUTATE_DEBUG) {
@@ -125,6 +146,25 @@ const MUTATIONS = [
         '    ...checkReservedPostRoutes(docs, DEFAULT_RESERVED_POST_ROUTES),',
       ),
   },
+  {
+    /**
+     * ⚠️ **2026-09-28 新增。**
+     *
+     * `toDoc` 原先写死 `(data as { related?: string[] }).related`——
+     * **而读路径那侧已经是 `relationField` 参数**。同一件事，一处能配一处不能，
+     * 就是一个站点换字段名时**构建侧要改代码而读路径不用**。
+     *
+     * 这一条把 `toDoc` 改回写死的形式，断言门禁会红。
+     */
+    name: '⑤ toDoc 改回写死 data.related（构建侧失去字段名注入口）',
+    expectRed: true,
+    apply: () =>
+      patch(
+        'content',
+        '  const relationValues = (data as Record<string, unknown>)[site.wiki.relationField];',
+        '  const relationValues = (data as { related?: string[] }).related;',
+      ),
+  },
 ];
 
 let allGood = true;
@@ -173,7 +213,7 @@ if (runGate().red) {
 console.log('  ✓ 恢复后：绿（源码已还原）\n');
 console.log(
   allGood
-    ? '四次变异都真的报出来了——这道门禁是尺子，不是装饰。'
+    ? `${MUTATIONS.length} 次变异都真的报出来了——这道门禁是尺子，不是装饰。`
     : '有变异没报出来——门禁有洞。',
 );
 console.log();
