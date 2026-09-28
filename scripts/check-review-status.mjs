@@ -24,7 +24,7 @@
  *
  * 用法：`npm run verify:review-status`
  */
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -82,6 +82,33 @@ for (const file of files) {
         `    这不是显示问题——**wiki:review 是给人做复核判断用的工具**，\n` +
         `    它把「已复核」说成「未复核」会让人以为要重新复核一遍。`,
     );
+  }
+
+  /*
+   * ⚠️ **2026-09-28 加：非法 status 要报出来，不能两边一起变成「未复核」。**
+   *
+   * `parseReview` 会对非法 `status` 返回 `undefined`（那是对齐
+   * `content.config.ts` 的 zod enum——**构建侧会直接失败**）。
+   * 而 `wiki:review` 与这道门禁**都经过同一个 `parseReview`**，
+   * 所以非法值在两边都变成 `unreviewed` → **比对通过，什么都没报**。
+   *
+   * > 症状是「frontmatter 写坏了，但所有检查都绿」——
+   * > 而构建会失败，于是**本地全绿、CI 构建红**，症状与原因相距很远。
+   *
+   * 所以这里**绕开 `parseReview` 直接读原始 frontmatter**，
+   * 拿它与「能解析出的 status」比：不一样就说明写坏了。
+   */
+  const raw = readFileSync(join(WIKI, file), 'utf8');
+  const rawStatus = /^\s{2}status:\s*(.+?)\s*$/m.exec(raw)?.[1] ?? null;
+  if (rawStatus && !['pending', 'reviewed', 'stale'].includes(rawStatus)) {
+    problems.push(
+      `${page.slug}：\`review.status\` 写的是「${rawStatus}」，而合法值只有 `
+      + '`pending` / `reviewed` / `stale`。\n'
+      + '    **构建会因此失败**（content.config.ts 的 zod enum），'
+      + '而 `wiki:review` 与本门禁都把非法值当成「未复核」——'
+      + '所以它们两边一致、比对通过，**什么都不报**。',
+    );
+    console.log(`  ✗ ${page.slug.padEnd(22)} review.status 非法：${rawStatus}`);
   }
 }
 
