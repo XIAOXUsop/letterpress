@@ -1262,6 +1262,29 @@ const CASES = [
     target: 'check-release.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着判据⑤：定位的措辞必须在全文唯一。**
+     *
+     * ④ 只核「有没有写明这是模板」——而**全文搜一个词找到「有一处这么说」，
+     * 不等于「没有别处说反的」**。
+     *
+     * 真实形状是：有人在 README **另一处**补一句说明
+     * （「它其实也可以当依赖装」/「这不是模板」/「只是主题」），
+     * 而那句话**与第 55 行矛盾**——**④ 照样绿**。
+     *
+     * > 而 README 是**给人读的**，人会补一句说明——
+     * > **补的那一句正是最容易与原句矛盾的地方**。
+     *
+     * 变异：在别处加一句「它只是主题」。
+     */
+    why: 'check:release — README 别处出现与「这是模板」矛盾的表述（⑤ 必须红）',
+    file: 'README.md',
+    find: '**不用改配置、不用建数据库、不用填环境变量。** 你现在看到的就是完整站点。',
+    replace: '**不用改配置、不用建数据库、不用填环境变量。** 你现在看到的就是完整站点。\n'
+      + '（它只是主题，不是一个包。）',
+    target: 'check-release.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",

@@ -259,6 +259,52 @@ if (SKIP_CHANGELOG) {
   console.log('    **那些对 clone 的人有用**），而 `files` 只让 `npm pack` 出 124 个。');
 }
 
+// ── ⑤ 定位的**措辞**必须在全文唯一 ────────────────────────────────────
+/*
+ * ⚠️ **④ 只核「有没有写明」，不核「写的是不是同一件事」。**
+ *
+ * 2026-09-29 实测的漏洞形状：④ 的 `claimsTemplate` 是**全文搜「这是模板」**，
+ * 而**别处若写一句「它是一个 Astro 集成包」/「这不是模板」**，
+ * ④ **照样绿**——因为它只认自己搜的那一句。
+ *
+ * > **全文搜一个词找到「有一处这么说」，不等于「没有别处说反的」。**
+ * > 而 README 是**给人读的**，人会补一句说明——
+ * > **补的那一句正是最容易与原句矛盾的地方**。
+ *
+ * 判据：扫出**明确的对立表述**，有一处就报。
+ *
+ * ⚠️ **而「一种说法」不能靠字符串相等判**——同义不同字
+ * （「主题」与「模板」、`template` 与 `starter`）是常态，
+ * 判「同义」是语义问题，**机器做不了**。
+ * 所以只抓**明确的对立/转向句式**——**那才是真正会误导读者的**。
+ *
+ * ⚠️ **而这必然漏**：有人写「它更像库而不是模板」而正则抓不到。
+ * **漏比误报便宜**——误报会逼人改掉本来正确的句子。
+ * 而那是本项目反复交的学费（判据太宽就变成噪声）。
+ */
+{
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+  const CONTRADICTS = [
+    { re: /不是\s*\**模板/, what: '「不是模板」' },
+    { re: /只[是为]?\s*\**主题/, what: '「只是主题」' },
+    { re: /当成\s*\**?(npm\s*)?(依赖|包)/i, what: '「当成依赖/包」' },
+    { re: /可以\s*`?npm (?:i|install|add)\s+letterpress/i, what: '「可以 npm i letterpress」' },
+  ];
+  const hits = CONTRADICTS.filter((c) => c.re.test(readme));
+  if (hits.length > 0) {
+    problems.push(
+      `README 里同时出现了**互相矛盾的定位**：\n`
+      + hits.map((h) => `        ${h.what}`).join('\n') + '\n'
+      + '    → 而 ④ 只认「这是模板」那一句，**看不到别处的对立表述**。\n'
+      + '    → 读者读到**任意一句**都会照着做——而两句给的用法不一样。\n'
+      + '    → 删掉对的那句，或改成本项目实际支持的那一种。',
+    );
+    console.log(`  ✗ README 里有 ${hits.length} 处与「这是模板」矛盾的表述：${hits.map((h) => h.what).join('、')}`);
+  } else {
+    console.log('  ✓ README 里没有与「这是模板」矛盾的表述');
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
