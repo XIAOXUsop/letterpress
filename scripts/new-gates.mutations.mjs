@@ -399,6 +399,22 @@ const ANCHOR2_TAIL = '(data as { review?: Doc[\'review\'] }).review : undefined;
  */
 const TOP_LEVEL_ONLY = '    ...ONLY_TOP_LEVEL,';
 
+
+
+/**
+ * `check-gate-list.mjs` 里 4g 重跑那道门禁的那两行——**从目标文件切出来的**。
+ *
+ * ⚠️ **为什么是这两行而不是一行**：单行替换会让下一行
+ * `encoding: 'utf8', });` 变成孤儿 → **SyntaxError**。
+ * 而门禁崩掉的退出码**也是非 0**——`mutate()` 会把那当成
+ * 「变异生效了」，**而它其实红在语法错误上，不是红在 4g 上**。
+ *
+ * > **「门禁红了」不等于「门禁在断的那条断言上红了」**（形态七）。
+ *
+ * 见本文件 `SINGLE_LINE` 上方那段「锚点不该手写」。
+ */
+const EXEC_COMMAND_SCRIPTS_TWO_LINES = "    const out = execFileSync('node', [join(ROOT, 'scripts', 'check-command-scripts.mjs')], {\n      encoding: 'utf8',\n    });"
+
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
@@ -930,6 +946,44 @@ const CASES = [
     file: 'scripts/check-field-coverage.mjs',
     find: "      if (name.endsWith('.mutations.mjs')) continue;\n      const src = readFileSync(join(scriptDir, name), 'utf8')",
     replace: "      const src = readFileSync(join(scriptDir, name), 'utf8')",
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4g 的主判据，而它抓到的是一处真漂移。**
+     *
+     * 2026-09-29 实测：台账里写着「48 个单文件命令」，
+     * 而 `check-command-scripts` 现在报 **59**——
+     * 这几天加了十几道门禁，**总数涨了而那一句没人核**。
+     * （分叉数 8 一直是对的，所以漂的是总数，不是分叉数。）
+     *
+     * 变异把台账那个数改回 48：若 4g 真在重跑那道门禁，必红。
+     */
+    why: 'check:gate-list — 台账里的命令总数漂了（4g 必须重跑门禁抓到它）',
+    file: 'knowledge/gate-negatives.md',
+    find: '一次性探针扫了 59 个单文件命令',
+    replace: '一次性探针扫了 48 个单文件命令',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4g 的「查不动 ≠ 通过」那个出口。**
+     *
+     * 4g 靠**解析 `check-command-scripts` 的输出来**取那个数。
+     * 而「那道门禁改了输出格式」与「台账的数字对不上」在输出上完全一样——
+     * 前者是**环境坏了**，后者是**有 bug**。
+     *
+     * 变异让重跑拿到一段**没有那个数**的输出，
+     * 4g 必须说「核不到任何东西」而不是**默默放过**。
+     *
+     * ⚠️ **锚点用完整的单行**——我第一版用多行 `find` 再按「到 `});` 为止」
+     * 去删，结果**删掉了 208 行**（把后面三个变异一起带走）。
+     * **锚点要选最短但完整的那一行。**
+     */
+    why: 'check:gate-list — 重跑那道门禁却拿不到那个数时，4g 必须报「核不到」而不是放过',
+    file: 'scripts/check-gate-list.mjs',
+    find: EXEC_COMMAND_SCRIPTS_TWO_LINES,
+    replace: "    const out = '这一段输出里没有那个数';",
     target: 'check-gate-list.mjs',
   },
   {
