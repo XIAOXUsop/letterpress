@@ -50,10 +50,14 @@ const SHARED_LITERALS = [
       + '而读者只看到其中一道的结论',
   },
   {
-    literal: "'related'",
-    where: null, // 允许多处：它是一个**字段名**，不是一份清单
-    what: null,
-    why: null,
+    // 「解析 frontmatter 里的 sources / review / original」没有单一字面量——
+    // 它的实现标志是**逐行扫块**（`for (const line of block.split`）。
+    // 所以这条走 `implOf` 而不是 `literal`。
+    implOf: (t) => /for \(const line of block\.split/.test(t),
+    where: 'src/lib/wiki/read-page.ts',
+    what: 'frontmatter 块（sources / review / original）的逐行解析',
+    why: '两份实现时 wiki:impact 与 check:impact 会对同一页给出不同的引用集，'
+      + '**而两个命令都是绿的**',
   },
 ];
 
@@ -100,8 +104,14 @@ if (scanned.length === 0) {
 
 for (const item of SHARED_LITERALS) {
   if (!item.where) continue; // 允许多处的条目不进判据
+  /*
+   * 两种匹配：**字面量**（`literal`）与**实现标志**（`implOf`）。
+   * 后者用于「那段解析没有单一字面量，但它的写法可以认」的情况——
+   * 2026-09-28 已修的第一处（frontmatter 块解析）就是这种。
+   */
+  const matches = (text) => (item.literal ? text.includes(item.literal) : item.implOf(text));
   const hits = scanned
-    .filter((f) => readFileSync(f, 'utf8').includes(item.literal))
+    .filter((f) => matches(readFileSync(f, 'utf8')))
     .map((f) => relative(ROOT, f).split(sep).join('/'));
 
   if (hits.length === 0) {
