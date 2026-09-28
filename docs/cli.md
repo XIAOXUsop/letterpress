@@ -38,8 +38,12 @@
 | `npm run verify:all`（CI 只跑其中一部分） | **37 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:retrieval-gates` → `verify:impact` → `verify:answers` → `verify:review` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:json-output` → `verify:json-mutations` → `verify:migrate` → `check:single-source` → `verify:second-site` → `verify:second-site-real` → `verify:second-site-real-mutations` → `verify:anchors` → `verify:reproducible` → `verify:base` → `check:manifest-schema` → `verify:formats` → `check:anchors` → `check:refs` → `check:agents-doc` → `check:onboarding-doc` → `check:two-paths` → `check:field-coverage` → `check:single-literal` → `check:adapter-size` → `check:staged`），**不含** `verify:online`（需要外部环境）、`migrate:manifest`（需要显式输入）与三个交互式命令 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
-| `npm run check:onboarding-doc` | **[接一个新站点](onboarding-a-new-site.md) 里的实测数字与现在跑出来的一致**。判据是**从文档的 Markdown 表格里解析数字**再与实测值比对——第一版把期望值硬编码在脚本里、文档读进来却从不使用，于是**改文档不会红、改代码才会红**，而它声称要核的正是文档。对应阶段 4 第 1 项 |
-| `npm run check:portability` | 核心模块三条断言：① 能被**裸 Node** 直接 `import`（含传递依赖）且**真的导出了**承诺的函数 ② 没有「可选链只保护左边、没保护字段本身」的写法 ③ **每个核心模块都有真实调用方**——只有测试或检查脚本在引用它会红。③ 的由来见[接一个新站点](onboarding-a-new-site.md) |
+| `npm run check:onboarding-doc` | **文档里转述的数字与命令名都与实际一致**。① 接线文档的实测表格**从文档里解析数字**再与实测值比对（第一版把期望值硬编码在脚本里、文档读进来却从不使用，于是**改文档不会红、改代码才会红**，而它声称要核的正是文档）② README 与本文件转述的 fixture 篇数 / 断言条数 ③ **本文档与 README 里每个 `npm run <名字>` 都真实存在**（实测抓到 `check:portability` 这个拼错的名字——照着敲会得到 `Missing script`） |
+| `npm run check:two-paths` | **读路径与构建路径对「post 拿不到什么」同一口径**。构建侧 `toDoc` 对 `post` 判 4 次（`related` / `review` / `original` / `wikiKind`），而读路径 2026-09-28 之前**一处都没对齐**。判据分三层：① 构建侧的判定处数与本门禁的名单**必须精确相等**（不是「大于 0」）② 真跑 `pageToDoc` 两种 `docKind` 逐项断言 ③ **单读与多读对同一页逐字段一致**（拿本站 11 页真实内容比）。对应阶段 4 第 1 项 |
+| `npm run check:field-coverage` | **读路径读得到构建侧读的那些 frontmatter 字段**。判据是**行为**——造一份写满字段的 frontmatter 读回来，而不是 grep 两边源码（第一版 grep，三次自己失败：`data as { x?: }` 写法、列表字段走另一个函数、块字段逐行扫描所以字面上不出现调用）。刻意不读的字段（`cover` / `toc` / `id` …）必须在白名单里并写明理由 |
+| `npm run check:single-literal` | **同一份清单不许写两遍**。2026-09-28 一天内找到四处「同一件事两处实现」（frontmatter 块解析 / `urlFor` 前缀 / `readContentDirs` 与 `readContentPage` 各算一遍 / 文档根清单两份拷贝）——**共同形态是漂开时不报错**。⚠️ 它量的是「字面量或实现标志又出现了」，不是「逻辑又实现了」 |
+| `npm run check:adapter-size` | **站点专属接线只剩「站点事实」**（阶段 4 第 4 条的代理指标）。映射层行数上限 2、只能降不能升，且**不能靠「不接核心」变小**（反向断言核心函数仍在被调用）。⚠️ 它量行数不量质量——上限会被人为压低，缓解是那 2 行各自都有独立的可证伪断言 |
+| `npm run verify:portability` | 核心模块三条断言：① 能被**裸 Node** 直接 `import`（含传递依赖）且**真的导出了**承诺的函数 ② 没有「可选链只保护左边、没保护字段本身」的写法 ③ **每个核心模块都有真实调用方**——只有测试或检查脚本在引用它会红。③ 的由来见[接一个新站点](onboarding-a-new-site.md) |
 
 ---
 

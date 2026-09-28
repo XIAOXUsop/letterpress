@@ -226,6 +226,44 @@ checkMention('docs/cli.md 的 fixture 篇数', cliText, new RegExp(`\\*\\*${fixt
 checkMention('README 的 fixture 篇数', readmeText, new RegExp(`\\*\\*${fixtureCount} 篇\\*\\*`), fixtureCount);
 checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount} 条断言`), assertionCount);
 
+/*
+ * ⚠️ **2026-09-28 加：文档提到的每个 `npm run <名字>` 都必须真的存在。**
+ *
+ * 实测抓到一处：`docs/cli.md` 那一行写的是 `npm run check:portability`，
+ * 而真实名字是 **`verify:portability`**——照着文档敲会得到
+ * `npm ERR! Missing script: "check:portability"`。
+ *
+ * > 它一直没人发现，是因为**没人照着敲那一行**
+ * > （`verify:all` 第 12 步跑的是正确名字，而所有门禁都绿）。
+ * > **文档里的命令名是一次转述，转述就会漂。**
+ *
+ * ⚠️ 只核 `docs/cli.md` 与 `README.md`——它们是**命令清单**所在的地方。
+ * 正文里举例写的 `npm run xxx` 可能在讲「假如有这样一个命令」，不判。
+ */
+{
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const defined = new Set(Object.keys(pkg.scripts));
+  const ghosts = new Set();
+  for (const [name, text] of [['docs/cli.md', cliText], ['README.md', readmeText]]) {
+    for (const m of text.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)) {
+      if (!defined.has(m[1])) ghosts.add(`${name} → npm run ${m[1]}`);
+    }
+  }
+  if (ghosts.size > 0) {
+    problems.push(
+      `文档里提到的命令在 package.json 里不存在：\n`
+      + [...ghosts].map((g) => `      ${g}`).join('\n') + '\n'
+      + '    **照着文档敲会得到 `Missing script`。** 改文档，别改 package.json——'
+      + '文档转述命令名时最容易写成「自己以为的那个」。',
+    );
+    console.log(`  ✗ 文档提到 ${ghosts.size} 个不存在的命令`);
+  } else {
+    const total = [...cliText.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)].length
+      + [...readmeText.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)].length;
+    console.log(`  ✓ 文档提到的 ${total} 处命令都真实存在`);
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
