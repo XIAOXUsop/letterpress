@@ -34,6 +34,8 @@ import { join, relative, sep } from 'node:path';
 
 const ROOT = process.cwd();
 const problems = [];
+/** 刻意不校验的条目——**要让读输出的人看见**，否则它与「忘了填」无法区分。 */
+const skipped = [];
 
 /**
  * 登记：**这个字面量只允许在这里出现。**
@@ -58,6 +60,46 @@ const SHARED_LITERALS = [
     what: 'frontmatter 块（sources / review / original）的逐行解析',
     why: '两份实现时 wiki:impact 与 check:impact 会对同一页给出不同的引用集，'
       + '**而两个命令都是绿的**',
+  },
+  {
+    // ⚠️ **2026-09-28 补登记。** 收敛 `['scripts','src']` 那天，
+    // `check-portability` 的 `PROD_CALLERS` 与 `check-no-duplicate-lists` 的
+    // `ROOT_DIRS` 逐字相同，于是抽成了 `scripts/lib/source-dirs.mjs`。
+    //
+    // > **这份登记表是「哪些清单必须只有一处」的完整清单**，
+    // > 而那天我只加了新门禁（它们各自抓得住），**没往这里登记**——
+    // > 于是「登记处」与「实际收敛点」不同步，而**没有任何东西会发现**。
+    // >
+    // > 这与「同一份清单在两个文件里」不同：`check:no-duplicate-lists`
+    // > 只在**一个文件内**查重复，**跨文件那 1 份是探针量出来的**，
+    // > 而量完就删了探针——**结论没有落进任何常跑的门禁**。
+    // > 「量过一次」不等于「会一直成立」。
+    literal: "'scripts', 'src'",
+    where: 'scripts/lib/source-dirs.mjs',
+    what: '「我们自己的源码在哪」这两个目录',
+    why: '两份拷贝时 check-portability 的「哪些算核心调用方」与 '
+      + 'check-no-duplicate-lists 的「扫哪些文件」会扫不同的范围，'
+      + '**而读者只看到其中一道的结论**',
+  },
+  {
+    // ⚠️ **2026-09-28 补登记。** 那天实测 48 个单文件命令里 8 个的命令名与
+    // 脚本名对不上，于是建了 `scripts/lib/command-scripts.mjs` 存那张册子。
+    // **册子本身也是「同一份事实写两遍」**（package.json 一份、册子一份），
+    // 所以它必须只有一处定义。
+    //
+    // ⚠️ **锚点不能用 `'scripts/bundle-and-verify.mjs'`**——
+    // 第一次登记时就用了它，于是报「`check-exit-codes.mjs` 里也有」。
+    // 那**不是重复**：那是一张**豁免表**（文件 → 为什么豁免），
+    // 而册子是**命令名 → 脚本名**——**两张不同的清单恰好提到同一个文件名**。
+    //
+    // > **判据要锚在「这张清单独有的东西」上，不是「它提到的东西」上。**
+    // > 后者匹配的是**引用**，而引用可以是**完全不同的另一张表**。
+    // > 这与 `check:field-coverage` 那次「字面匹配三次自己失败」同族。
+    literal: "'verify vs check 的前缀差'",
+    where: 'scripts/lib/command-scripts.mjs',
+    what: '命令名与脚本名对不上的那张册子',
+    why: '两份拷贝时 check-command-scripts 的「登记是否与 package.json 一致」'
+      + '会拿旧册子去比，**而它报出来的差异全是假的**（因为有一份是真的）',
   },
 ];
 
@@ -117,8 +159,53 @@ if (scanned.length === 0) {
   process.exit(1);
 }
 
+
+/*
+ * ── 第一步：把每条登记的**结论**算出来，一个分支都不依赖 ──────────────
+ *
+ * ⚠️ **2026-09-28 修了四轮才看明白：前三轮都在防「控制流」，而这里的问题不是控制流。**
+ *
+ * ① `if (!item.where) continue;` —— **完全静默**
+ * ② 加守卫（没 `skip` 就报错）—— 守卫与 `else` 是**两个出口**，
+ *    拆掉守卫 → `{ what: 'x' }` 被打印成 `ℹ 刻意不校验：x——undefined` 并放行
+ * ③ 合成一个 `if/else` —— 拆掉 `if` → 后面两行**无条件执行**
+ * ④ 「失败条件与控制流解耦」 —— **也错了**：
+ *    `problems.push` **就在那个 `if` 的 body 里**，
+ *    拆掉 `if` 等于**拆掉记账本身**，而 `else` 照样打印 `ℹ`。
+ *
+ * > **四次都栽在同一句话上：「结构上只有一个出口，所以拆不掉」。**
+ * > 而**能拆掉它的不是结构，是「结论由分支是否执行决定」这件事**——
+ * > 只要 `problems.push` 在某个 `if` 里面，
+ * > **把那个 `if` 改成 `if (false)` 就等于删掉这条判据**，而变异脚本干的正是这个。
+ *
+ * 所以：**先无条件算出每条登记的状态，再按状态打印。**
+ * 状态是一个**数据**（`bad` / `dup` / `missing` / `ok` / `skipped`），
+ * 而 `problems` 的填充**不依赖任何 `if` 是否被拆**——
+ * 「有没有问题」由**数据的取值**决定，不由**分支跑没跑**决定。
+ *
+ * ⚠️ 这**不防**「把 `analyze` 整个删掉」那种变异——那任何门禁都防不住。
+ * 它防的是**「逐条判据被单独摘掉」**，而那正是今天这四轮的实际形态。
+ */
+
+/** @type {{what: string, why: string}[]} */
+const checked = [];
+/** 无 `where` 且没写 `skip` 理由的登记——**它们的失败不依赖任何分支**。 */
+const unexplained = [];
+/** 刻意不校验且写了理由的登记。 */
+const deliberatelySkipped = [];
+
 for (const item of SHARED_LITERALS) {
-  if (!item.where) continue; // 允许多处的条目不进判据
+  if (!item.where) {
+    // ⚠️ 记账在 `if` **之外**：`unexplained` 记录「该报」这件事，
+    // 打印在后面单独做。拆掉任何分支都不影响 `problems` 会不会非空。
+    if (typeof item.skip !== 'string' || item.skip.trim() === '') {
+      unexplained.push(item.what ?? '(未命名)');
+    } else {
+      deliberatelySkipped.push({ what: item.what, reason: item.skip.trim() });
+    }
+    continue;
+  }
+
   /*
    * 两种匹配：**字面量**（`literal`）与**实现标志**（`implOf`）。
    * 后者用于「那段解析没有单一字面量，但它的写法可以认」的情况——
@@ -130,23 +217,53 @@ for (const item of SHARED_LITERALS) {
     .map((f) => relative(ROOT, f).split(sep).join('/'));
 
   if (hits.length === 0) {
-    problems.push(
-      `登记的清单「${item.what}」在 \`${item.where}\` 里找不到了——\n`
-      + '    要么它被改名 / 挪走（那要更新这条登记），要么它**真的没了**'
-      + '（那两道门禁正扫不到东西，而它们会绿）。',
-    );
-    console.log(`  ✗ ${item.what}：登记处已经找不到了`);
+    checked.push({
+      what: item.what,
+      why: item.why,
+      bad: `登记的清单「${item.what}」在 \`${item.where}\` 里找不到了——\n`
+        + '    要么它被改名 / 挪走（那要更新这条登记），要么它**真的没了**'
+        + '（那两道门禁正扫不到东西，而它们会绿）。',
+      short: '登记处已经找不到了',
+    });
   } else if (hits.length > 1) {
-    problems.push(
-      `「${item.what}」出现在 ${hits.length} 处：${hits.join('、')}\n`
-      + `    登记处是 \`${item.where}\`。\n`
-      + `    **漂开的后果**：${item.why}\n`
-      + '    把多余的改成 import 登记处；若那处确实该有一份自己的，'
-      + '**先答「漂开的后果是什么」再改这条登记**。',
-    );
-    console.log(`  ✗ ${item.what}：${hits.length} 处（${hits.join('、')}）`);
+    checked.push({
+      what: item.what,
+      why: item.why,
+      bad: `「${item.what}」出现在 ${hits.length} 处：${hits.join('、')}\n`
+        + `    登记处是 \`${item.where}\`。\n`
+        + `    **漂开的后果**：${item.why}\n`
+        + '    把多余的改成 import 登记处；若那处确实该有一份自己的，'
+        + '**先答「漂开的后果是什么」再改这条登记**。',
+      short: `${hits.length} 处（${hits.join('、')}）`,
+    });
   } else {
-    console.log(`  ✓ ${item.what}：只在 ${hits[0]}`);
+    checked.push({ what: item.what, why: item.why, ok: hits[0] });
+  }
+}
+
+// ── 第二步：按上面算出的结论打印与记账 ─────────────────────────────────
+//
+// 这一段**只读数据、不做判定**——所以变异改不了「结论是什么」，
+// 最多改「怎么显示」。
+
+for (const w of unexplained) {
+  problems.push(
+    `\`${w}\` 没有 \`where\`——**它不会被校验**，`
+    + '而没写 `skip: 理由` 时这一条在输出上完全看不出来。\n'
+    + '    → 「刻意不校验」必须**显式且可见**，否则它与「忘了填」无法区分。',
+  );
+  console.log(`  ✗ ${w}：没有 where，也没有写明为什么不校验`);
+}
+for (const s of deliberatelySkipped) {
+  skipped.push(`${s.what}（${s.reason}）`);
+  console.log(`  ℹ 刻意不校验：${s.what}——${s.reason}`);
+}
+for (const c of checked) {
+  if (c.bad) {
+    problems.push(c.bad);
+    console.log(`  ✗ ${c.what}：${c.short}`);
+  } else {
+    console.log(`  ✓ ${c.what}：只在 ${c.ok}`);
   }
 }
 

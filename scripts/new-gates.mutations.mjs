@@ -82,7 +82,7 @@ const red = (script) => {
  * ⚠️ `find` 必须在文件里**唯一存在**，否则替换可能命中别处而门禁不红——
  * 那会让我以为「变异没生效」而实际是打错了位置。所以先断言唯一。
  */
-function mutate({ file, find, replace, target, why }) {
+function mutate({ file, find, replace, alsoEdit, target, why }) {
   const path = join(ROOT, file);
   const original = readFileSync(path, 'utf8');
   const hits = original.split(find).length - 1;
@@ -95,7 +95,30 @@ function mutate({ file, find, replace, target, why }) {
     console.log(`  ✗ ${why}：锚点出现 ${hits} 次，变异未生效`);
     return false;
   }
-  writeFileSync(path, original.replace(find, replace), 'utf8');
+  /*
+   * ⚠️ **有些缺陷需要两处同时改才会发作**（2026-09-28）。
+   *
+   * 例：「有一条无理由的刻意不校验登记」+「守卫被拆掉」——
+   * 只做前者报红是**守卫正常工作**，只做后者门禁走不到那条分支。
+   * 两件一起做才是那个失效状态。
+   *
+   * 所以 `alsoEdit` 是**一等公民**，而不是「顺手再改一处」——
+   * 因为「顺手的第二处」忘了做，那条变异就悄悄验的是别的东西。
+   */
+  let injected = original.replace(find, replace);
+  if (alsoEdit) {
+    const ah = injected.split(alsoEdit.find).length - 1;
+    if (ah !== 1) {
+      problems.push(
+        `变异「${why}」的第二处锚点出现 ${ah} 次（期望 1 次）——**注入不完整**。\n`
+        + '    这种情形下「门禁没红」是**变异无效**，不是「判据没盲区」。',
+      );
+      console.log(`  ✗ ${why}：第二处锚点出现 ${ah} 次，变异未生效`);
+      return false;
+    }
+    injected = injected.replace(alsoEdit.find, alsoEdit.replace);
+  }
+  writeFileSync(path, injected, 'utf8');
   /*
    * ⚠️ **替换可能静默不发生。**
    *
@@ -128,11 +151,27 @@ function mutate({ file, find, replace, target, why }) {
     return false;
   }
   if (after.red) {
+    /*
+     * ⚠️ **「恢复后仍红」有两种可能，输出上分不开。**（2026-09-28 实测）
+     *
+     * ① 文件没还原干净（真的还原失败）
+     * ② **文件还原了，但环境被别的步骤改了**——那次就是
+     *    `verify:base` 跑完清空了 `dist`（`docs/cli.md` 里写明它会），
+     *    于是后面任何依赖产物的门禁在 `after` 那次必然红，
+     *    **而与本次变异毫无关系**。
+     *
+     * > 「它仍然红」不等于「是我的错」——**先确认环境，再下结论**。
+     * > 判据：把 `after` 的输出里**第一条错误**打出来，
+     * > 让「ENOENT dist」与「某条断言不符」能被分开看。
+     */
+    const firstErr = (after.out.split('\n').find((l) => /Error|✗|失败/.test(l)) ?? '').trim();
     problems.push(
-      `恢复之后 ${target} **仍然是红的**——文件没还原干净。\n`
-      + '    **「本轮结论不作数」**：后面每一条的结果都建立在被污染的源码上。',
+      `恢复之后 ${target} **仍然是红的**——文件没还原干净，**或者环境被前面的步骤改了**。\n`
+      + `    恢复后它报的第一条：${firstErr || '(没抓到)'}\n`
+      + '    **「仍然红」不等于「是我的错」**：先确认是环境还是还原。\n'
+      + '    → 若是环境（例如 `dist` 被 `verify:base` 清空），先重跑 `npm run build`。',
     );
-    console.log(`  ✗ ${why}：恢复后仍红（文件没还原干净）`);
+    console.log(`  ✗ ${why}：恢复后仍红（先分清是环境还是还原——它报的第一条：${firstErr.slice(0, 90)}）`);
     return false;
   }
   console.log(`  ✓ ${why} → ${target} 变红，恢复后回绿`);
@@ -328,6 +367,38 @@ const CASES = [
     find: "    tags: relationList(source, 'tags'),",
     replace: "    tags: (frontmatterField(source, 'tags') ?? '').split(',').map((x) => x.trim()).filter(Boolean),",
     target: 'check-field-coverage.mjs',
+  },
+  {
+    // ⚠️ 守着「静默跳过 → 必须显式写明理由」那个改动。
+    // 原来 `if (!item.where) continue;`——加一条**故意不校验**的登记
+    // 在输出上完全看不出来，而那正是「按文件豁免通病」的形状：
+    // **豁免的正是检查本身**。今天第三次撞上同一个病。
+    //
+    // ⚠️ **2026-09-28 修了四轮才防住，而四轮都栽在同一句话上：
+    // 「结构上只有一个出口，所以拆不掉」。**
+    //
+    // ① `if (!item.where) continue;` 完全静默
+    // ② 加守卫 → 守卫与 else 是两个出口，拆守卫 → `skip: undefined` 被放行
+    // ③ 合成 if/else → 拆 if → 后面两行无条件执行
+    // ④ 「失败条件与控制流解耦」→ **也错了**：`problems.push` 就在那个 if 的
+    //    **body 里**，拆掉 if 等于**拆掉记账本身**。
+    //
+    // 现在的结构是**先算结论、再按结论打印**：`unexplained` 这个**数据**
+    // 在分支里被填充，而 `problems` 的填充只看这个数据。
+    // 于是拆掉那个 if 也只是让「该报」落进 `deliberatelySkipped`——
+    // **而 problems 仍非空** → 仍红。
+    //
+    // 这条变异拆的就是那个记账分支：**它必须仍然红**。
+    why: 'check:single-literal — 有一条无理由的「刻意不校验」登记，且记账分支被拆掉',
+    file: 'scripts/check-single-literal.mjs',
+    find: "    if (typeof item.skip !== 'string' || item.skip.trim() === '') {",
+    replace: "    if (false) { // MUTATION：记账分支被拆掉",
+    target: 'check-single-literal.mjs',
+    // 额外注入：加一条无理由的登记
+    alsoEdit: {
+      find: 'const SHARED_LITERALS = [',
+      replace: "const SHARED_LITERALS = [\n  { what: '无理由的刻意不校验' },",
+    },
   },
   {
     why: 'check:single-literal — 文档根清单在别处又写一份',
