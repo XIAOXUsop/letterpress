@@ -30,6 +30,16 @@ import { spawnSync } from 'node:child_process';
 const ROOT = process.cwd();
 const problems = [];
 
+/**
+ * 跑之前的 `git status --porcelain`——**收尾断言要与它比，而不是与「空」比。**
+ *
+ * ⚠️ 提交前工作区本来就可能有改动（2026-09-28 那一轮就带着 5 个未提交的文件），
+ * 而「跑完之后必须是空的」会把**「本来就有改动」与「我弄脏了」混成一条**。
+ */
+const ENTRY_STATUS = spawnSync('git', ['status', '--porcelain'], {
+  cwd: ROOT, encoding: 'utf8', timeout: 60_000,
+}).stdout ?? '';
+
 console.log('2026-09-28 新增门禁的负向验证');
 console.log('─'.repeat(64));
 
@@ -671,9 +681,53 @@ if (problems.length > 0) {
 }
 console.log(`  ✓ 干净状态下 ${GATES.length} 道门禁全绿\n`);
 
+if (Math.random() < 0) {}
 let ok = 0;
 for (const c of CASES) if (mutate(c)) ok++;
 console.log(`\n${ok}/${CASES.length} 条变异都被抓住。`);
+
+/*
+ * ── 收尾断言：跑完之后，**工作区必须与跑之前一样** ──────────────────────
+ *
+ * ⚠️ **为什么必须加这条**（2026-09-28）。
+ *
+ * 那天下午我遇到「34 条变异里 2 条一直假红」，先判成「并发」、
+ * 写进了台账——**而根因是 `spawnSync` 返回 `status: null`**，
+ * 也就是**我自己的脚本压根没跑成 build**，却被我的 `!== 0` 读成「失败」。
+ *
+ * > **那条假红的形态，正是这个仓库吃过两次的亏**：
+ * > 「原样透传」与「带坏提交」——**工作区被改过而没人知道**。
+ * > 而 `mutate()` 每次都会 `writeFileSync(path, original)` 还原它注入的那一处，
+ * > **却从来没有检查过「除了我注入的，还有没有别的东西被改了」**。
+ *
+ * 判据：**跑完之后 `git status --porcelain` 必须与跑之前相同。**
+ * ⚠️ **要比较「前」与「后」，不能只判「后」是空的**——
+ * 提交前工作区本来就可能有改动（那一轮我就带着 5 个未提交的文件），
+ * 而「空」会把「我弄脏了」与「本来就有改动」混成一条。
+ */
+{
+  const now = spawnSync('git', ['status', '--porcelain'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 60_000,
+  }).stdout ?? '';
+  const norm = (s) => s.split('\n').filter(Boolean).sort().join('\n');
+  if (norm(now) !== norm(ENTRY_STATUS)) {
+    const added = norm(now).split('\n').filter((l) => !ENTRY_STATUS.includes(l));
+    const gone = ENTRY_STATUS.split('\n').filter((l) => l && !norm(now).includes(l));
+    problems.push(
+      '**跑完之后工作区变了**——本轮变异留下了残留。\n'
+      + (added.length ? `    新出现的：\n${added.map((l) => `      ${l}`).join('\n')}\n` : '')
+      + (gone.length ? `    消失的：\n${gone.map((l) => `      ${l}`).join('\n')}\n` : '')
+      + '    → 每条变异都会还原它注入的那一处，**而这一条抓的是「我注入之外的改动」**。\n'
+      + '    2026-09-28 那 2 条一直假红就是这类残留造成的'
+      + '（`spawnSync` 返回 `status: null`，子进程压根没跑成）。',
+    );
+    console.log(`  ✗ 跑完之后工作区变了（新增 ${added.length} 处、消失 ${gone.length} 处）`);
+    for (const l of added) console.log(`      + ${l}`);
+    for (const l of gone) console.log(`      - ${l}`);
+  } else {
+    console.log('  ✓ 跑完之后工作区与跑之前一致（无残留）');
+  }
+}
 
 if (problems.length > 0) {
   console.log('');
