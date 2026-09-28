@@ -2,11 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, test]
   pull_request:
   workflow_dispatch:
 
 jobs:
+  full-gates:
+    name: 完整门禁
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run verify:all
+
   build:
     name: 构建与测试
     runs-on: ubuntu-latest
