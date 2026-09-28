@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的四道门禁的负向验证。**
+ * **2026-09-28 新增的五道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那四道是 `check:two-paths` / `check:field-coverage` /
- * `check:single-literal` / `check:adapter-size`。
+ * 那五道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
+ * `check:adapter-size` / `check:not-a-demo`。
  * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
  * 语料一扩、判据一改，遮住关系就变了。
  *
@@ -92,6 +92,11 @@ function mutate({ file, find, replace, target, why }) {
 // JSON.stringify 之后两边一样，门禁照样绿，**而我差点读成「判据没盲区」**。
 // 那是形态「变异本身无效」。
 
+const GATES = [
+  'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
+  'check-adapter-size.mjs', 'check-not-a-demo.mjs',
+];
+
 const CASES = [
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
@@ -137,6 +142,20 @@ const CASES = [
     target: 'check-single-literal.mjs',
   },
   {
+    why: 'check:not-a-demo — relationField 失效（适配层没起作用，两边就不分叉）',
+    file: 'src/lib/wiki/read-page.ts',
+    find: '        ...(relationField ? { related: relationList(source!, relationField) } : {}),',
+    replace: '        // MUTATION：relationField 不生效',
+    target: 'check-not-a-demo.mjs',
+  },
+  {
+    why: 'check:not-a-demo — 语料让两边都从正文拿关系（异构点被正文遮住）',
+    file: 'scripts/check-not-a-demo.mjs',
+    find: "    '正文提到关系，但**不写** `[[乙]]`——那正是 frontmatter 声明的用处。',",
+    replace: "    '见 [[乙]]。',",
+    target: 'check-not-a-demo.mjs',
+  },
+  {
     why: 'check:adapter-size — 映射层多写一行手写接线',
     file: 'scripts/check-second-site-real.mjs',
     find: 'const docs = pages.map((page) => pageToDoc(page));',
@@ -153,7 +172,7 @@ const CASES = [
 ];
 
 // 先确认全部干净（干净状态下不该有任何一条红）
-for (const t of ['check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs', 'check-adapter-size.mjs']) {
+for (const t of ['check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs', 'check-adapter-size.mjs', 'check-not-a-demo.mjs']) {
   const r = red(t);
   if (r.red) {
     problems.push(`干净状态下 ${t} 就是红的——先修那个，本轮验证没有意义`);
@@ -165,7 +184,7 @@ if (problems.length > 0) {
   for (const p of problems) console.log(`  ✗ ${p}`);
   process.exit(1);
 }
-console.log('  ✓ 干净状态下四道门禁全绿\n');
+console.log(`  ✓ 干净状态下 ${GATES.length} 道门禁全绿\n`);
 
 let ok = 0;
 for (const c of CASES) if (mutate(c)) ok++;
@@ -177,4 +196,4 @@ if (problems.length > 0) {
   console.log(`\n${problems.length} 处。\n`);
   process.exit(1);
 }
-console.log('四道新门禁的负向验证全部成立。\n');
+console.log(`${GATES.length} 道新门禁的负向验证全部成立。\n`);
