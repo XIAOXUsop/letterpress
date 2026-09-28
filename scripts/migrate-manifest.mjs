@@ -54,6 +54,8 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+// ⚠️ 来自 `origin/main`：schema 校验要它。`ajv` 在 devDependencies 里。
+import Ajv2020 from 'ajv/dist/2020.js';
 import {
   EXIT_USAGE,
   EXIT_NOT_FOUND,
@@ -205,6 +207,43 @@ function migrateManifest(input) {
     }
   }
   if (diagnostics.some((d) => d.level === 'error')) return null;
+
+  /*
+   * ⚠️ **这一段来自 `origin/main`**（那边给迁移器加了 JSON Schema 校验）。
+   *
+   * 2026-09-28 合并 `main` 时，`main` 侧的负向验证加了 ⑥⑦ 两类坏法
+   * （`markdown.bytes` 为负数 / 缺 `site.home`），
+   * 而**把它们搬进本分支后，两类都「迁移居然成功了」**——
+   * 因为**拦住它们的东西只存在于 `main` 的迁移器里**。
+   *
+   * > **「负向验证新增了用例，而实现没有对应能力」——那道验证立刻报红。**
+   * > 这正是负向验证的用途：**它把「谁缺了什么」指出来，而不只是说「有问题」**。
+   *
+   * 语义：「字段齐全不代表形状合法」——上面那些检查是**逐字段**的，
+   * 而 schema 管的是**整体形状**（`bytes >= 0`、`site.home` 必填、`kind` 取值…）。
+   * 两者**互补**，不是替代。
+   */
+  const schema = JSON.parse(
+    readFileSync(join(import.meta.dirname, '..', 'public', 'content-manifest.schema.json'), 'utf8'),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  ajv.addFormat('uri', (value) => {
+    try { new URL(value); return true; } catch { return false; }
+  });
+  ajv.addFormat('date-time', (value) =>
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    && !Number.isNaN(Date.parse(value)));
+  const validate = ajv.compile(schema);
+  if (!validate(input)) {
+    for (const error of validate.errors ?? []) {
+      diagnostics.push({
+        level: 'error',
+        where: error.instancePath || '(根)',
+        message: `不符合内容清单 schema：${error.message}`,
+      });
+    }
+    return null;
+  }
 
   return {
     format: input.format,

@@ -342,6 +342,13 @@ jobs:
         run: node scripts/migrate-manifest.mutations.mjs --only 4
       - name: verify:migrate ⑤ 不认识的 v1 字段
         run: node scripts/migrate-manifest.mutations.mjs --only 5
+      # ⚠️ **⑥⑦ 来自 `origin/main`**，那边把坏法从五类扩到七类
+      # （负数 bytes / 缺 site.home），而拦住它们的 schema 校验也来自那边。
+      # 2026-09-28 合并时一起搬过来——**两个都在 `test` 侧才是完整的**。
+      - name: verify:migrate ⑥ markdown.bytes 为负数
+        run: node scripts/migrate-manifest.mutations.mjs --only 6
+      - name: verify:migrate ⑦ 缺少站点地址
+        run: node scripts/migrate-manifest.mutations.mjs --only 7
 
       - name: verify:second-site-real-mutations
         run: npm run verify:second-site-real-mutations

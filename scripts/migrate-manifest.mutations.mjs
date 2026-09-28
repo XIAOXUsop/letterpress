@@ -10,7 +10,7 @@
  * 而「精确」这个词必须能证伪 —— 所以这里逐种注入坏数据，
  * 每次都必须报出**能定位到具体条目**的诊断，而不是一个笼统的失败。
  *
- * 坏法分五类：
+ * 坏法分七类（①②③④⑤ 是本分支的，⑥⑦ 来自 main）：
  *   ① 缺 `id`             → 应定位到 documents[i]
  *   ② `markdown.sha256` 不合法 → 应定位到具体 id
  *   ③ ID 重复            → 应报出重复的那个 id
@@ -21,7 +21,7 @@
  * 产出一个「看着像 v2」实则不兼容的清单——**而它不会报任何错**。
  *
  * 跑法：`node scripts/migrate-manifest.mutations.mjs`
- * 退出码 0 = 五次都真的报出了精确诊断。
+ * 退出码 0 = 七次都真的报出了精确诊断。
  */
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -117,6 +117,33 @@ const MUTATIONS = [
       m.documents[2].legacyScore = 0.87;
     },
   },
+  /*
+   * ⚠️ **⑥⑦ 来自 `origin/main`**（那边把这道门禁从五类扩到七类）。
+   *
+   * 2026-09-28 合并 `main` 时发现两边**都只有一半**：
+   * `test` 侧有「`mkdirSync` 建 `.verify/` 目录」那个修复
+   * （`main` 侧没有——而那正是「本地绿、CI 全新 checkout 红」的成因），
+   * `main` 侧有这两类 schema 边界（`test` 侧没有）。
+   *
+   * > **冲突的正确解不是「选一边」**——那会丢掉另一边真正做的东西。
+   * > **「同一道门禁被两边各自往前推」时，合并才是对的。**
+   */
+  {
+    name: '⑥ markdown.bytes 为负数',
+    expect: /documents\/2\/markdown\/bytes.*schema.*>= 0/s,
+    why: '不能迁出不符合 schema 的 v2 清单',
+    apply: (m) => {
+      m.documents[2].markdown.bytes = -1;
+    },
+  },
+  {
+    name: '⑦ 缺少站点地址',
+    expect: /\/site.*schema.*home/s,
+    why: '缺少 site.home 时下游无法定位正文',
+    apply: (m) => {
+      delete m.site.home;
+    },
+  },
 ];
 
 let allGood = true;
@@ -170,17 +197,25 @@ for (const [i, m] of MUTATIONS.entries()) {
 rmSync(TMP, { force: true });
 console.log('');
 /*
- * ⚠️ **只跑一条时不能说「五种坏法都……」**——
+ * ⚠️ **只跑一条时不能说「全部坏法都……」**——
  * 那是本项目反复出现的「结论行比实际判定的多」。
- * `run:verify:migrate` 的默认路径（无 `--only`）才跑全部 5 条，
+ * `run:verify:migrate` 的默认路径（无 `--only`）才跑全部 7 条，
  * 那时这句话才成立。
+ *
+ * ⚠️ **而那句「5 条 / 4 条」也曾在这里**（2026-09-28 合并 `main` 时忘了改）——
+ * **它跑的是七类、说的是五类，而两个数都不会报错**。
+ * **所以这里用 `MUTATIONS.length` 而不是抄一个数。**
  */
+const ranCount = ONLY === null ? MUTATIONS.length : 1;
 console.log(
   allGood
     ? ONLY === null
-      ? '五种坏法都报出了能定位到具体条目的诊断——「失败时有精确诊断」这句退出条件有证据了。'
-      : `第 ${ONLY} 条坏法报出了能定位到具体条目的诊断（**只跑了这一条，不代表其余 4 条**）。`
+      ? `${MUTATIONS.length} 种坏法都报出了能定位到具体条目的诊断`
+        + '——「失败时有精确诊断」这句退出条件有证据了。'
+      : `第 ${ONLY} 条坏法报出了能定位到具体条目的诊断`
+        + `（**只跑了这一条，不代表其余 ${MUTATIONS.length - 1} 条**）。`
     : '有坏法没有被精确诊断拦下。',
 );
+console.log(`（本次实际判定 ${ranCount} 条）`);
 console.log();
 process.exit(allGood ? 0 : 1);
