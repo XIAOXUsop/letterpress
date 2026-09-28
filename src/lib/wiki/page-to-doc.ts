@@ -137,6 +137,18 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
    * 而 `lint` 用 `doc.wikiKind ?? ''` 兜，两者兼容。
    */
   const isWiki = docKind === 'wiki';
+  /*
+   * ⚠️ **三处「post 拿不到」必须写成同一种形状。**
+   *
+   * 2026-09-28 实测过它们曾经是三种写法：
+   *   `...(isWiki ? { wikiKind } : {})` / `...(isWiki && review ? { review } : {})` /
+   *   `docKind === 'post' ? [] : …`
+   * **都正确，但它们互为掩护**——变异验证时我只撤掉 `review` 的内层条件，
+   * 门禁照样绿，因为外层 `const review = isWiki ? … : undefined` 挡住了。
+   *
+   * > **同一个约束写 N 遍，就等于它有 N 个可以只改一处的漏洞。**
+   * > 现在统一成「取值时判一次 + 展开时用同一个变量」。
+   */
   const review = isWiki ? options.review ?? page.review : undefined;
   return {
     kind: docKind,
@@ -161,7 +173,7 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
     // ⚠️ **`post` 一律没有关系**——与构建侧 `toDoc` 的
     // `kind === 'wiki' ? data.related : []` 同一口径。
     // 读路径若照收，就与构建产物对不上（详见 `PageToDocOptions.docKind`）。
-    declaredRelations: docKind === 'post' ? [] : options.relations ?? page.related,
+    declaredRelations: isWiki ? options.relations ?? page.related : [],
     explicitSlug: options.explicitSlug ?? page.explicitSlug ?? false,
     draft: options.draft ?? false,
   };
