@@ -54,7 +54,7 @@ import { join } from 'node:path';
 import { buildGraph } from '../src/lib/wiki/graph.ts';
 import { lint } from '../src/lib/wiki/lint.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
-import { readContentPage, relationList } from '../src/lib/wiki/read-page.ts';
+import { readContentDirs, readContentPage, relationList } from '../src/lib/wiki/read-page.ts';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { resolveSlug } from '../src/lib/wiki/slug.ts';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
@@ -77,34 +77,21 @@ if (files.length === 0) {
  * ── 映射层：一个真实站点的适配器要做的事 ──────────────────────────
  *
  * **这就是阶段 4 第 5 项要验的那一步。**
- * 它需要两个读取器，因为字段分在两处：
- *   - `readContentPage` 解析**嵌套块**（`review:` / `sources:`）与正文；
- *   - `frontmatterField` 解析**顶层标量**（`summary:`）。
- * （迭代 AO 同一个结论：两个都要，一个都不够。）
  *
- * 而 `audience:` 是**这个站点自己的字段名**——核心不认识它，
- * 适配层负责翻译成 `related`。**这正是「剥离站点展示逻辑」要留的口子。**
+ * ⚠️ **2026-09-28：从 27 行降到 3 行。** 三步：
+ *   ① `pageToDoc` 收走组装（原先 22 行）；
+ *   ② `readContentDirs` 顺带补 `summary` 与 `.sort()`（原先 8 行）；
+ *   ③ `relationField` 参数收走「这个站点把关系声明叫 `audience`」（原先 5 行）。
+ *
+ * **剩下这几行没有一句是「适配」**——它们是「这个站点在哪、字段叫什么」。
+ * 而那正是「站点无关」要留给调用方的口子：**核心不猜，它问。**
+ *
+ * ⚠️ 它曾需要**两个**读取器（`frontmatterField` 取顶层 `summary`、
+ * `readContentPage` 取嵌套块），现在**一个就够**。
  */
-const pages = files.map((file) => {
-  const page = readContentPage(DIR, file);
-  const source = readFileSync(join(DIR, file), 'utf8');
-  return {
-    page,
-    summary: frontmatterField(source, 'summary') ?? '',
-    // ⚠️ **这个适配层现在只剩「字段叫什么」这一件事。**
-    // `audience:` 是**这个站点自己的字段名**，核心只认 `related`。
-    //
-    // **2026-09-28**：原先这里是 5 行手写解析（剥方括号 + 按分隔符切），
-    // 而 `readContentPage` 内部有**一模一样的一段**——站点改个字段名
-    // 就得把解析逻辑重写一遍，而「剥方括号」那行恰恰是最容易漏的
-    // （漏了不报错，只是所有关系都解析不出来）。
-    // 现在两处共用 `relationList`，核心只多一个参数：**字段名**。
-    audience: relationList(source, 'audience'),
-  };
-});
+const { pages } = readContentDirs([DIR], { relationField: 'audience' });
 
-const docs = pages.map(({ page, summary, audience }) =>
-  pageToDoc(page, { summary, relations: audience }));
+const docs = pages.map((page) => pageToDoc(page));
 
 console.log(`  读了 ${docs.length} 篇：${docs.map((d) => d.slug).join('、')}\n`);
 
@@ -141,7 +128,7 @@ const ranked = rank(passages, '谁能看到机密内容');
  * 判据因此加了「每篇都有非空 docId」，见下面那条断言。
  */
 const pack = buildContextPack(
-  pages.map(({ page }) => ({
+  pages.map((page) => ({
     slug: page.slug,
     title: page.title,
     updated: page.updated,

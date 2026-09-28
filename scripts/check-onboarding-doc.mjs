@@ -25,6 +25,7 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
 import { buildGraph } from '../src/lib/wiki/graph.ts';
@@ -175,10 +176,60 @@ if (noSummary.length <= withSummary.length) {
   console.log(`  ✓ 空 summary 确实多报 ${noSummary.length - withSummary.length} 条`);
 }
 
+/*
+ * ── 转述：README 与 docs/cli.md 里那几处「异构内容集」的数字 ──────────
+ *
+ * ⚠️ **2026-09-28 加。** 上面核的是这份文档自己的表格，
+ * 而 **README 与 `docs/cli.md` 里也抄了同一批数字**
+ * （几篇、几条断言、几种破坏、适配层多少行）——
+ * 2026-09-28 实测它们写的是 **6 篇 / 18 条 / 7 种 / 20 行**，
+ * 实际是 **9 / 20 / 8 / 3**。**漂了很久没人发现，因为没有任何东西核它。**
+ *
+ * > **一个数字在三个地方写着，就要有三处都能被核对。**
+ * > 否则修了一处，另两处继续骗人——而读者读到的是**任意一处**。
+ */
+console.log('');
+console.log('  转述：README / docs/cli.md 里的异构内容集数字');
+
+const FIXTURE = join(ROOT, 'knowledge', 'fixtures', 'second-site');
+const fixtureCount = readdirSync(FIXTURE).filter((f) => /\.mdx?$/.test(f)).length;
+
+/** 数一个门禁输出里 `✓` 的条数——那才是「断言数」，不是脚本里写了多少条。 */
+function countPassing(script) {
+  const out = execFileSync('node', [join(ROOT, 'scripts', script)], { encoding: 'utf8' });
+  return (out.match(/^ {2}✓ /gm) ?? []).length;
+}
+const assertionCount = countPassing('check-second-site-real.mjs');
+
+const cliText = readFileSync(join(ROOT, 'docs', 'cli.md'), 'utf8');
+const readmeText = readFileSync(join(ROOT, 'README.md'), 'utf8');
+
+/**
+ * 文档里必须出现「实测值 + 明确的词」，否则就是没写或写旧了。
+ *
+ * ⚠️ **只匹配数字，不要求闭合的 `**`**——第一版写的是 `\*\*20 条断言\*\*`，
+ * 而 README 里那句末尾跟着一个斜体星号（`…负向验证*`），
+ * 于是判据红了而文档是对的。**判据自己红、被测对象对**，那是最坏的一种失败。
+ */
+function checkMention(name, text, pattern, actual) {
+  if (pattern.test(text)) {
+    console.log(`  ✓ ${name}：写的是 ${actual}`);
+  } else {
+    problems.push(
+      `${name} 没写当前的实测值 ${actual}——它要么没提，要么还写着旧数字`,
+    );
+    console.log(`  ✗ ${name}：找不到 ${actual}`);
+  }
+}
+
+checkMention('docs/cli.md 的 fixture 篇数', cliText, new RegExp(`\\*\\*${fixtureCount} 篇\\*\\*`), fixtureCount);
+checkMention('README 的 fixture 篇数', readmeText, new RegExp(`\\*\\*${fixtureCount} 篇\\*\\*`), fixtureCount);
+checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount} 条断言`), assertionCount);
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
   console.log(`\n${problems.length} 处对不上。\n`);
   process.exit(1);
 }
-console.log('\n接线文档里的实测数字与现在跑出来的一致。\n');
+console.log('\n接线文档与各处转述里的实测数字，与现在跑出来的一致。\n');

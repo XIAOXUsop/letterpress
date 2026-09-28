@@ -280,7 +280,10 @@ function parseReview(block: string): PageReview | undefined {
  * 日期化的规范 URL 引用**在影响分析里根本不存在**——
  * 不是漏报，是这一层压根没进语料。
  */
-export function readContentDirs(dirs: readonly string[]): {
+export function readContentDirs(
+  dirs: readonly string[],
+  options: { readonly relationField?: string } = {},
+): {
   /**
    * ⚠️ **不是 `ReturnType<typeof readContentPage>`**——那不含 `summary`，
    * 而这里实际返回的页**多一个字段**。
@@ -293,6 +296,19 @@ export function readContentDirs(dirs: readonly string[]): {
 } {
   const pages = [];
   const counts = new Map<string, number>();
+  /*
+   * ⚠️ **2026-09-28 加 `relationField`。**
+   *
+   * 本站的关系声明叫 `related:`，而异构站点可能叫 `audience:`。
+   * `readContentPage` **只认 `related` 这个名字**——实测
+   * `knowledge/fixtures/second-site/` 那 9 篇全用 `audience:`，
+   * `page.related` 在那里恒为 `[]`。
+   *
+   * 不给这个参数时，`related` 走 `readContentPage` 原有的解析；
+   * 给了就用 `relationList` 按**那个字段名**重解析并覆盖——
+   * **核心依然不认识任何站点的字段名，它只是收一个字符串。**
+   */
+  const relationField = options.relationField;
   for (const dir of dirs) {
     const files = readdirSync(dir)
       .filter((f) => /\.mdx?$/.test(f))
@@ -300,6 +316,8 @@ export function readContentDirs(dirs: readonly string[]): {
     counts.set(dir, files.length);
     for (const file of files) {
       const page = readContentPage(dir, file);
+      const full = join(dir, file);
+      const source = readFileSync(full, 'utf8');
       /*
        * ⚠️ **2026-09-28 加：顺带补上 `summary`。**
        *
@@ -316,7 +334,11 @@ export function readContentDirs(dirs: readonly string[]): {
        */
       pages.push({
         ...page,
-        summary: frontmatterField(readFileSync(join(dir, file), 'utf8'), 'summary') ?? '',
+        summary: frontmatterField(source, 'summary') ?? '',
+        // ⚠️ **只在显式给了字段名时覆盖。** 不给就沿用 `readContentPage` 的
+        // `related:` 解析——而那个解析与 `relationList` 是同一套逻辑
+        // （`readContentPage` 内部就调它），所以两条路不会漂。
+        ...(relationField ? { related: relationList(source, relationField) } : {}),
       });
     }
   }
