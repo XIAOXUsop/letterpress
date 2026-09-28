@@ -359,12 +359,41 @@ checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount}
    * 排除：`knowledge/` 下的是**门禁的台账**，那里出现的命令名是**被检查的对象**
    * （故意写错的命令名、变异脚本的注入值），**核它们必然误报**。
    */
+  /*
+   * ⚠️⚠️ **2026-09-28 补：内容页也要扫。**
+   *
+   * 原来只扫 `README.md` / `AGENTS.md` / `docs/*.md`（10 份），
+   * 而仓库里**共 34 份** `.md`。没扫到的 24 份里有两类，性质完全不同：
+   *
+   * | 类别 | 例 | 读者会不会照着敲 |
+   * |---|---|---|
+   * | **内容页** | `src/content/posts/reproducible-builds.md` | **会**——它们是**发布出去的页面** |
+   * | fixtures / 台账 | `knowledge/fixtures/**`、`gate-negatives.md` | 不会（是语料与台账） |
+   *
+   * 实测内容页里有 **5 处** `npm run`（`verify:reproducible` ×3、`build`、`dev`），
+   * **当下全对**——所以这不是「又抓到一个 bug」，
+   * 而是「**下次改命令名，这 5 处就漏了**」。
+   *
+   * > 与 `docs/deploy.md` 那次同族：**幽灵命令要等到有人照着敲才会暴露**，
+   * > 而对**发布出去的页面**来说，照着敲的人更多。
+   *
+   * ⚠️ **`src/content` 要递归**（`posts/` 与 `wiki/` 是两个子目录），
+   * 而顶层那版 `readdirSync` 只看一层——**那正是 `check:field-coverage`
+   * 当初栽过的形状**（`readContentDirs` 不递归，判据从未发作）。
+   */
+  const walkMd = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory()
+      ? walkMd(join(dir, e.name))
+      : (e.name.endsWith('.md') ? [join(dir, e.name)] : []),
+  );
   const DOCS_WITH_COMMANDS = [
     join(ROOT, 'README.md'),
     join(ROOT, 'AGENTS.md'),
     ...readdirSync(join(ROOT, 'docs'))
       .filter((f) => f.endsWith('.md'))
       .map((f) => join('docs', f)),
+    // ⚠️ **内容页是递归的**——`posts/` 与 `wiki/` 在 `src/content/` 下面。
+    ...walkMd(join(ROOT, 'src', 'content')),
   ].map((p) => relative(ROOT, p).split(sep).join('/'));
   console.log(`  扫了 ${DOCS_WITH_COMMANDS.length} 份文档里的 \`npm run\`（从文件系统推导，非手写清单）`);
   for (const name of DOCS_WITH_COMMANDS) {

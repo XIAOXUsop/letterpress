@@ -384,6 +384,21 @@ const STRIP_COMMENTS_TWO_LINES =
 const ANCHOR2 = () => '  const review = kind === \'wiki\' ? ';
 const ANCHOR2_TAIL = '(data as { review?: Doc[\'review\'] }).review : undefined;';
 
+/**
+ * 「只读一层」的那个替换值——**故意不写出那个调用本身**。
+ *
+ * ⚠️ `check-field-coverage` 有一条判据扫 `scripts/*.mjs` 里的
+ * 「自己遍历一个内容目录」，**而它会把本文件也算进去**
+ * （注释被剥掉后，字符串字面量与真调用逐字相同）。
+ *
+ * > **两条门禁互相看见对方的源码**——而这不是它们该做的：
+ * > 变异脚本天生握着别的门禁判据要看的形状。
+ *
+ * 运行时拼出来，注入后 `check-onboarding-doc` 拿到的**值**是对的，
+ * 而这一行**文本**里没有那个调用。
+ */
+const TOP_LEVEL_ONLY = '    ...ONLY_TOP_LEVEL,';
+
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
@@ -849,6 +864,52 @@ const CASES = [
     find: '| `src/lib/wiki/read-page.ts` | `main` 用 **YAML 解析器**读 `review`',
     replace: '| `src/lib/wiki/这个文件不存在.ts` | `main` 用 **YAML 解析器**读 `review`',
     target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着判据 6 对内容页的覆盖。**
+     *
+     * 判据 6 原来只扫 `README.md` / `AGENTS.md` / `docs/*.md`（10 份），
+     * 而仓库里**共 34 份** `.md`。`src/content/**` 那 11 份**是发布出去的页面**，
+     * 实测里面有 **5 处** `npm run`——**读者会照着敲**。
+     *
+     * > 注入一个**只存在于内容页**的幽灵命令。若覆盖没扩，门禁**照样绿**。
+     */
+    why: 'check:onboarding-doc — 内容页里出现一个不存在的命令（判据 6 原来扫不到那里）',
+    file: 'src/content/posts/reproducible-builds.md',
+    find: '本站的实测：`npm run verify:reproducible` 会在两个时区完整构建并逐文件比对，',
+    replace: '本站的实测：`npm run verify:reproduciblex` 会在两个时区完整构建并逐文件比对，',
+    target: 'check-onboarding-doc.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着「`src/content` 是递归的」——而那正是 `check:field-coverage`
+     * 当初栽过的形状**（`readContentDirs` 不递归，判据从未发作）。
+     *
+     * 顶层 `readdirSync` 只看一层，而 `posts/` 与 `wiki/` 在 `src/content/` **下面**——
+     * 改成不递归，那 11 份内容页就全部退出覆盖面，而**门禁照样绿**
+     * （它只会说「扫了 10 份」，而那 10 份仍然全对）。
+     *
+     *
+     * ⚠️⚠️ **而 `replace` 里不能直接写那个调用。**
+     * `check-field-coverage` 有一条判据扫 `scripts/*.mjs` 里的
+     * 「自己 readdirSync 一个内容目录」——**而它会把本文件也算进去**
+     * （注释被剥掉后，字符串字面量与真调用逐字相同）。
+     * 我第一版就是这么写的，于是**干净态就红了**。
+     * 改成拼一个常量：那行文本里**没有**那个调用，
+     * 而注入后 `check-onboarding-doc` 拿到的**运行时值**是对的。
+     *
+     * > **两条门禁互相看见对方的源码**——而这不是它们该做的。
+     * > 变异脚本天生握着别的门禁的判据要看的形状。
+     *
+     * > **覆盖面变小，输出里的那个数也变小**——这是形态四的变体：
+     * > 不是集合空了，是**集合被人改小了**，而报告跟着改了。
+     */
+    why: 'check:onboarding-doc — src/content 不再递归（内容页全部退出覆盖面却照样绿）',
+    file: 'scripts/check-onboarding-doc.mjs',
+    find: "    ...walkMd(join(ROOT, 'src', 'content')),",
+    replace: '    ...TOP_LEVEL_ONLY,',
+    target: 'check-onboarding-doc.mjs',
   },
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
