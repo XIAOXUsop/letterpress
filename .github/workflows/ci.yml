@@ -306,8 +306,31 @@ jobs:
         run: npm run verify:json-output
       - name: verify:json-mutations
         run: npm run verify:json-mutations
-      - name: verify:migrate
-        run: npm run verify:migrate
+      # ⚠️ **2026-09-28：这道门禁在 Linux CI 上红，本地（Windows）绿。**
+      #
+      # 已排除的（都不是原因）：单独跑绿、组合跑绿、`full-gates` 的
+      # `verify:all` 里也绿；`.verify/` 已被 gitignore；无 locale / 排序 /
+      # 时区依赖；从 git 对象读的字节与工作区**逐字节相同**；
+      # catch 里的 `e.stdout`/`e.stderr` 实测都是 string。
+      #
+      # 而 job 日志要 admin 权限（匿名 403），`::error::` 只在日志里，
+      # `GITHUB_STEP_SUMMARY` 也不经 API 暴露——**唯一匿名可读的是 step 名**。
+      # 所以把 5 条坏法拆成 5 个 step：GitHub 在首个失败后停止，
+      # **第一个红的 step 名就是答案**。
+      #
+      # `--only N` 是为此给脚本加的参数（默认全跑，结论行也据实区分）。
+
+      - name: verify:migrate ① 缺 id
+        run: node scripts/migrate-manifest.mutations.mjs --only 1
+      - name: verify:migrate ② sha256 不合法
+        run: node scripts/migrate-manifest.mutations.mjs --only 2
+      - name: verify:migrate ③ ID 重复
+        run: node scripts/migrate-manifest.mutations.mjs --only 3
+      - name: verify:migrate ④ documentCount 对不上
+        run: node scripts/migrate-manifest.mutations.mjs --only 4
+      - name: verify:migrate ⑤ 不认识的 v1 字段
+        run: node scripts/migrate-manifest.mutations.mjs --only 5
+
       - name: verify:second-site-real-mutations
         run: npm run verify:second-site-real-mutations
 

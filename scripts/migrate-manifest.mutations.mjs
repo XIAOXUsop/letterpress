@@ -105,6 +105,19 @@ let allGood = true;
 console.log('migrate-manifest 的负向验证（诊断是否精确）');
 console.log('─'.repeat(64));
 
+/*
+ * ⚠️ **`--only <序号>`：只跑第 N 条坏法（1 起）。**
+ *
+ * 2026-09-28：这道门禁在 Linux CI 上红，而**失败详情读不到**
+ * （job 日志要 admin 权限、`::error::` 只在日志里、step 摘要不经 API 暴露）。
+ * 唯一匿名可读的是「哪个 step 红了」——所以 CI 上把 5 条坏法拆成
+ * 5 个 step，各自 `--only`，**第一个红的 step 名就是答案**。
+ *
+ * 它同时让本地排查更快：复现单条不必等全部跑完。
+ */
+const onlyArg = process.argv.indexOf('--only');
+const ONLY = onlyArg === -1 ? null : Number(process.argv[onlyArg + 1]);
+
 // 先确认好数据是通的
 writeFileSync(TMP, readFileSync(SRC, 'utf8'), 'utf8');
 const good = runMigrate();
@@ -115,7 +128,8 @@ if (!good.ok) {
 }
 console.log('  ✓ 真实的线上 v1：可迁移\n');
 
-for (const m of MUTATIONS) {
+for (const [i, m] of MUTATIONS.entries()) {
+  if (ONLY !== null && i + 1 !== ONLY) continue;
   const manifest = JSON.parse(readFileSync(SRC, 'utf8'));
   m.apply(manifest);
   writeFileSync(TMP, JSON.stringify(manifest, null, 2), 'utf8');
@@ -137,9 +151,17 @@ for (const m of MUTATIONS) {
 
 rmSync(TMP, { force: true });
 console.log('');
+/*
+ * ⚠️ **只跑一条时不能说「五种坏法都……」**——
+ * 那是本项目反复出现的「结论行比实际判定的多」。
+ * `run:verify:migrate` 的默认路径（无 `--only`）才跑全部 5 条，
+ * 那时这句话才成立。
+ */
 console.log(
   allGood
-    ? '五种坏法都报出了能定位到具体条目的诊断——「失败时有精确诊断」这句退出条件有证据了。'
+    ? ONLY === null
+      ? '五种坏法都报出了能定位到具体条目的诊断——「失败时有精确诊断」这句退出条件有证据了。'
+      : `第 ${ONLY} 条坏法报出了能定位到具体条目的诊断（**只跑了这一条，不代表其余 4 条**）。`
     : '有坏法没有被精确诊断拦下。',
 );
 console.log();
