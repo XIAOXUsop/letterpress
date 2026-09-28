@@ -27,9 +27,16 @@
  *
  * 用法：`npm run check:agents-doc`
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+// ⚠️ **核心模块一律用动态 import 加载**（见下面第 85 行那个）——
+// 本文件要处理「模块加载不了」的情况，静态 import 会在那之前就抛。
+// 早先这里多写了一条静态 `import { buildGraph }`，于是
+// `SyntaxError: Identifier 'buildGraph' has already been declared`。
+const { readContentDirs } = await import(pathToFileURL(join(process.cwd(), 'src/lib/wiki/read-page.ts')).href);
+const { pageToDoc } = await import(pathToFileURL(join(process.cwd(), 'src/lib/wiki/page-to-doc.ts')).href);
 
 const ROOT = process.cwd();
 const DOC = join(ROOT, 'AGENTS.md');
@@ -171,6 +178,42 @@ if (claims('指的是同一个页面', '「写标题与写 slug 指向同一页�
         `只写 slug → ${viaSlug ? '解析成功' : '没解析到'}；` +
         `断链 → ${noBroken ? '无' : '有'}`,
     );
+  }
+}
+
+// ── ④ 草稿不进 CLI 检索（2026-09-28 补）────────────────────────────
+//
+// AGENTS.md 原文只说「草稿不进构建、不进机器出口」——**没提 CLI**。
+// 而 2026-09-28 实测的正是那个缺口：`readContentPage` **完全不读 `draft`**，
+// 于是 `buildGraph` 的草稿过滤形同虚设，**草稿会进 `wiki:ask` / `wiki:impact`
+// 的回答，而构建产物里没有它**。
+//
+// 症状对 agent 尤其糟：它按 CLI 回答行动，而那些内容**对读者不可见**。
+//
+// ⚠️ 判据是**真文件**：合成 `Doc` 量不到「解析」这一层，而那正是缺口所在。
+if (claims('更不会被 `wiki:ask`', '「草稿不进 CLI 检索」')) {
+  const dir = mkdtempSync(join(tmpdir(), 'agents-draft-'));
+  try {
+    writeFileSync(
+      join(dir, 'draft-page.md'),
+      '---\ntitle: 未写完\nsummary: 别发布。\ndraft: true\n---\n\n正文。\n',
+      'utf8',
+    );
+    writeFileSync(join(dir, 'live-page.md'), '---\ntitle: 正式\nsummary: 可以。\n---\n\n正文。\n', 'utf8');
+    const { pages } = readContentDirs([dir]);
+    const inGraph = [...buildGraph(pages.map((p) => pageToDoc(p))).bySlug.keys()];
+    if (inGraph.includes('draft-page')) {
+      problems.push(
+        '草稿进了链接图——**`wiki:ask` / `wiki:impact` 会把它当正式内容检索到**，'
+        + '而构建产物里没有它。\n'
+        + '    根因通常是 `readContentPage` 没有读 `draft` 字段。',
+      );
+      console.log('  ✗ 草稿进了链接图（CLI 会检索到它）');
+    } else {
+      ok('草稿不进链接图（CLI 检索不到它）');
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
