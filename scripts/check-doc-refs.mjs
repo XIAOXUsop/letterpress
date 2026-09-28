@@ -35,13 +35,16 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, extname, relative, sep } from 'node:path';
+import { DOC_ROOTS } from './lib/doc-roots.mjs';
 
 const ROOT = process.cwd();
 const DIST = join(ROOT, 'dist');
 const hasDist = existsSync(DIST);
 
 // 会被当成「文档里提到的路径」的模式：反引号包着、带已知扩展名
-const DOC_GLOBS = ['README.md', 'AGENTS.md', 'docs', 'src/content'];
+// ⚠️ 清单在 `scripts/lib/doc-roots.mjs`——2026-09-28 从这里与
+// check-anchor-links.mjs 各一份的拷贝抽成一处。
+const DOC_GLOBS = DOC_ROOTS;
 const EXTS = new Set([
   '.ts', '.mjs', '.js', '.astro', '.json', '.css', '.md', '.mdx', '.toml', '.yml', '.yaml',
 ]);

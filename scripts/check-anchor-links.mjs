@@ -19,6 +19,7 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, extname, relative, sep } from 'node:path';
+import { DOC_ROOTS } from './lib/doc-roots.mjs';
 
 const ROOT = process.cwd();
 const norm = (p) => p.split(sep).join('/');
@@ -39,7 +40,9 @@ function ghSlug(title) {
 }
 
 // ── 收集文档 ────────────────────────────────────────────────────────
-const ROOTS = ['README.md', 'AGENTS.md', 'docs', 'src/content'];
+// ⚠️ 清单在 `scripts/lib/doc-roots.mjs`——2026-09-28 从这里与
+// check-doc-refs.mjs 各一份的拷贝抽成一处（两份逐字相同，漂开则两道门禁扫不同东西）。
+const ROOTS = DOC_ROOTS;
 const docs = [];
 for (const entry of ROOTS) {
   const full = join(ROOT, entry);
