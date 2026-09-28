@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的九道门禁的负向验证。**
+ * **2026-09-28 新增的十道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那九道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
+ * 那十道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
  * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists` /
- * `check:onboarding-doc` / `check:command-scripts` / `check:gate-list`。
+ * `check:onboarding-doc` / `check:command-scripts` / `check:gate-list` / `check:single-source`。
  * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
  * 语料一扩、判据一改，遮住关系就变了。
  *
@@ -116,9 +116,45 @@ const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
+  'check-single-source.mjs',
 ];
 
 const CASES = [
+  {
+    // ⚠️ 这两条就是 2026-09-24 那个**真 bug** 的两半：
+    // 提交把生产端升到 v2，同步器与测试固件都停在 1，
+    // 于是同步器对着本站自己的清单必然报错，而 453 条测试全绿
+    // ——因为固件也写着 1，它测的是一个已不存在的格式。
+    why: 'check:single-source — 同步器把版本号写死（真故障的前一半）',
+    file: 'scripts/lib/content-sync.mjs',
+    find: 'const MANIFEST_VERSION = readManifestVersion()',
+    replace: 'const MANIFEST_VERSION = 1',
+    target: 'check-single-source.mjs',
+  },
+  {
+    why: 'check:single-source — 测试固件把 manifest 的 version 写死（真故障的后一半，测试全绿却功能是坏的）',
+    file: 'scripts/lib/content-sync.test.mjs',
+    find: '    version: MANIFEST_VERSION,',
+    replace: '    version: 1,',
+    target: 'check-single-source.mjs',
+  },
+  {
+    // ⚠️ 文档判据原来**空转了整整一年**：六份文档里一处「版本为 N」都没有，
+    // 而它每天在 CI 里跑、每天打印一行诚实的提示，没人行动。
+    // 2026-09-28 把「扫到 0 处」升级为红，并在文档里补上那句本来就该有的声明。
+    why: 'check:single-source — 文档里的版本声明被改（2 → 1）',
+    file: 'docs/content-manifest.md',
+    find: '**当前版本为 2**',
+    replace: '**当前版本为 1**',
+    target: 'check-single-source.mjs',
+  },
+  {
+    why: 'check:single-source — 清单里的文档不存在（静默跳过 = 核不到，形状同「按文件豁免通病」）',
+    file: 'scripts/check-single-source.mjs',
+    find: "  'docs/content-export.md',",
+    replace: "  'docs/content-export-renamed.md',",
+    target: 'check-single-source.mjs',
+  },
   {
     // ⚠️ 这一条守着 2026-09-28 修的那处盲区：「第 999 步」格式合法、
     // 指向一个不存在的步骤，而旧判据只认格式、不核数字。

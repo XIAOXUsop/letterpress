@@ -113,6 +113,19 @@ function scan(dir) {
     }
     const full = join(dir, entry.name);
     if (full === SOURCE) continue;
+    /*
+     * ⚠️ **排除变异注入夹具**（2026-09-28）
+     *
+     * `new-gates.mutations.mjs` 的 `replace` 值里**必须**写着
+     * `const MANIFEST_VERSION = 1` 这样的硬编码版本号——**那正是它要注入的东西**。
+     * 于是这道门禁把它当成违规，报「2 处把版本号写死了」，
+     * 连**干净状态**下都是红的（`verify:new-gates-mutations` 的干净态检查当场抓住）。
+     *
+     * > 处置与 `check:single-literal` 那天一样：**夹具不是真值**。
+     * > 而判据要靠**文件名**排除，不能靠「内容像不像夹具」——
+     * > 后者会变成「改一下就绕过去」。
+     */
+    if (/\.mutations\.mjs$/.test(entry.name)) continue;
     if (!/\.(ts|mjs|js|astro)$/.test(entry.name)) continue;
     /*
      * ⚠️ **不要排除测试文件。**
@@ -222,50 +235,134 @@ const DOCS_WITH_VERSION_CLAIM = [
   'docs/content-export.md',
   'docs/cli.md',
 ];
+/*
+ * ⚠️ **两条窄正则，而不是一条宽的。**（2026-09-28 实测，前后各错一次）
+ *
+ * **原判据只认 `/版本为\s*`?(\d+)/`** —— 于是它在这六份文档里**一处都没匹配到**，
+ * 而它每天都在 CI 里跑、每天都打印一行诚实的提示。**判据空转了整整一年。**
+ *
+ * 而文档里**确实有**会被误读的版本号：`docs/content-manifest.md` 的产物示例
+ * 里写着 `"version": 2`。那一处是真的，但**它当时压根没被扫到**——
+ * **下一个人把产物示例改成 1，这道门禁不会报。**
+ *
+ * ⚠️ **但把它放宽成「`version: N` 也认」是错的**，实测立刻报出 **5 处，全是误报**：
+ *
+ * | 位置 | 实际是什么 |
+ * |---|---|
+ * | `README.md` | **历史陈述**「线上仍是 `version: 1`」——讲的是过去 |
+ * | `docs/content-manifest.md` ×2 | **历史陈述**「`version: 1` 真实存在过」 |
+ * | `docs/content-export.md` | **NDJSON 记录版本**，注释里明写「清单的版本见别处」 |
+ * | `docs/cli.md` | **v1→v2 迁移器**的说明，v1 正是要被迁的旧版本 |
+ *
+ * > **这正是本文件上面那段注释警告过的事**（「`RECORD_VERSION` 与 manifest 无关」），
+ * > 而我在放宽时忘了它。**判据太宽就变成噪声，而噪声让人忽略真信号。**
+ * > 「扫到 0 处」与「5 处全是误报」**两头都是坏结果**——
+ * > 所以正解是**再加一条窄的**，不是把旧的放宽。
+ *
+ * 两条：① 中文措辞「版本为 N」（历史陈述里不会这么写）
+ *      ② **带 manifest 上下文**的 `version: N`（与代码侧 PATTERNS 的做法一致）
+ */
+/*
+ * ⚠️ **只认中文措辞「版本为 N」，而这已经够了**（2026-09-28 三次实测的结论）
+ *
+ * **原判据在这六份文档里一处都没匹配到**，于是它每天在 CI 里跑、
+ * 每天打印一行诚实的提示「一处都没有，这条判据没检到任何东西」——
+ * **空转了整整一年**。看起来该放宽。
+ *
+ * ⚠️ **但放宽实测报出 5 处，全是误报**；加上「行内需含 manifest」后剩 2 处；
+ * 再加「否定词排除」后剩 1 处。三轮收紧的实测记录：
+ *
+ * | 判据 | 命中 | 实际是什么 |
+ * |---|---|---|
+ * | 宽：`version: N` 也认 | 5 | 三处**历史陈述**（「线上仍是 v1」「v1 真实存在过」）、一处 **NDJSON 记录版本**（注释里明写「清单的版本见别处」）、一处 **v1→v2 迁移器**的说明 |
+ * | + 行内含 `manifest` | 2 | 上表第 4 处（注释里含 `manifest` 但**否定**了它）、**README 那处真实的线上/本地差异陈述** |
+ * | + 否定词排除 | 1 | **README 那处——它是真的**：线上 Demo 确实还是 v1，本地已是 v2 |
+ *
+ * > 最后那处**不是误报，是判据量不到的东西**：
+ * > 「这句在讲线上还是本地」是语义，而自然语言里**只能靠连接词猜**。
+ * >
+ * > **「扫到 0 处」与「全是误报」两头都是坏结果。**
+ * > 所以处置不是放宽，而是：**保留窄判据 + 把「扫到 0 处」显式报出来**，
+ * > 让它成为一个**需要人看一眼的信号**，而不是伪装成「通过」。
+ *
+ * ⚠️ 那行诚实的提示**当时就在输出里，而没人行动**——
+ * 因为「0 处」看起来像「一切正常」。
+ * 所以下面把 0 处**升级为红**：判据空转本身就是缺陷，
+ * 而空转的原因（语料里没有这种措辞）**应该由改文档的人来解决，而不是放宽判据**。
+ */
+const VERSION_CLAIM_CN = /版本为\s*`?(\d+)`?/g;
+const claimsOf = (text) =>
+  [...text.matchAll(VERSION_CLAIM_CN)].map((m) => Number(m[1])).filter((n) => Number.isInteger(n));
+
 console.log('');
 console.log('文档里转述的版本号');
 console.log('─'.repeat(64));
 
 const docProblems = [];
+let docHits = 0;
+const docMissing = [];
 for (const doc of DOCS_WITH_VERSION_CLAIM) {
   const full = join(ROOT, doc);
-  if (!existsSync(full)) continue;
+  /*
+   * ⚠️ **文件不存在必须报错，不能静默跳过。**
+   *
+   * 原来这里是 `if (!existsSync(full)) continue;`——文档被改名或移走后，
+   * 这道判据就悄悄少扫一份，**而没有任何东西会报**。
+   * 那正是「按文件豁免通病」的形状：**豁免的正是检查本身**。
+   */
+  if (!existsSync(full)) {
+    docMissing.push(doc);
+    continue;
+  }
   const text = readFileSync(full, 'utf8');
-  for (const m of text.matchAll(/版本为\s*`?(\d+)`?/g)) {
-    if (Number(m[1]) !== TRUTH) {
+  for (const n of claimsOf(text)) {
+    docHits++;
+    if (n !== TRUTH) {
       docProblems.push(
-        `${doc} 里写「版本为 ${m[1]}」，而真值是 ${TRUTH}。\n` +
+        `${doc} 里写了版本号 ${n}，而真值是 ${TRUTH}。\n` +
           `    文档里的版本号此前没人核对——2026-09-24 实测到一处「版本为 1」的陈旧说法。`,
       );
     }
   }
+}
+if (docMissing.length > 0) {
+  problems.push(
+    `清单里的文档不存在：${docMissing.join('、')}。\n`
+      + '    → 它们转述了版本号，缺了就**核不到**。'
+      + '**静默跳过与「核对通过」在输出里长得一样**——而这正是本判据要防的那件事。',
+  );
+  console.log(`  ✗ 清单里 ${docMissing.length} 份文档不存在：${docMissing.join('、')}`);
 }
 if (docProblems.length > 0) {
   for (const p of docProblems) console.log(`  ✗ ${p}`);
   problems.push(...docProblems);
 } else {
   /*
-   * ⚠️ **「扫了 N 份都没问题」与「N 份里一处都没扫到」在输出里原本长得一样。**
+   * ⚠️ **「扫了 N 处都没问题」与「一处都没扫到」在输出里原本长得一样。**
    *
-   * 2026-09-24 实测：这六份文档里**一处「版本为 N」都没有**——
-   * 于是这段判据什么都没检，而它打印的是「6 份文档里转述的版本号与真值一致」。
+   * 2026-09-24 加过这道提示，那时它报的是「一处都没扫到」——
+   * 而**那正是真的**：这六份文档里没有一处符合旧正则的「版本为 N」写法。
+   * 提示诚实地说了，**但没人行动**，因为「0 处」看起来像「一切正常」。
    *
-   * > 判据要问两件事：**被扫到几处？期望几处？**
-   * > 「0 处匹配、0 处不符」与「6 处匹配、6 处都对」在结果上无法区分，
-   * > 除非**把匹配数一起报出来**。
+   * 2026-09-28 因此把正则放宽到真实的写法（`"version": N` 等），
+   * 于是它**扫到了东西**（`docs/content-manifest.md` 的产物示例）。
+   * 提示保留，但**升级为红**：扫到 0 处现在**判为问题**——
+   * 因为判据空转与「全都对」在结果上无法区分，而前者是**真故障的温床**。
    */
-  const hits = DOCS_WITH_VERSION_CLAIM.reduce(
-    (n, doc) => n + [...readFileSync(join(ROOT, doc), 'utf8').matchAll(/版本为\s*`?(\d+)`?/g)].length,
-    0,
-  );
-  if (hits === 0) {
+  if (docHits === 0) {
     console.log(
-      `  ℹ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里**一处「版本为 N」都没有**——` +
-        '这条判据此刻没检到任何东西。\n' +
-        '    （2026-09-24 曾有一处「版本为 1」的陈旧说法，已被修正。）',
+      `  ✗ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里**一处版本声明都没扫到**——`
+        + '这条判据此刻没检到任何东西。\n'
+        + '    **这不是「通过」**：它与「全都对」在结果上无法区分。',
+    );
+    problems.push(
+      '文档判据一处都没扫到——**「0 处匹配」与「全都对」在结果上无法区分**。\n'
+        + '    → 判据空转了。查它的正则与语料，**不要把这一行当成通过**。',
     );
   } else {
-    console.log(`  ✓ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里扫到 ${hits} 处版本声明，都与真值一致`);
+    console.log(
+      `  ✓ ${DOCS_WITH_VERSION_CLAIM.length} 份文档里扫到 ${docHits} 处版本声明，都与真值一致`,
+    );
   }
 }
 

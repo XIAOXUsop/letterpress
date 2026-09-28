@@ -31,6 +31,8 @@ IDE 补全、CI 校验、生成客户端类型。
 1. **完整校验产物与 JSON Schema**，再检查文档数等业务不变量；
 2. **源码常量、产物、schema 三处的 `version` 一致**——它们各自都能独立改，
    而只有两处改了就没人发现；
+   **当前版本为 2**（真值在 `src/lib/content-manifest.ts` 的 `CONTENT_MANIFEST_VERSION`，
+   改版本只需改那一处，本文档这行由 `npm run check:single-source` 核对）;
 3. **文档指路**（消费方找得到它，否则 schema 白写）。
 
 > 构建后的门禁使用 JSON Schema 校验器检查字段类型、格式和嵌套结构；
