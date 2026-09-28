@@ -21,6 +21,9 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+// ⚠️ **2026-09-28 引入**：标量与块字段一律按 YAML 解析。
+// 依据见 `dataOf` 的注释——**那是实测出来的，不是「YAML 更规范」**。
+import { parseDocument } from 'yaml';
 import { frontmatterField } from './frontmatter.ts';
 import { resolveSlug } from './slug.ts';
 
@@ -126,6 +129,9 @@ export function readContentPage(dir: string, file: string): {
    */
   const body = end === -1 ? source : source.slice(source.indexOf('\n', end + 1) + 1).trim();
 
+  // ⚠️ 2026-09-28：标量一律走 YAML（见 `dataOf` 的注释与实测表）。
+  const data = dataOf(block, file);
+
   // sources 是块状数组，逐条抓 sourceId / revision / locator
   const refs: PageSourceRef[] = [];
   let current: { sourceId: string; revision: string; locator: string } | null = null;
@@ -173,7 +179,7 @@ export function readContentPage(dir: string, file: string): {
   const originalReason = originalOf(source);
 
   return {
-    explicitSlug: Boolean(frontmatterField(source, 'slug')?.trim()),
+    explicitSlug: Boolean(scalarOf(data, 'slug')?.trim()),
     /*
      * ⚠️ **2026-09-24 改：这里原先是 `file.replace(/\.mdx?$/, '')`——直接用文件名。**
      *
@@ -200,14 +206,14 @@ export function readContentPage(dir: string, file: string): {
      * > 它是在异构 fixture 上第一次暴露的（迭代 AR）。
      */
     slug: resolveSlug(
-      frontmatterField(source, 'title') ?? file.replace(/\.mdx?$/, ''),
-      frontmatterField(source, 'slug'),
+      scalarOf(data, 'title') ?? file.replace(/\.mdx?$/, ''),
+      scalarOf(data, 'slug'),
       file.replace(/\.mdx?$/, ''),
     ),
-    title: frontmatterField(source, 'title') ?? file,
+    title: scalarOf(data, 'title') ?? file,
     // post 没有 kind 字段，wiki 才有——**别与 Doc.kind 搞混**（那个是 post/wiki）
-    kind: frontmatterField(source, 'kind') ?? '',
-    updated: frontmatterField(source, 'updated') ?? '',
+    kind: scalarOf(data, 'kind') ?? '',
+    updated: scalarOf(data, 'updated') ?? '',
     /*
      * ⚠️ **2026-09-28 补 `date` 与 `tags`。**
      *
@@ -347,6 +353,59 @@ export function originalOf(source: string): string | undefined {
  * 它在第二次修好之前一直是「6 个全部跳过」——
  * **一个静默跳过全部被测对象的检查，等于没有检查。**
  */
+/**
+ * **把 frontmatter 那段文本按 YAML 解析。**
+ *
+ * ⚠️ **2026-09-28 引入，而依据是实测的，不是「YAML 更规范」。**
+ *
+ * `frontmatterField` 是**手写子集解析器**（`^field:[ \t]*(.*)$` + `m` 标志），
+ * 它是 YAML 的一个**更窄、更严格的子集**。实测三种合法写法上两边分叉：
+ *
+ * | 写法 | `frontmatterField` | YAML |
+ * |---|---|---|
+ * | `title: 第 5 章: 一个结论` | **读成** `"第 5 章: 一个结论"` | **报错**（YAML 不允许裸冒号） |
+ * | `title: 标题 # 注释` | **抛错**（它主动拒绝） | 读成 `"标题"`（YAML 认注释） |
+ * | `  title: 缩进的值` | **`null`** | 读成 `"缩进的值"` |
+ *
+ * > **三处都是「YAML 更严或更准」，而「报错 / 读对」都比「读错 / 给 null」好。**
+ * > 而 `null` 尤其危险——它会被 `?? ''` 兜成空串，于是
+ * > 「这一页没标题」与「这一页的标题缩进了」在下游**完全一样**。
+ *
+ * ⚠️ 换之前**先量过「现有内容上会不会变」**：
+ * **11 篇真实内容 × 7 个标量 = 77 次逐字段比对，0 处不同。**
+ * 而「0 处不同」只说明**现在**没差别——**所以才要靠上面那三种写法证明方向对**。
+ *
+ * ⚠️ 块字段（`sources` / `review` / `original`）**仍然走 `indentedBlockOf`**：
+ * 它们已经修好（`sources` 曾被别的块覆盖，实测复现后修的），
+ * 而 YAML 解析它们是**下一步**，不在这一轮。
+ *
+ * ⚠️⚠️ **这里原本写着一句「保留 `frontmatterField` 作为兜底」——而我没实现。**
+ * **2026-09-28 实测证明那是个错的承诺**：`check:onboarding-doc` 在
+ * `Export Notes.md` 上崩了（`summary` 以裸 `*` 开头，YAML 判为别名语法），
+ * 而**崩溃恰恰是正确行为**——
+ * 那一篇若进真实构建，**Astro 的 YAML 解析器也会拒绝它**。
+ *
+ * > **静默降级到逐行解析，会让读路径接受构建侧拒绝的内容**——
+ * > 那正是「同一份坏数据，一边失败一边接受」，
+ * > 而 `check:review-status` 早就为它记过一笔。
+ * > **所以这里 `throw` 是对的，而那句兜底的承诺是错的。** 已删。
+ */
+function dataOf(block: string, file: string): Record<string, unknown> {
+  const parsed = parseDocument(block);
+  if (parsed.errors.length > 0) {
+    throw new Error(`${file} 的 frontmatter 无法按 YAML 解析：${parsed.errors[0].message}`);
+  }
+  return (parsed.toJS() ?? {}) as Record<string, unknown>;
+}
+/** 取一个标量字段，返回**字符串**（与旧口径一致：数字/布尔/日期都转成字符串）。 */
+function scalarOf(data: Record<string, unknown>, key: string): string | undefined {
+  const v = data[key];
+  if (v === undefined || v === null) return undefined;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'boolean' || typeof v === 'number') return String(v);
+  return typeof v === 'string' ? v : String(v);
+}
+
 /**
  * **一个顶层字段下面那些缩进行**（不含该字段本身那一行）。
  *

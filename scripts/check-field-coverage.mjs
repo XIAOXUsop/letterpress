@@ -113,6 +113,75 @@ const checks = [
   ['original', page.original?.reason === '本站自己的约定'],
 ];
 
+/*
+ * ── 第 7 条：标量按 **YAML** 解析，而逐行解析器会读错的那几种写法 ──────
+ *
+ * ⚠️ **2026-09-28 换解析器时，第一版没有这条判据**，于是
+ * 「把 `title` 退回逐行解析」这条变异**门禁照样绿**——
+ * 因为原有语料里的字段**两种解析器读法完全一样**。
+ *
+ * > **判据没有覆盖新行为，而「读起来全绿」正是它没覆盖的证据。**
+ * > 与「被测集合是空的」同族：**两边一样时，比对必然通过。**
+ *
+ * 所以这里造**三种只有 YAML 能读对**的写法（实测分叉，见 `read-page.ts`
+ * 的 `dataOf` 注释里那张表）：
+ * ① `title: 标题 # 注释` —— 逐行解析器**主动抛错**
+ * ② `  title: 缩进的值` —— 逐行给 **`null`**（会被 `?? ''` 兜成空串）
+ * ③ `title: 第 5 章: 冒号` —— 逐行**读成整串**，YAML 报错（这一条
+ *    断言的是「YAML 会拒绝」，与前两条方向相反）
+ */
+{
+  const d = mkdtempSync(join(tmpdir(), 'field-coverage-yaml-'));
+  try {
+    // ① 行内注释：YAML 读成「标题」，逐行解析器抛错
+    writeFileSync(
+      join(d, '注释.md'),
+      '---\ntitle: 标题 # 这是注释\nslug: 注释\nsummary: 一句话。\n---\n\n正文。\n',
+      'utf8',
+    );
+    const withComment = readContentPage(d, '注释.md');
+    const commentOk = withComment.title === '标题';
+    if (!commentOk) {
+      problems.push(
+        `标量**没有按 YAML 解析**：\`title: 标题 # 这是注释\` 读成了 `
+        + `${JSON.stringify(withComment.title)}，而 YAML 应读成「标题」。\n`
+        + '    → 逐行解析器在这一句上**主动抛错**，所以症状是「整篇读不出来」。',
+      );
+      console.log(`  ✗ 行内注释：title 读成 ${JSON.stringify(withComment.title)}（应为「标题」）`);
+    } else {
+      console.log('  ✓ 标量按 YAML 解析（`title: 标题 # 注释` 读成「标题」，逐行解析器会抛错）');
+    }
+
+    // ② **行内数组**：YAML 读成数组，逐行解析器给的是**原始字符串** `"[甲, 乙]"`。
+    //    ⚠️ 我第一版造的是「顶层字段后面缩进的键」——**那不是合法 YAML**
+    //    （`Nested mappings are not allowed in compact mappings`），
+    //    于是断言崩在解析上。**第四次「我以为合法、其实不合法」的语料。**
+    //    换成下面这个形状：它 100% 合法，且两种解析器的读法**必然不同**。
+    writeFileSync(
+      join(d, '数组.md'),
+      '---\ntitle: 正常标题\nslug: 数组\nsummary: 一句话。\nrelated: [甲, 乙]\n---\n\n正文。\n',
+      'utf8',
+    );
+    const arr = readContentPage(d, '数组.md');
+    const arrayParsed = Array.isArray(arr.related) && arr.related.length === 2;
+    if (!arrayParsed) {
+      problems.push(
+        `标量**没有按 YAML 解析**：\`related: [甲, 乙]\` 读成了 `
+        + `${JSON.stringify(arr.related)}，而 YAML 应读成两项数组。\n`
+        + '    → 逐行解析器给的是**原始字符串** `"[甲, 乙]"`——\n'
+        + '    而 `relationList` 剥方括号后正好也能切成两项，**所以它蒙混过关了**。\n'
+        + '    这就是为什么**换解析器必须由行为判据守着**：两边「都能用」时，'
+        + '只有**直接看类型**才分得开。',
+      );
+      console.log(`  ✗ 行内数组：related 读成 ${JSON.stringify(arr.related)}（应为两项数组）`);
+    } else {
+      console.log('  ✓ 标量按 YAML 解析（`related: [甲, 乙]` 读成两项数组，不是字符串）');
+    }
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+}
+
 const readable = checks.filter(([, ok]) => ok).map(([f]) => f);
 const missing = checks.filter(([, ok]) => !ok).map(([f]) => f);
 const skipped = [...DELIBERATELY_UNREAD.keys()];

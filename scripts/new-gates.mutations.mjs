@@ -344,6 +344,18 @@ const GATES = [
 
 const CASES = [
   {
+    // ⚠️ 守着 2026-09-28 那个**设计决定**的落地：标量一律走 YAML 解析。
+    // 依据是实测的（三种合法写法上逐行解析器与 YAML 分叉），而**不是**「YAML 更规范」。
+    //
+    // 变异：把 `title` 退回逐行解析——而 `check:field-coverage` 的语料里
+    // **有一篇的 title 带行内注释**，两种解析器对它的读法不同。
+    why: 'check:field-coverage — 标量退回逐行解析（YAML 那次替换被撤掉）',
+    file: 'src/lib/wiki/read-page.ts',
+    find: "    title: scalarOf(data, 'title') ?? file,",
+    replace: "    title: frontmatterField(source, 'title') ?? file, // MUTATION：退回逐行",
+    target: 'check-field-coverage.mjs',
+  },
+  {
     // ⚠️ 守着 2026-09-28 修的那个**实测出来的真 bug**：
     // 逐行扫 `sources` 时若不限定「只扫该块内」，**别的顶层块里的
     // `revision:` 会覆盖当前那条来源**——症状**静默**（来源的版本日期
