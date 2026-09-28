@@ -64,6 +64,15 @@ export interface ReadPage {
     readonly checkedAt?: string;
     readonly contentDigest?: string;
   };
+  /**
+   * 「原创实践记录」——知识层专属，post 给 `undefined`（与构建侧同口径）。
+   *
+   * ⚠️ **`readContentDirs` 从 2026-09-28 起才读它**；在那之前
+   * 读路径**完全不认识这个字段**，而本站有 **3 篇**真的写了它。
+   * 之所以没发作：`original` 唯一的消费者是 `content-manifest.ts`，
+   * 那走构建期的 `doc`。
+   */
+  readonly original?: { readonly reason: string };
 }
 
 export interface PageToDocOptions {
@@ -106,6 +115,11 @@ export interface PageToDocOptions {
    * 与构建侧 `kind === 'wiki' ? data.review : undefined` 同口径。
    */
   readonly review?: { readonly status: 'pending' | 'reviewed' | 'stale'; readonly checkedAt?: string; readonly contentDigest?: string };
+  /**
+   * 原创实践记录。**只有 `docKind: 'wiki'` 才会用上它**——
+   * 与构建侧 `kind === 'wiki' ? data.original : undefined` 同口径。
+   */
+  readonly original?: { readonly reason: string };
   /** 草稿不进图（`buildGraph` 默认也会滤，但显式给出更清楚）。 */
   readonly draft?: boolean;
   /** slug 是不是显式指定的。影响 lint 的「中文 slug」告警分级。 */
@@ -150,6 +164,7 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
    * > 现在统一成「取值时判一次 + 展开时用同一个变量」。
    */
   const review = isWiki ? options.review ?? page.review : undefined;
+  const original = isWiki ? options.original ?? page.original : undefined;
   return {
     kind: docKind,
     slug: page.slug,
@@ -171,6 +186,7 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
     // 而「同一约束散在多处、互为掩护」才是真正要治的（见上面的注释）。
     ...(isWiki ? { wikiKind: page.kind } : {}),
     ...(isWiki && review ? { review } : {}),
+    ...(isWiki && original ? { original } : {}),
     // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
     // 传错键会被 `?? []` 静静兜成空数组——摘要照样算得出，只是永远对不上。
     //

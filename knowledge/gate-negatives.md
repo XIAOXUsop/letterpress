@@ -65,6 +65,8 @@
 | `check:two-paths`（新） | 撤掉 `post` 丢 `declaredRelations` 的对齐 | ✅ 红 | 2026-09-28 |
 | `check:two-paths`（新） | 撤掉 `post` 丢 `review` 的**外层**守卫 | ✅ 红 | 2026-09-28 |
 | `check:two-paths`（新） | **只撤内层条件展开那一道锁** | ⚠️ **仍然绿——因为外层 `const review = isWiki ? … : undefined` 挡住了**。同一个约束写了两道锁，**它们互为掩护** | 2026-09-28 |
+| `read-page` 的 `original` 解析 | 把「先切出 `original:` 块」换成「全文扫 `reason:`」 | ✅ 红（`不会串到别的块里的 reason:` 与 `空 reason` 两条都红） | 2026-09-28 |
+| `read-page` 的 `original` 解析 | 我第一版那条测试的固件用 `locator:` 而不是 `reason:` | ⚠️ **测不到 ≠ 测过**——那个固件压根触发不了串味，换成「`review:` 块里有一行 `reason:`」才真正验到 | 2026-09-28 |
 
 ## 读路径与构建路径的「post 口径」曾经三处分歧（2026-09-28）
 

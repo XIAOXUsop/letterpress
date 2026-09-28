@@ -302,6 +302,8 @@ export function readContentDirs(
   readonly pages: (ReturnType<typeof readContentPage> & {
     readonly summary: string;
     readonly docKind?: 'post' | 'wiki';
+    /** 2026-09-28 补：`readContentPage` 不读它，只有读多个目录时才有。 */
+    readonly original?: { readonly reason: string };
   })[];
   readonly counts: ReadonlyMap<string, number>;
 } {
@@ -330,6 +332,20 @@ export function readContentDirs(
       const full = join(dir, file);
       const source = readFileSync(full, 'utf8');
       /*
+       * ⚠️ `original` 是**嵌套块**（`original:` 下面缩进一行 `reason:`），
+       * 而 `frontmatterField` **只认顶层标量**——直接问它会拿到 `''`。
+       *
+       * 它和 `review:` / `sources:` 一样是块，**但那几个由 `readContentPage`
+       * 解析了**。`original` 当时漏了（2026-09-28 补）。
+       *
+       * 这里只取 `reason` 一行——`content.config.ts` 的 schema 也只要求它，
+       * 多出来的键 zod 会剥掉，核心不必认识。
+       */
+      const originalMatch = /^ {2}reason:\s*(.+)$/m.exec(
+        /^original:\s*$\n(?<block>(?:^[ \t]+.*\n?)*)/m.exec(source)?.groups?.block ?? '',
+      );
+      const originalReason = originalMatch?.[1]?.trim() || undefined;
+      /*
        * ⚠️ **2026-09-28 加：顺带补上 `summary`。**
        *
        * 它是顶层标量，而 `readContentPage` 只解析**嵌套块**——
@@ -351,6 +367,19 @@ export function readContentDirs(
         // （`readContentPage` 内部就调它），所以两条路不会漂。
         ...(relationField ? { related: relationList(source, relationField) } : {}),
         ...(options.docKind ? { docKind: options.docKind } : {}),
+        // ⚠️ **2026-09-28 补 `original`。**
+        //
+        // `content.ts` 的 `toDoc` 会带它（知识层专属，post 给 `undefined`），
+        // 而读路径原先**完全不认识这个字段**——两条路径的 `Doc` 不等价。
+        // **本站 3 篇 wiki 真的写了它**（`build-probe` / `design-tokens` /
+        // `letterpress`），所以这不是「数据不存在」，是**读路径漏读**。
+        //
+        // 为什么至今没发作：`original` 唯一的消费者是 `content-manifest.ts`，
+        // 而那走**构建期**的 `doc`。将来若有 lint 规则看它，读路径就会漏。
+        //
+        // ⚠️ **空 `reason` 不给**——`content.config.ts` 的 schema 要求
+        // `min(1)`，而「空理由等于没声明」是那条注释的原话。
+        ...(originalReason ? { original: { reason: originalReason } } : {}),
       });
     }
   }

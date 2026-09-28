@@ -69,7 +69,7 @@ if (gates === 0) {
  * 加一个进来，就必须同时更新构建侧与本门禁的名单——
  * **这正是它存在的意义：两份名单不可能悄悄漂开。**
  */
-const WIKI_ONLY = ['wikiKind', 'review', 'declaredRelations'];
+const WIKI_ONLY = ['wikiKind', 'review', 'declaredRelations', 'original'];
 
 const page = {
   slug: 'a',
@@ -79,6 +79,7 @@ const page = {
   sources: [{ sourceId: 's1', revision: 'v1', locator: '§1' }],
   related: ['b'],
   review: { status: 'reviewed', checkedAt: '2026-01-01', contentDigest: 'd' },
+  original: { reason: '本站自己的实践，外部无对应来源' },
 };
 
 const wikiDoc = pageToDoc(page, { docKind: 'wiki' });

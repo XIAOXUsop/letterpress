@@ -284,6 +284,53 @@ describe('readContentPage', () => {
     });
   });
 
+  describe('original（原创实践记录）', () => {
+    /**
+     * ⚠️ **2026-09-28 加。** 读路径原先**完全不认识 `original`**，
+     * 而 `content.ts` 的 `toDoc` 会带它——两条路径的 `Doc` 不等价。
+     * 本站有 **3 篇**真的写了它（`build-probe` / `design-tokens` / `letterpress`），
+     * 所以这不是「数据不存在」，是**读路径漏读**。
+     */
+    it('读到 original 的 reason', () => {
+      write('a.md', '---\ntitle: 甲\noriginal:\n  reason: 本站自己的实践\n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect(pages[0].original).toEqual({ reason: '本站自己的实践' });
+    });
+
+    it('没有 original 时键不出现——不是 { reason: undefined }', () => {
+      write('a.md', '---\ntitle: 甲\n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect('original' in pages[0]).toBe(false);
+    });
+
+    it('**空 reason 不给键**——schema 要求 min(1)，空理由等于没声明', () => {
+      write('a.md', '---\ntitle: 甲\noriginal:\n  reason:\n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect('original' in pages[0]).toBe(false);
+    });
+
+    it('reason 前后的空格被 trim 掉', () => {
+      // YAML 允许 `reason:   值  `；不 trim 的话 reason 里就带着尾随空格，
+      // 而它会被序列化进 content-manifest 的 provenance。
+      write('a.md', '---\ntitle: 甲\noriginal:\n  reason:    值有空格   \n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect(pages[0].original).toEqual({ reason: '值有空格' });
+    });
+
+    it('**不会串到别的块里的 `reason:` 行**', () => {
+      // ⚠️ 这条才是真判据。先试的实现用 `/^ {2}reason:\s*(.+)$/m` **全文扫**，
+      // 它会抓到**任何**缩进两格的 `reason:` 行——
+      // 而 `review:` 块里若有同名字段，`original.reason` 就会串味。
+      //
+      // ⚠️ 我第一版这条测试写的是「sources 的 locator 不该被当 reason」——
+      // **那个固件压根触发不了**（`locator` 不叫 `reason`），
+      // 于是它在错误的实现下也绿。**测不到 ≠ 测过。**
+      write('a.md', '---\ntitle: 甲\nreview:\n  status: reviewed\n  reason: 这行属于 review\n---\n\n甲。\n');
+      const { pages } = readContentDirs([dir]);
+      expect('original' in pages[0]).toBe(false);
+    });
+  });
+
   describe('readContentDirs', () => {
     it('跨目录汇总，counts 按**目录**给出文档数', () => {
       // ⚠️ 它**不递归**：传进来的是内容目录本身（`src/content/wiki` 等），
