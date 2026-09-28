@@ -2,7 +2,7 @@
   "name": "letterpress",
   "type": "module",
   "version": "0.1.0",
-  "description": "一个把中文排版做对、同时写给人和 AI 读的静态博客主题",
+  "description": "A static blog template that gets Chinese typography right — and serves markdown to AI agents.",
   "license": "MIT",
   "files": [
     "src/",
@@ -109,5 +109,28 @@
   },
   "allowScripts": {
     "esbuild": true
+  },
+  "keywords": [
+    "astro",
+    "astro-theme",
+    "blog",
+    "blog-theme",
+    "static-site",
+    "markdown",
+    "typescript",
+    "cjk",
+    "typography",
+    "pagefind"
+  ],
+  "homepage": "https://xiaoxusop.github.io/letterpress",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XIAOXUsop/letterpress.git"
+  },
+  "author": {
+    "name": "XIAOXUsop"
+  },
+  "bugs": {
+    "url": "https://github.com/XIAOXUsop/letterpress/issues"
   }
 }

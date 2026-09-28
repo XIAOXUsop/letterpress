@@ -1302,7 +1302,7 @@ spawnSync('npm.cmd', ['run','build'])
 「五道检索闸每道有专属用例」那句话**曾经是假的**，由 `verify:retrieval-gates` 揭穿。
 
 **语料一扩、判据一改，遮住关系就变了。** 已固化为
-`scripts/new-gates.mutations.mjs`（**共 60 条变异** / 13 道门禁），每次 CI 都跑：
+`scripts/new-gates.mutations.mjs`（**共 61 条变异** / 13 道门禁），每次 CI 都跑：
 
 | 被测门禁 | 变异 |
 |---|---|
@@ -1857,6 +1857,53 @@ CI 上「知识层门禁（子进程）」连续三次红。定位过程本身�
 有多少是真跑出来的、有多少是后来补记的，本检查无从判断。**
 （`verify:review` 那行记的就是「6 个知识页全部一致」——
 而**「全对」与「没看见」在输出上一样**，那正是形态十一。）
+
+---
+
+## npm 元数据：每一条都取自仓库里的真值（2026-09-29）
+
+补 `keywords` / `homepage` / `repository` / `author` / `bugs`，
+**外加把 `description` 改成英文**。**而每一条的依据都是量出来的，不是想的**：
+
+| 字段 | 取值 | 依据 |
+|---|---|---|
+| `repository` | `XIAOXUsop/letterpress` | `git remote -v` |
+| `homepage` | `xiaoxusop.github.io/letterpress` | `src/config.ts:111` |
+| `author.name` | `XIAOXUsop` | `src/config.ts:119` |
+| `description` | 英文那一句 | **`README.md` 里已有的英文定位** |
+| `keywords` | 10 个 | **registry.npmjs.org 实测**（见下） |
+
+### `keywords` 为什么**没有** `llm` / `ai`
+
+查 registry 上 `astro-blog-theme` / `astro-starter-template` / `astro` 三组里
+**下载量最高的包**，它们共同的标签是：
+
+```
+astro, astro-theme, blog, blog-theme, theme, markdown,
+typography, pagefind, static-site, tailwindcss, i18n
+```
+
+**没有一条与 AI 有关。**而「给 AI 读」正是本项目的差异化——
+
+> **「我们的特色」与「大众会搜的词」是两件事。**
+> 把特色写进 `keywords` 会让**不相关的人搜到它**，而那会拉低转化而不是提高。
+> 特色该写在 `description` 与 README 里——**那里已经有了**。
+
+### 而 `description` 改成英文，是因为**生态共识**
+
+查下载量最高的三个同类包（3783 / 46 / 136 次每月），`description` **全是英文**，
+其中一个还标了 `Trilingual (zh/en/ja)`。
+
+> **那不是我的偏好，是量出来的**——而 `description` 只有一个位置，
+> 所以取自 **`README.md` 里已经写好的那句英文定位**，不另编一句。
+
+**代价是「同一份事实两处措辞」，所以加了判据③**：`description` 必须与
+README 那句**逐字相同**（`check:package-files`）。
+同族已栽过多次：README 的测试条数漂过三次、编排步数漂过四次。
+
+⚠️ **而它们现在仍然没有实际作用**——2026-09-29 实测 registry 对
+`letterpress` 返回 **`Not found`**：**它压根没发布到 npm**。
+所以这些字段是**为发布做准备**，而**发布本身是对外动作，不擅自做**。
 
 ---
 

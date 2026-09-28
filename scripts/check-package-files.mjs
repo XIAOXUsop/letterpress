@@ -117,6 +117,50 @@ if (!Array.isArray(pkg.files)) {
   }
 }
 
+// ── ③ `description` 必须与 README 里那句英文定位逐字相同 ──────────────────
+/*
+ * ⚠️ **2026-09-29 调研 npm registry 时加的。**
+ *
+ * 查 `astro-blog-theme` / `astro-starter-template` 这两组下**下载量最高的包**，
+ * 它们的 `description` **全是英文**（其中一个还标了 `Trilingual (zh/en/ja)`）——
+ * 那是**生态共识，不是我的偏好**。
+ *
+ * 所以 `package.json` 的 `description` 改成英文。**而那意味着它与 README
+ * 里那句英文定位说的是同一件事**——于是**必须逐字一致**，否则又是
+ * 「同一份事实两处措辞」（README 的测试条数漂过三次、编排步数漂过四次）。
+ *
+ * > **判据要核的是「同一件事的两处措辞」而不是「措辞好不好」**——
+ * > 后者是人的判断，而前者是机械的。
+ *
+ * ⚠️ **而 README 里那句话的位置是判据的一部分**：它必须在 `<summary>English</summary>`
+ * 那个折叠块里。**不在那儿就说明「英文定位」这件事已经变了**，而判据要报出来。
+ */
+{
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+  const m = /\*\*A static blog template[^*]*\*\*/.exec(readme);
+  const claimed = m ? m[0].replace(/^\*\*|\*\*$/g, '').trim() : null;
+  if (!claimed) {
+    problems.push(
+      '**`README.md` 里找不到那句英文定位**（`**A static blog template …**`）。\n'
+      + '    → 而 `package.json` 的 `description` **取自它**——\n'
+      + '    **所以那句话不见了，就没法核「两边是否还一致」。**',
+    );
+    console.log('  ✗ README 里找不到英文定位');
+  } else if (claimed !== pkg.description) {
+    problems.push(
+      `**\`package.json\` 的 \`description\` 与 \`README.md\` 里那句不一致：**\n`
+      + `        package.json: ${JSON.stringify(pkg.description)}\n`
+      + `        README.md   : ${JSON.stringify(claimed)}\n`
+      + '    → 两者**说的是同一件事**（那句是 description 的来源）。\n'
+      + '    → 改一处而不改另一处，就是「同一份事实两处措辞」，\n'
+      + '    **而读者读到的是任意一处**。',
+    );
+    console.log('  ✗ `description` 与 README 里那句不一致');
+  } else {
+    console.log('  ✓ `description` 与 README 里那句英文定位逐字相同');
+  }
+}
+
 // ── ② 白名单覆盖后，干净目录里还能不能构建 ────────────────────────────
 /*
  * ⚠️ **这才是唯一能分开「必要」与「多余」的办法。**

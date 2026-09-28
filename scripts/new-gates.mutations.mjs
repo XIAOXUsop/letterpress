@@ -1140,6 +1140,27 @@ const CASES = [
     target: 'check-package-files.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着判据③：`description` 必须与 README 里那句逐字相同。**
+     *
+     * 2026-09-29 查 npm registry 时把 `description` 改成英文
+     * （**查 `astro-blog-theme` / `astro-starter-template` 下下载量最高的包，
+     * 它们全是英文**——那是生态共识，不是我的偏好），
+     * 而那是从 README 已有的英文定位取的。
+     *
+     * > **同一份事实两处措辞**——README 的测试条数漂过三次、编排步数漂过四次。
+     * > 所以「它从哪来」要被守住，而不只是「它存在」。
+     *
+     * 变异改 `description` 的措辞（改得仍然通顺，只是不一致）——
+     * **那正是「同一件事两处写法」的形状**。
+     */
+    why: 'check:package-files — description 与 README 那句不一致（同义不同字）',
+    file: 'package.json',
+    find: '"description": "A static blog template that gets Chinese typography right',
+    replace: '"description": "An Astro blog template for Chinese typography',
+    target: 'check-package-files.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",
