@@ -26,10 +26,10 @@
  *
  * 用法：`node scripts/check-field-coverage.mjs`
  */
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { readContentPage, readContentDirs } from '../src/lib/wiki/read-page.ts';
 
 const ROOT = process.cwd();
 const problems = [];
@@ -179,6 +179,55 @@ const checks = [
     }
   } finally {
     rmSync(d, { recursive: true, force: true });
+  }
+}
+
+/*
+ * ── 第 8 条：`readContentDirs` **递归读子目录**，与 Astro 的内容 glob 一致 ──
+ *
+ * ⚠️ **2026-09-29 从 `origin/main` 搬来。** 原先 `readdirSync(dir)` 只读**一层**，
+ * 而 **Astro 的内容 glob 是递归的**——于是有人建了
+ * `src/content/wiki/子目录/` 那天，**构建读得到、CLI 读不到**，
+ * 症状是「CLI 少了几篇」**且不报错**。
+ *
+ * > 本站 `src/content/` 下**恰好没有子目录**，所以那个差异**从未发作**——
+ * > 而「在本站永远不触发的分支，就是没有守卫的分支」。
+ *
+ * ⚠️ 这条判据**必须自己造子目录**：拿真实内容验它**永远验不到**
+ * （真实内容里没有子目录），而那正是它当初能活下来的原因。
+ */
+{
+  const nested = mkdtempSync(join(tmpdir(), 'field-coverage-nested-'));
+  try {
+    mkdirSync(join(nested, '子目录'), { recursive: true });
+    writeFileSync(
+      join(nested, '子目录', '深层.md'),
+      '---\ntitle: 深层\nslug: 深层\nsummary: 一句话。\n---\n\n正文。\n',
+      'utf8',
+    );
+    writeFileSync(
+      join(nested, '顶层.md'),
+      '---\ntitle: 顶层\nslug: 顶层\nsummary: 一句话。\n---\n\n正文。\n',
+      'utf8',
+    );
+    const { pages } = readContentDirs([nested]);
+    const slugs = pages.map((p) => p.slug).sort();
+    const recursive = slugs.includes('深层') && slugs.includes('顶层');
+    if (!recursive) {
+      problems.push(
+        `\`readContentDirs\` **没有递归读子目录**——读到 ${slugs.length} 篇`
+        + `（${slugs.join('、')}），而子目录里那篇没进来。\n`
+        + '    → **Astro 的内容 glob 是递归的**，所以构建读得到、CLI 读不到，\n'
+        + '    症状是「CLI 少了几篇」**且不报错**。\n'
+        + '    2026-09-29 从 `origin/main` 搬来；此前本站**恰好没有子目录**，'
+        + '所以那个差异**从未发作**。',
+      );
+      console.log(`  ✗ 子目录没被读到（只读到 ${slugs.join('、')}）`);
+    } else {
+      console.log('  ✓ readContentDirs 递归读子目录（与 Astro 的内容 glob 一致）');
+    }
+  } finally {
+    rmSync(nested, { recursive: true, force: true });
   }
 }
 

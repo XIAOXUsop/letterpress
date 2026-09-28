@@ -529,9 +529,38 @@ export function readContentDirs(
    */
   const relationField = options.relationField;
   for (const dir of dirs) {
-    const files = readdirSync(dir)
-      .filter((f) => /\.mdx?$/.test(f))
-      .sort();
+    /*
+     * ⚠️ **2026-09-29 改为递归**（来自 `origin/main`）。
+     *
+     * 原先只 `readdirSync(dir)` 读**一层**，而 **Astro 的内容 glob 是递归的**
+     * （`content/**` 加 `*`）——于是有人建了 `src/content/wiki/子目录/` 那天，
+     * **构建能读到那几篇、CLI 读不到**，而症状是「CLI 少了几篇」**且不报错**。
+     *
+     * > ⚠️ **上面刻意不写那个 glob 的字面形式**——它含一对「斜杠星号」，
+     * > **而那会提前闭合这段块注释**，于是整个文件变成语法错误。
+     * > **而解释这件事的那句话本身也必须小心**：我第一版写「一次让
+     * > `src/双星号/星号.ts` 的注释提前闭合」——**那又把 glob 写进去了**，
+     * > 于是同一个错误在同一段注释里犯了第二次。
+     * > **症状是 `Expected ';'` 且报的行号落在注释内部**（我据此查错了三次）。
+     * > **判据：注释里提到 glob 时，一律描述它而不写它。**
+     *
+     * > 本站 `src/content/` 下**恰好没有子目录**，所以那个差异**从未发作**——
+     * > 而「在本站永远不触发的分支，就是没有守卫的分支」。
+     * > 与 `resolveSlug` 那条注释是同一个道理。
+     *
+     * 文件名存的是**相对 dir 的路径**（`子目录/那篇.md`），
+     * 所以 `readContentPage(dir, file)` 不用改。
+     */
+    const files: string[] = [];
+    const walk = (relativeDir: string): void => {
+      for (const entry of readdirSync(join(dir, relativeDir), { withFileTypes: true })) {
+        const name = relativeDir ? join(relativeDir, entry.name) : entry.name;
+        if (entry.isDirectory()) walk(name);
+        else if (entry.isFile() && /\.mdx?$/.test(entry.name)) files.push(name);
+      }
+    };
+    walk('');
+    files.sort();
     counts.set(dir, files.length);
     for (const file of files) {
       const page = readContentPage(dir, file);

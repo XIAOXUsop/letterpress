@@ -344,6 +344,17 @@ const GATES = [
 
 const CASES = [
   {
+    // ⚠️ 守着 2026-09-29 从 `origin/main` 搬来的**递归读子目录**。
+    // 本站 src/content/ 下恰好没有子目录，所以这个差异**从未发作**——
+    // 而「在本站永远不触发的分支，就是没有守卫的分支」。
+    // 症状会是「CLI 少了几篇」**且不报错**（Astro 的内容 glob 是递归的）。
+    why: 'check:field-coverage — readContentDirs 不再递归（构建读得到、CLI 读不到）',
+    file: 'src/lib/wiki/read-page.ts',
+    find: '    walk(\'\');',
+    replace: '    // MUTATION：不递归，只读一层',
+    target: 'check-field-coverage.mjs',
+  },
+  {
     // ⚠️ 守着 2026-09-28 那个**设计决定**的落地：标量一律走 YAML 解析。
     // 依据是实测的（三种合法写法上逐行解析器与 YAML 分叉），而**不是**「YAML 更规范」。
     //
