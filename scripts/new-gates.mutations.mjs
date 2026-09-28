@@ -33,8 +33,41 @@ const problems = [];
 console.log('2026-09-28 新增门禁的负向验证');
 console.log('─'.repeat(64));
 
-/** 跑一个门禁，返回它红没红。 */
+/*
+ * ⚠️ **2026-09-28 第二次：「单跑这条门禁」不等于「门禁在编排里跑」。**
+ *
+ * `verify` 走 `bundle-and-verify.mjs`：esbuild 把脚本打成
+ * `node_modules/.cache/letterpress/verify.mjs` 再执行。
+ * 我给 `verify-negotiation.mjs` 里的新判据用了 `import.meta.url` 定位 docs，
+ * **单跑是绿的、打包后 ENOENT**——而 `verify:all` 跑的正是打包那条路。
+ *
+ * > **手敲的命令不是 CI 里的那条**（[[local_simulation_missing_semantics]]）。
+ * > 而这类缺陷**只会在编排里发作**，所以
+ * > **变异脚本必须按编排的方式跑被测门禁**，不能一律 `node scripts/x.mjs`。
+ *
+ * 所以 `red()` 对这几个命令改用 `npm run <name>`，与编排同一条路。
+ * 目前只有 `verify` 需要这样跑——它是唯一走打包的。
+ *
+ * ⚠️ **这个 `Set` 必须定义在 `red()` 之前**：`const` 有暂时性死区，
+ * 反过来写会 ReferenceError——而**那正是「注释里写了、代码没实现」的形状**。
+ */
+const BUNDLED = new Set(['verify']);
+
+/**
+ * 跑一个门禁，返回它红没红。
+ *
+ * ⚠️ **`verify` 必须按编排的方式跑**（`npm run verify` → esbuild 打包 → 执行），
+ * 单跑 `node scripts/bundle-and-verify.mjs` 走的是另一条路——
+ * 2026-09-28 实测：一条新判据单跑绿、打包后 ENOENT。
+ * 而 `verify:all` 里的第 4 步跑的是打包那条。
+ */
 const red = (script) => {
+  if (BUNDLED.has(script.replace(/\.mjs$/, ''))) {
+    const r = spawnSync('npm', ['run', 'verify'], {
+      cwd: ROOT, encoding: 'utf8', timeout: 600_000, shell: true,
+    });
+    return { red: r.status !== 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+  }
   const r = spawnSync('node', [join('scripts', script)], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -106,11 +139,6 @@ function mutate({ file, find, replace, target, why }) {
   return true;
 }
 
-// ── 每条变异必须是「真的分叉」，不是「值相同」 ───────────────────────
-//
-// 2026-09-28 实测过一次教训：变异写成 `page.summary + ""` ——
-// JSON.stringify 之后两边一样，门禁照样绿，**而我差点读成「判据没盲区」**。
-// 那是形态「变异本身无效」。
 
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
@@ -120,6 +148,26 @@ const GATES = [
 ];
 
 const CASES = [
+  {
+    // ⚠️ 守着 2026-09-28 补的那条判据：`docs/content-negotiation.md` 的 MD 列
+    // 与实测一致。原先 `verify-negotiation.mjs` 的注释写着
+    // 「真实词表那组由 docs 里的表负责」——**而 docs 那侧零门禁**：
+    // 注释说「X 负责」而 X 那边没有检查，等于没有人负责。
+    why: 'verify:negotiation — docs 表格的 MD token 列被改',
+    file: 'docs/content-negotiation.md',
+    find: '2,852 / 2,965（−3.8%）',
+    replace: '2,999 / 2,965（−3.8%）',
+    target: 'verify-negotiation.mjs',
+  },
+  {
+    // ⚠️ 「取不到」与「都对」在结果上无法区分——删掉一行必须报，
+    // 而**不能**默认通过（形态四）。
+    why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',
+    file: 'docs/content-negotiation.md',
+    find: '> | /cjk-web-typography/ | 8,732 / 10,095（−13.5%） | 3,919 / 4,246（−7.7%） | 55.1% / **57.9%** |',
+    replace: '',
+    target: 'verify-negotiation.mjs',
+  },
   {
     // ⚠️ 这两条就是 2026-09-24 那个**真 bug** 的两半：
     // 提交把生产端升到 v2，同步器与测试固件都停在 1，

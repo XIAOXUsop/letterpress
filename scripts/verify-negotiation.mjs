@@ -1020,6 +1020,83 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
 }
 
 /**
+ * ── `docs/content-negotiation.md` 的 MD token 列必须等于实测 ────────────
+ *
+ * ⚠️ **2026-09-28 加。** 上一条判据的注释写着：
+ *
+ * > 真实词表那组由 `docs/content-negotiation.md` 里的表负责
+ * > （那张表量的是当次构建的产物，**刻意不进门禁**）。
+ *
+ * **那是一句悬空的职责声明**：它把一件事交给了 docs，而 docs 那侧**零门禁**。
+ * 注释说「负责」，而**没有任何东西会去核**。
+ *
+ * > **注释里说「X 负责」而 X 那边没有检查，等于没有人负责。**
+ * > 交接的双方都不验证，交接就成了丢弃。
+ *
+ * 而它是**可以核的**——`measured` 里已经有 MD 侧实测值（`t2`），
+ * 文档表格里的 MD 列就是同一批文本的同一次量。
+ * ⚠️ **只核 MD 侧，不核真实词表那一列**：那一列来自 `o200k_base`，
+ * 本仓库**没有装 tiktoken**（`package.json` 里没有），**无法重算**——
+ * 核不了的东西不能声称在核。
+ *
+ * ⚠️ **文档表格里取不到值时要红**，不能默认通过：
+ * 「取不到」与「都对」在结果上无法区分（形态四）。
+ */
+{
+  /*
+   * ⚠️ **用 `process.cwd()`，不要用 `import.meta.url`。**
+   *
+   * `npm run verify` 走 `bundle-and-verify.mjs`：esbuild 把脚本打成
+   * `node_modules/.cache/letterpress/verify.mjs` 再执行，于是
+   * `import.meta.url` 指向**缓存目录**，`../docs/…` 解析成
+   * `node_modules/.cache/docs/content-negotiation.md` → ENOENT。
+   *
+   * > **单跑 `node scripts/verify-negotiation.mjs` 是绿的，打包后红**——
+   * > 而 `verify:all` 跑的正是打包那条路。**本地那条绿不能代表门禁那条绿。**
+   * > 与 [[local_simulation_missing_semantics]] 同族：手敲的命令不是 CI 里的那条。
+   */
+  const docText = await readFile(join(process.cwd(), 'docs', 'content-negotiation.md'), 'utf8');
+  const mismatches = [];
+  let checked = 0;
+  for (const row of measured) {
+    // 表格行形如 `> | /markdown-for-agents/ | 6,750 / 7,530（−10.4%） | 2,852 / 2,965（−3.8%） | 57.7% / **60.6%** |`
+    // MD 列是第 3 列（`| 分过 → [0]是空、[1]是页、[2]是 HTML、[3]是 MD`）。
+    const line = docText.split('\n').find((l) => l.startsWith(`> | ${row.page}`));
+    if (!line) {
+      mismatches.push(`${row.page}：文档表格里找不到这一行——判据没跟上文档的改写`);
+      continue;
+    }
+    const cols = line.split('|');
+    const mdCol = cols[3] ?? '';
+    const claimed = /([\d,]+)\s*\/\s*([\d,]+)/.exec(mdCol.replace(/\*/g, ''));
+    if (!claimed) {
+      mismatches.push(`${row.page}：文档表格的 MD 列取不到「估算 / 真实」这一对数字`);
+      continue;
+    }
+    checked++;
+    const docMd = Number(claimed[1].replace(/,/g, ''));
+    if (docMd !== row.t2) {
+      mismatches.push(
+        `${row.page}：文档表格写 MD ${docMd}，实测 ${row.t2}`
+          + '（这一列量的是当次构建的产物，内容一改就会漂——**别手抄**）',
+      );
+    }
+  }
+  if (measured.length === 0) {
+    mismatches.push('`measured` 是空的——这条判据没检到任何东西（查不动 ≠ 通过）');
+  }
+  check(
+    mismatches.length === 0,
+    '`docs/content-negotiation.md` 表格的 MD token 列与实测一致',
+    mismatches.join('\n    '),
+  );
+  console.log(
+    `  ${mismatches.length === 0 ? '✓' : '✗'} docs 表格核了 ${checked}/${measured.length} 行的 MD 列`
+      + '（真实词表那列无法重算，刻意不核）',
+  );
+}
+
+/**
  * ── 文档一致性：手抄的快照必须等于这里数出来的数 ──────────────────────
  *
  * 脚本上方那段注释写得很清楚——「这类数字一旦靠手抄，就必然会漂，**而且漂了没有
