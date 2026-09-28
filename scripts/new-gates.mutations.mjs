@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的十道门禁的负向验证。**
+ * **2026-09-28 新增的十一道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
@@ -247,10 +247,30 @@ const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
-  'check-single-source.mjs',
+  'check-single-source.mjs', 'check-agents-doc.mjs',
 ];
 
 const CASES = [
+  {
+    // ⚠️ 这两条守着 2026-09-28 补的判据：AGENTS.md 那张「分三级」的规则表
+    // 必须与 lint.ts 的规则集**完全相同**。
+    // 此前那三类判据全是「**文档里这一句**还成立吗」，于是**没有一条问
+    // 「文档该说的都说了吗」**——而**缺的项永远不会触发「这一句还对吗」**。
+    // 实测的缺口：ambiguous-wikilink（**error** 级）与 ambiguous-title
+    // 不在任何面向人的文档里，而 agent 正是照这张表判断什么会让构建失败。
+    why: 'check:agents-doc — 规则表里漏掉一条（代码里有、表里没有）',
+    file: 'AGENTS.md',
+    find: '| 错误 | `ambiguous-wikilink` | 引用了一个**有歧义的标题**（两篇同名），无法确定指哪一篇 |\n',
+    replace: '',
+    target: 'check-agents-doc.mjs',
+  },
+  {
+    why: 'check:agents-doc — 规则表里多一条不存在的（表里有、代码里没有）',
+    file: 'AGENTS.md',
+    find: '| 提示 | `summary-too-long` |',
+    replace: '| 错误 | `nonexistent-rule` | 表里写了但代码里没有 |\n| 提示 | `summary-too-long` |',
+    target: 'check-agents-doc.mjs',
+  },
   {
     // ⚠️ 守着 2026-09-28 补的那条判据：`docs/content-negotiation.md` 的 MD 列
     // 与实测一致。原先 `verify-negotiation.mjs` 的注释写着

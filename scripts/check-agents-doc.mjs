@@ -217,6 +217,58 @@ if (claims('更不会被 `wiki:ask`', '「草稿不进 CLI 检索」')) {
   }
 }
 
+/*
+ * ── 第四条：那张「分三级」的规则表必须与 `lint.ts` 的规则集**完全相同** ──
+ *
+ * ⚠️ **2026-09-28 加。** 此前那三类判据都是「**文档里这一句**还成立吗」，
+ * 于是**没有一条问「文档该说的都说了吗」**。
+ *
+ * 实测的缺口：`ambiguous-wikilink`（**error** 级）与 `ambiguous-title`（warn 级）
+ * 两条规则**不在 `AGENTS.md`、不在 `README.md`、不在任何 `docs/`**——
+ * 只有 `knowledge/fixtures/README.md`（测试语料的说明）里有。
+ * 而那张表叫「**每次构建会跑体检**」、写着「分三级」——
+ * **漏掉的是 error 级那条**，agent 照它判断「什么会让构建失败」时会漏掉。
+ *
+ * > **「文档里说的还对吗」与「文档该说的都说了吗」是两个方向**，
+ * > 而**前者全绿不代表后者**——**缺的项永远不会触发「这一句还对吗」**。
+ *
+ * 判据是**集合相等**（不是「表里的每一条都存在」）：
+ * - 表里有、代码里没有 → 文档在教一条不存在的规则（已有的三类判据能抓）
+ * - **代码里有、表里没有 → 文档漏了一条规则（本条抓）**
+ */
+{
+  const lintSrc = readFileSync(join(ROOT, 'src', 'lib', 'wiki', 'lint.ts'), 'utf8');
+  const inCode = new Set([...lintSrc.matchAll(/rule: '([a-z-]+)'/g)].map((m) => m[1]));
+  // 表里那几行：`| 级别 | \`rule\` | 含义 |`
+  const inDoc = new Set(
+    [...doc.matchAll(/^\| (?:错误|警告|提示) \| `([a-z-]+)`/gm)].map((m) => m[1]),
+  );
+  const missing = [...inCode].filter((r) => !inDoc.has(r));
+  const extra = [...inDoc].filter((r) => !inCode.has(r));
+  for (const r of extra) {
+    problems.push(
+      `AGENTS.md 的规则表里有 \`${r}\`，而 \`lint.ts\` 里没有这条规则——`
+      + '**照着表改会被无视**。',
+    );
+    console.log(`  ✗ 规则表里的 ${r}：代码里不存在`);
+  }
+  for (const r of missing) {
+    problems.push(
+      `AGENTS.md 的规则表**漏了 \`${r}\`**（\`lint.ts\` 里有）。\n`
+      + '    → 那张表叫「每次构建会跑体检」并说「分三级」，**缺一条就不完整**；\n'
+      + '    而 agent 正是照着它判断「什么会让构建失败」——'
+      + '**2026-09-28 实测漏掉的是 `ambiguous-wikilink`（error 级）**。',
+    );
+    console.log(`  ✗ 规则表漏了 ${r}：代码里有，表里没有`);
+  }
+  if (missing.length === 0 && extra.length === 0) {
+    console.log(
+      `  ✓ 规则表与代码的规则集相同（${inCode.size} 条：`
+      + `${[...inCode].sort().join('、')}）`,
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
