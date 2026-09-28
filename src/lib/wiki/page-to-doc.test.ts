@@ -54,6 +54,26 @@ describe('pageToDoc', () => {
     expect(postKeys.length).toBe(wikiKeys.length - 2);
   });
 
+  /**
+   * ⚠️ **「键不出现」与「键在、值 undefined」在产物上没有区别。**
+   *
+   * 2026-09-28 我在注释里写「`JSON.stringify` 会不同、manifest 会不一致」——
+   * **那是夸大了**：实测两边序列化后**逐字节相同**，因为 `undefined` 的值
+   * 会被 `JSON.stringify` 丢掉。差别只在内存里那个对象的键集合。
+   *
+   * 这条断言把那个实测钉住，免得下次又照着错的前提往下推。
+   */
+  it('省略键与给 undefined 在 JSON 产物上完全相同——差别只在键集合', () => {
+    const noReview = { ...page };
+    delete (noReview as { review?: unknown }).review;
+    const doc = pageToDoc(noReview, { docKind: 'wiki' });
+    expect('review' in doc).toBe(false);
+    // 序列化后不含 review 键——这才是产物里看得见的
+    expect(JSON.parse(JSON.stringify(doc))).not.toHaveProperty('review');
+    // 而「键在、值 undefined」那种写法，序列化后也一样不含
+    expect(JSON.parse(JSON.stringify({ ...doc, review: undefined }))).not.toHaveProperty('review');
+  });
+
   it('关系用 declaredRelations，且默认取 page.related', () => {
     const withRelated = { ...page, related: ['x', 'y'] };
     expect(pageToDoc(withRelated, {}).declaredRelations).toEqual(['x', 'y']);

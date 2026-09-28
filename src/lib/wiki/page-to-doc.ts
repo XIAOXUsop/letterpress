@@ -157,14 +157,18 @@ export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
     summary: options.summary ?? page.summary ?? '',
     body: page.body,
     sources: page.sources,
-    // ⚠️ **`post` 的 `wikiKind` 与 `review` 整个键都不出现**——
-    // 与构建侧同一口径。
+    // ⚠️ **`post` 的 `wikiKind` 与 `review` 整个键都不出现**——与构建侧同一口径。
     //
-    // ⚠️ **而且是「键不出现」而不是「键在、值是 undefined」**：
-    // 两者用 `doc.wikiKind` 读起来一样，但 `Object.keys()` 与
-    // `JSON.stringify` 会不同——而 `content-manifest` 正是把 `Doc`
-    // 序列化出去的。`{ a: undefined }` 序列化成 `{}`，而 `hasOwnProperty`
-    // 也会说它有——**两处都会不一致**。
+    // ⚠️ **「键不出现」与「键在、值是 undefined」在 `JSON.stringify` 后完全相同**
+    // （`undefined` 的值被丢掉），而 `content-manifest.json` 正是这么产出的。
+    // 所以这条与构建侧在 `review` 上的写法差异（那边直接写 `review,`）
+    // **只影响 `Object.keys()` / `hasOwnProperty`，不影响任何产物**。
+    //
+    // > 2026-09-28 我一度把这个差异说成「两处都会不一致」——**那是夸大了**：
+    // > 实测两边序列化后逐字节相同。差别只在**内存里**那个对象的键集合。
+    //
+    // 那为什么还要统一？因为**键集合会被读**——`check-two-paths.mjs` 就读它，
+    // 而「同一约束散在多处、互为掩护」才是真正要治的（见上面的注释）。
     ...(isWiki ? { wikiKind: page.kind } : {}),
     ...(isWiki && review ? { review } : {}),
     // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
