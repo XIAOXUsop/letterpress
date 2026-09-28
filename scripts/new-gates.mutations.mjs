@@ -4,8 +4,8 @@
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那五道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
- * `check:adapter-size` / `check:not-a-demo`。
+ * 那六道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
+ * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists`。
  * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
  * 语料一扩、判据一改，遮住关系就变了。
  *
@@ -62,6 +62,25 @@ function mutate({ file, find, replace, target, why }) {
     return false;
   }
   writeFileSync(path, original.replace(find, replace), 'utf8');
+  /*
+   * ⚠️ **替换可能静默不发生。**
+   *
+   * 2026-09-28 一次：锚点写在一个**不存在**的 `export interface ReadPage` 上，
+   * 而 `String.replace` 找不到就原样返回——文件**根本没变**，
+   * 于是 `before.red` 是 false，本该被读成「门禁有盲区」。
+   * 真相是「变异压根没注入」。
+   *
+   * > **「绿」既可能是「它没看见」，也可能是「压根没被喂进去」——
+   * > 而这两种的输出完全一样。** 所以每次注入都必须先自证注入成功。
+   */
+  if (readFileSync(path, 'utf8') === original) {
+    problems.push(
+      `变异「${why}」的替换**没有生效**——写回去的内容与原文逐字相同。\n`
+      + '    → 「门禁仍然绿」在这种情形下**不能读成「它有盲区」**，它只是压根没被注入。',
+    );
+    console.log(`  ✗ ${why}：替换没生效，注入无效（结论不可用）`);
+    return false;
+  }
   const before = red(target);
   writeFileSync(path, original, 'utf8');
   const after = red(target);
@@ -94,7 +113,7 @@ function mutate({ file, find, replace, target, why }) {
 
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
-  'check-adapter-size.mjs', 'check-not-a-demo.mjs',
+  'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
 ];
 
 const CASES = [
@@ -154,6 +173,20 @@ const CASES = [
     find: "    '正文提到关系，但**不写** `[[乙]]`——那正是 frontmatter 声明的用处。',",
     replace: "    '见 [[乙]]。',",
     target: 'check-not-a-demo.mjs',
+  },
+  {
+    why: 'check:no-duplicate-lists — 同一个文件里把清单抄了第二份',
+    file: 'scripts/check-not-a-demo.mjs',
+    find: "const MUST_MATCH = ['slugs', 'broken', 'hasErrors', 'topHit']",
+    replace: "const MUST_MATCH = ['slugs', 'broken', 'hasErrors', 'topHit'];\nconst MUST_MATCH_COPY = ['slugs', 'broken', 'hasErrors', 'topHit'];",
+    target: 'check-no-duplicate-lists.mjs',
+  },
+  {
+    why: 'check:no-duplicate-lists — 把扫描根收窄（覆盖面变小却照样绿）',
+    file: 'scripts/check-no-duplicate-lists.mjs',
+    find: "const ROOT_DIRS = ['scripts', 'src'];",
+    replace: "const ROOT_DIRS = ['src'];",
+    target: 'check-no-duplicate-lists.mjs',
   },
   {
     why: 'check:adapter-size — 一行手工 Doc（行数不变，但是核心的完整复制）',
