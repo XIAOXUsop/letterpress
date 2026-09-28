@@ -40,8 +40,8 @@
  *
  * 用法：`npm run check:single-source`
  */
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative, sep, extname } from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 
 const ROOT = process.cwd();
 const SOURCE = join(ROOT, 'src', 'lib', 'content-manifest.ts');

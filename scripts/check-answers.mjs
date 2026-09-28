@@ -28,7 +28,7 @@
  *
  * 用法：`node scripts/check-answers.mjs`
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 import { readContentDirs } from '../src/lib/wiki/read-page.ts';

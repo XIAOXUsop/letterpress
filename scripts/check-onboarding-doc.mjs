@@ -23,7 +23,7 @@
  *
  * 用法：`npm run check:onboarding-doc`
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
@@ -340,6 +340,56 @@ checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount}
     const total = [...cliText.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)].length
       + [...readmeText.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)].length;
     console.log(`  ✓ 文档提到的 ${total} 处命令都真实存在`);
+  }
+}
+
+/*
+ * ── 第五条：「以后会引入 X」的话，X 现在到底在不在 ──────────────────
+ *
+ * ⚠️ **2026-09-29 实测到的一句真过时陈述。**
+ * `docs/content-sync.md` 原先写「**如果以后引入 Schema**，应把它作为
+ * 这条链路的补充」——而 **`public/content-manifest.schema.json` 已经在了**
+ * （`origin/main` 先落地，2026-09-29 合过来），`verify:migrate` 昨天还在用它。
+ *
+ * > **一句「以后会做」的话，在它变成「已经做了」之后仍留在文档里**，
+ * > **而没有任何东西会发现**——因为它**语法正确、语气笃定**。
+ * > 与「文档里的实测数字也是断言」同族，**但更难**：
+ * > 数字至少能被正则抓到，而**「以后会」是个语义承诺**。
+ *
+ * 判据：扫出「如果以后引入/添加 X」这类措辞，**逐个查 X 现在在不在**。
+ * ⚠️ **「在」的定义要具体**——这里用「有个同名文件」（仓库里能落地的东西
+ * 通常有文件）。而**判据太宽会误报**（谈「以后引入向量库」不需要有那个库），
+ * 所以**只对登记在 `PROMISED` 里的那几条查**。
+ */
+{
+  const PROMISED = new Map([
+    ['public/content-manifest.schema.json', '内容清单的 JSON Schema（已在 `public/`）'],
+  ]);
+  const docs = readdirSync(join(ROOT, 'docs')).filter((f) => f.endsWith('.md'));
+  let promisedHits = 0;
+  for (const name of [...docs.map((d) => join('docs', d)), join(ROOT, 'README.md')]) {
+    const full = join(ROOT, name);
+    if (!existsSync(full)) continue;
+    const body = readFileSync(full, 'utf8');
+    for (const [path, what] of PROMISED) {
+      if (!new RegExp(`(如果以后引入|以后引入|将来引入)[^。]{0,20}${path.split('/').pop()?.replace(/\./g, '\\.')}`, 'i').test(body)) {
+        continue;
+      }
+      promisedHits++;
+      if (existsSync(join(ROOT, path))) {
+        problems.push(
+          `${name} 里写着「以后会引入 ${what}」——**而它已经在了**`
+          + `（\`${path}\`）。\n`
+          + '    → 一句「以后会做」的话，在它变成「已经做了」之后仍留在文档里，'
+          + '**而没有任何东西会发现**——它语法正确、语气笃定。\n'
+          + '    把它改成陈述现在的事实。',
+        );
+        console.log(`  ✗ ${name}：说「以后会引入 ${what}」，而它已经在了`);
+      }
+    }
+  }
+  if (promisedHits === 0) {
+    console.log(`  ✓ 没有「以后会引入 X」而 X 已经在仓库里的陈述（查了 ${PROMISED.size} 条）`);
   }
 }
 

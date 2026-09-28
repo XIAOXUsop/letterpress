@@ -344,6 +344,19 @@ const GATES = [
 
 const CASES = [
   {
+    // ⚠️ 守着 2026-09-29 加的那条：**「以后会引入 X」而 X 已经在仓库里**。
+    // `docs/content-sync.md` 原先写「如果以后引入 Schema」——
+    // 而 `public/content-manifest.schema.json` 已经到了（`verify:migrate` 昨天还在用）。
+    //
+    // > 一句「以后会做」的话，在它变成「已经做了」之后仍留在文档里，
+    // > **而没有任何东西会发现**——它语法正确、语气笃定。
+    why: 'check:onboarding-doc — 文档说「以后会引入 Schema」而它已经在了',
+    file: 'docs/content-sync.md',
+    find: '仓库现已提供',
+    replace: '如果以后引入 content-manifest.schema.json，仓库尚未提供',
+    target: 'check-onboarding-doc.mjs',
+  },
+  {
     // ⚠️ 守着 2026-09-29 那条**generalize 后**的判据：扫所有 scripts/*.mjs，
     // 凡是自己 readdirSync 一个内容目录的都要登记理由。
     // **不给 `wiki-ask` 单独写**——一个个补，下一个自建循环照样能溜进来。

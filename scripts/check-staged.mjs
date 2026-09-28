@@ -31,7 +31,6 @@
  * 用法：`npm run check:staged`（也挂在 `verify:all` 末尾）
  */
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
 
 const ROOT = process.cwd();
 
