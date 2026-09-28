@@ -99,13 +99,15 @@ try {
 const checks = [
   ['title', page.title === SCALAR_FIELDS.title],
   ['slug', page.slug === SCALAR_FIELDS.slug],
-  ['summary', (page.summary ?? '') !== ''],
+  ['summary', page.summary === SCALAR_FIELDS.summary],
   ['updated', page.updated === SCALAR_FIELDS.updated],
   ['date', page.date === SCALAR_FIELDS.date],
   ['kind', page.kind === SCALAR_FIELDS.kind],
   ['draft', page.draft === false],
   ['related', page.related.length === 1 && page.related[0] === 'field-probe-b'],
-  ['tags', page.tags.length === 2 && page.tags.includes('排版')],
+  // ⚠️ 第一版只查 includes('排版')——**第二个元素没被看**。
+  // 「切出 2 个、第一个对」与「两个都对」在输出里一样。
+  ['tags', JSON.stringify(page.tags) === JSON.stringify(['排版', 'css'])],
   ['sources', page.sources.length === 1 && page.sources[0].sourceId === 'probe-source'],
   ['review', page.review?.status === 'reviewed' && page.review?.checkedAt === '2026-01-03'],
   ['original', page.original?.reason === '本站自己的约定'],
