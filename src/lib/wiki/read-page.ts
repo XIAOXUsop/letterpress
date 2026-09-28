@@ -165,17 +165,33 @@ export function readContentPage(dir: string, file: string): {
     updated: frontmatterField(source, 'updated') ?? '',
     sources: refs,
     ...(review ? { review } : {}),
-    // ⚠️ 必须先剥方括号：`frontmatterField` 返回**原始字符串**，
-    // `related: [a, b]` 拿到的是 `"[a, b]"`。不剥的话第一项变成 `"[a"`，
-    // **所有关系都解析不出来**——症状是「候选页全空」而不是报错。
-    related: (frontmatterField(source, 'related') ?? '')
-      .replace(/^\[/, '')
-      .replace(/\]$/, '')
-      .split(/[、,，]/)
-      .map((s) => s.trim())
-      .filter(Boolean),
+    related: relationList(source, 'related'),
     body,
   };
+}
+
+/**
+ * 读一个**关系列表**字段（`related:` / 站点自己的 `audience:` …）。
+ *
+ * ⚠️ **2026-09-28 抽出来的。** 原先这段解析只存在于 `readContentPage` 里，
+ * 于是**站点把字段改名就得把同样的逻辑重写一遍**——
+ * 而「剥方括号」那一行是最容易漏的：不剥的话 `related: [a, b]` 拿到
+ * `"[a, b]"`，第一项变成 `"[a"`，**所有关系都解析不出来**，
+ * 症状是「候选页全空」而不是报错。
+ *
+ * > 阶段 4 第 1 项要消除的正是这种重复。而**重写解析逻辑比换个字段名贵得多**——
+ * > 所以它该在核心里，站点只负责告诉核心**字段叫什么**。
+ *
+ * @param field 字段名。本站叫 `related`，别的站点可以叫 `audience`。
+ */
+export function relationList(source: string, field: string): string[] {
+  return (frontmatterField(source, field) ?? '')
+    // ⚠️ 必须先剥方括号：`frontmatterField` 返回**原始字符串**。
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .split(/[、,，]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**

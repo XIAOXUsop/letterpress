@@ -54,7 +54,7 @@ import { join } from 'node:path';
 import { buildGraph } from '../src/lib/wiki/graph.ts';
 import { lint } from '../src/lib/wiki/lint.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
-import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { readContentPage, relationList } from '../src/lib/wiki/read-page.ts';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { resolveSlug } from '../src/lib/wiki/slug.ts';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
@@ -91,15 +91,15 @@ const pages = files.map((file) => {
   return {
     page,
     summary: frontmatterField(source, 'summary') ?? '',
-    // ⚠️ **这 5 行是这个适配层里唯一「站点专属」的部分。**
-    // 站点把关系声明叫 `audience`，核心只认 `related`。
-    // 其余的接线（补 summary、拼 Doc、填显式字段）由 `pageToDoc` 提供——
-    // **那不是适配，是每站都要重写一遍的接线**（迭代 AS 实测：27 行里 22 行是它）。
-    audience: (frontmatterField(source, 'audience') ?? '')
-      .replace(/^\[|\]$/g, '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    // ⚠️ **这个适配层现在只剩「字段叫什么」这一件事。**
+    // `audience:` 是**这个站点自己的字段名**，核心只认 `related`。
+    //
+    // **2026-09-28**：原先这里是 5 行手写解析（剥方括号 + 按分隔符切），
+    // 而 `readContentPage` 内部有**一模一样的一段**——站点改个字段名
+    // 就得把解析逻辑重写一遍，而「剥方括号」那行恰恰是最容易漏的
+    // （漏了不报错，只是所有关系都解析不出来）。
+    // 现在两处共用 `relationList`，核心只多一个参数：**字段名**。
+    audience: relationList(source, 'audience'),
   };
 });
 

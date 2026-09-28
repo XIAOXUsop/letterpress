@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readContentDirs, readContentPage } from './read-page.js';
+import { readContentDirs, readContentPage, relationList } from './read-page.js';
 
 /**
  * `read-page.ts` 此前**没有自己的测试文件**——
@@ -243,6 +243,44 @@ describe('readContentPage', () => {
         { sourceId: 'css-values-4', revision: 'WD-20240312', locator: '§5.1.1 长度单位 · ch' },
         { sourceId: 'other', revision: '', locator: '' },
       ]);
+    });
+  });
+
+  describe('relationList', () => {
+    /**
+     * ⚠️ **2026-09-28 变异验证逼出来的。**
+     *
+     * 我把 `relationList` 里「剥方括号」那两行删掉，跑了三道门禁：
+     * `verify:second-site-real` **绿**、`verify:questions` **绿**。
+     * 原因是那些语料的关系都**含分隔符**（`[a, b]`），
+     * 所以不剥括号 `split` 照样切得对——**只有单元素时才坏**。
+     *
+     * > 「实测过」与「**每条路径都被量到**」是两件事。
+     * > 而这个形状就是本项目记录在案的「空集合通过」——
+     * > 这里不是集合空，是**被测的那条路径没出现在语料里**。
+     */
+    it('单元素也要剥掉方括号——`[a]` 不该得到 `[a`', () => {
+      const src = '---\nrelated: [只一个]\n---\n\n正文。\n';
+      expect(relationList(src, 'related')).toEqual(['只一个']);
+    });
+
+    it('多元素：方括号 + 多种分隔符都能切', () => {
+      const src = '---\nrelated: [甲、乙, 丙]\n---\n\n正文。\n';
+      expect(relationList(src, 'related')).toEqual(['甲', '乙', '丙']);
+    });
+
+    it('字段不存在时是空数组，不是含空串的数组', () => {
+      // 含空串会让关系图里出现一个指向「」的边——
+      // 而它的症状是「有一条说不清来路的孤儿边」，极难定位。
+      expect(relationList('---\ntitle: 甲\n---\n\n正文。\n', 'related')).toEqual([]);
+    });
+
+    it('**字段名是参数**——同一个站点换个字段名就复用它', () => {
+      // 这正是它从 readContentPage 里抽出来的理由：
+      // 异构站点把关系声明叫 `audience`，而**解析逻辑不该重写一遍**。
+      const src = '---\naudience: [甲, 乙]\nrelated: [丙]\n---\n\n正文。\n';
+      expect(relationList(src, 'audience')).toEqual(['甲', '乙']);
+      expect(relationList(src, 'related')).toEqual(['丙']);
     });
   });
 
