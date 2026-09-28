@@ -571,14 +571,14 @@ const CASES = [
     target: 'check-field-coverage.mjs',
   },
   {
-    why: `check:agents-coverage — 某类声明「无门禁认领」（空白归属比错的归属更隐蔽）`,
+    why: 'check:agents-coverage — 某类声明「无门��认领」（空白归属比错的归属更隐蔽）',
     file: 'scripts/check-agents-coverage.mjs',
     find: "    gate: 'check:field-coverage',",
     replace: "    gate: null, // MUTATION：这一类无门禁认领",
     target: 'check-agents-coverage.mjs',
   },
   {
-    why: `check:agents-coverage — OWNERS 说某道门禁核它，而那个门禁不存在（「已核」是自己说的）`,
+    why: 'check:agents-coverage — OWNERS 说某道门禁核它，而那个门禁不存在（「已核」是自己说的）',
     file: 'scripts/check-agents-coverage.mjs',
     find: "gate: 'check:onboarding-doc', why: '命令名' },",
     replace: "gate: 'check:nonexistent-gate', why: '命令名' },",
@@ -875,6 +875,7 @@ const CASES = [
      * > 而这条门禁的全部价值就在后者。
      */
     why: 'check:two-paths — 构建侧少一处判定（基准 4 → 3，必须报而不是「正常」）',
+    covers: ['①'],
     file: 'src/lib/content.ts',
     find: ANCHOR2(),
     replace: ANCHOR2_TAIL,
@@ -1362,6 +1363,7 @@ const CASES = [
   },
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
+    covers: ['②'],
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",
     replace: 'declaredRelations: options.relations ?? page.related,',
@@ -1369,6 +1371,7 @@ const CASES = [
   },
   {
     why: 'check:two-paths — post 侧不再丢 wikiKind',
+    covers: ['②'],
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "...(isWiki ? { wikiKind: page.kind } : {}),",
     replace: '...({ wikiKind: page.kind }),',
@@ -1376,6 +1379,7 @@ const CASES = [
   },
   {
     why: 'check:two-paths — 读路径不再读 draft（草稿会进图）',
+    covers: ['④'],
     file: 'src/lib/wiki/read-page.ts',
     // 用正则：那一行含 `$` 与 `|`，用字符串 find 会与「锚点唯一」判定打架
     find: 'draft: /^(true|yes|on)$/i.test',
@@ -1510,6 +1514,41 @@ if (problems.length > 0) {
 console.log(`  ✓ 干净状态下 ${GATES.length} 道门禁全绿\n`);
 
 if (Math.random() < 0) {}
+/*
+ * ⚠️ **每条变异必须齐五个字段——而这五个字段本身就是判据。**
+ *
+ * 2026-09-29 实测：`check-agents-coverage` 的两条变异把 `why` 写成
+ * **反引号模板串**，而 `mutate()` 不检查 `why` 存不存在——
+ * **所以「为什么做这条变异」这件事一直没有守卫**。
+ * 而它**恰恰是「判据 ↔ 变异」对应关系的唯一说明**：
+ * `covers` 是结构化登记，`why` 是给人读的理由，**两者都缺就等于那条变异没被交代**。
+ *
+ * > **「所有条目都有理由」与「理由是空字符串」在输出上完全一样**——
+ * > 而「字段缺失」连输出都没有。
+ *
+ * ⚠️ **而 `covers` 刻意不要求每条都有**：
+ * 只有**有编号判据**的门禁才需要它（其余是 CLI 契约 / 迁移类变异，
+ * 它们的对应关系由 `why` 承担）。
+ */
+{
+  const REQUIRED = ['why', 'file', 'find', 'replace', 'target'];
+  const bad = [];
+  CASES.forEach((c, i) => {
+    const missing = REQUIRED.filter((k) => c?.[k] === undefined);
+    if (missing.length > 0) bad.push(`第 ${i + 1} 条缺 ${missing.join('、')}`);
+  });
+  if (bad.length > 0) {
+    problems.push(
+      `**有 ${bad.length} 条变异缺必要字段**：\n`
+      + bad.map((b) => `        ${b}`).join('\n') + '\n'
+      + '    → `why` 是「判据 ↔ 变异」对应关系的**唯一说明**，而它缺了**连输出都没有**。',
+    );
+    console.log(`  ✗ ${bad.length} 条变异缺字段`);
+  } else {
+    console.log(`  ✓ ${CASES.length} 条变异都齐五个字段`);
+  }
+}
+
 let ok = 0;
 for (const c of CASES) if (mutate(c)) ok++;
 console.log(`\n${ok}/${CASES.length} 条变异都被抓住。`);
