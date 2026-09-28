@@ -156,6 +156,13 @@ const CASES = [
     target: 'check-not-a-demo.mjs',
   },
   {
+    why: 'check:adapter-size — 一行手工 Doc（行数不变，但是核心的完整复制）',
+    file: 'scripts/check-second-site-real.mjs',
+    find: 'const docs = pages.map((page) => pageToDoc(page));',
+    replace: 'const docs = pages.map((page) => ({ kind: "wiki", slug: page.slug, title: page.title, summary: page.summary ?? "", body: page.body, sources: page.sources, declaredRelations: page.related, explicitSlug: page.explicitSlug, draft: page.draft, wikiKind: page.kind }));',
+    target: 'check-adapter-size.mjs',
+  },
+  {
     why: 'check:adapter-size — 映射层多写一行手写接线',
     file: 'scripts/check-second-site-real.mjs',
     find: 'const docs = pages.map((page) => pageToDoc(page));',
@@ -172,7 +179,11 @@ const CASES = [
 ];
 
 // 先确认全部干净（干净状态下不该有任何一条红）
-for (const t of ['check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs', 'check-adapter-size.mjs', 'check-not-a-demo.mjs']) {
+//
+// ⚠️ **用 `GATES` 遍历，不要再写一份字面量**——2026-09-28 加第 5 道门禁时
+// 忘了同步这里，于是「干净态检查」漏掉一道（而它仍是绿的，看起来没事）。
+// **清单写两遍 = 迟早漏一处**，同形态今天已犯四次。
+for (const t of GATES) {
   const r = red(t);
   if (r.red) {
     problems.push(`干净状态下 ${t} 就是红的——先修那个，本轮验证没有意义`);

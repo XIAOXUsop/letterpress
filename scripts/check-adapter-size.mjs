@@ -128,10 +128,51 @@ if (missing.length > 0) {
   console.log(`  ✓ 仍调用核心的 ${REQUIRED_CORE_CALLS.join(' / ')}`);
 }
 
+/*
+ * ── 第三条：映射层里**不得有「自己算一遍」** ─────────────────────────
+ *
+ * 行数是**代理**：`const docs = pages.map(p => ({ ...18 个字段自己填 }))`
+ * 只有一行，而它是**核心行为的完整复制**。
+ * 而第 4 条问的正是「**减少重复维护**」——那是关于**不重复实现**的，
+ * 不是关于行数的。
+ *
+ * 所以判据是：**映射层里每一行要么调用核心，要么只是读站点事实**，
+ * 不得出现「把核心里已有的逻辑又写一遍」。
+ *
+ * 怎么判「自己算一遍」？**看它有没有在调核心**，以及
+ * **它有没有在造核心的输出形状**（`{ kind: …, declaredRelations: … }` 这类
+ * 手工的对象字面量——那就是把 `pageToDoc` 又抄了一遍）。
+ */
+const HAND_ROLLED = [
+  // 手工构造 Doc 的字段——那是 `pageToDoc` 的复制品
+  /\bdeclaredRelations\s*:/,
+  /\bwikiKind\s*:/,
+  /\bexplicitSlug\s*:/,
+  // 自己算关系（`related` 的切分逻辑在核心里）
+  /\.replace\(\/\^\\\[/,
+  /\.split\(\/[、,，]\//,
+];
+const handRolled = codeLines.filter((l) => HAND_ROLLED.some((re) => re.test(l)));
+if (handRolled.length > 0) {
+  problems.push(
+    `映射层里有**手工重造核心输出**的写法（${handRolled.length} 行）：\n`
+    + handRolled.map((l) => `      ${l}`).join('\n') + '\n'
+    + '    那不是「站点专属接线」，那是**核心行为的复制**——\n'
+    + '    而第 4 条问的正是「减少重复维护」，**不是行数少**。\n'
+    + '    一行也能是完整的复制（本条就是为了它加的）。',
+  );
+  console.log(`  ✗ 映射层里有 ${handRolled.length} 行在手工重造核心输出`);
+} else {
+  console.log('  ✓ 映射层里没有「自己算一遍」——每一行都在调用核心或读站点事实');
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);
   console.log(`\n${problems.length} 处。\n`);
   process.exit(1);
 }
-console.log('\n站点专属接线只剩「站点事实」，核心每多收走一块它就少一行。\n');
+console.log(
+  '\n站点专属接线只剩「站点事实」，核心每多收走一块它就少一行；\n'
+  + '而它里面**没有核心行为的复制**——那才是「减少维护」的字面意思。\n',
+);
