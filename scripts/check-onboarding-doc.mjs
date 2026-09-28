@@ -113,11 +113,68 @@ function bool(cellText) {
   return /true/i.test(s) ? true : /false/i.test(s) ? false : null;
 }
 
-/** 一格一格地核：文档里没有就红（而不是拿默认值蒙过去）。 */
+/**
+ * 按 `label` 反查它在表格里那一格的**原文**（供诊断区分「占位」与「没写」）。
+ *
+ * ⚠️ **查不到就返回 `null` 而不是猜**——而「查不到」本身也是一条诊断
+ * （说明那一行不见了），所以它有第三种说法。
+ */
+const LABEL_TO_ROW = new Map([
+  ['只读 wiki 的页数', '| **只读 `wiki`**'],
+  ['只读 wiki 的断链数', '| **只读 `wiki`**'],
+  ['只读 wiki 的 hasErrors', '| **只读 `wiki`**'],
+  ['两目录齐读的页数', '| **`wiki` + `posts`**'],
+  ['两目录齐读的断链数', '| **`wiki` + `posts`**'],
+  ['两目录齐读的 hasErrors', '| **`wiki` + `posts`**'],
+  ['`summary` 留空时 lint 条数', '| `\'\'`（不传）'],
+  ['补上 summary 后 lint 条数', '| 从 frontmatter 读'],
+]);
+/** 每个 label 对应哪一列（与上面那些调用点的列号一致）。 */
+const LABEL_TO_COL = new Map([
+  ['只读 wiki 的页数', 2], ['只读 wiki 的断链数', 3], ['只读 wiki 的 hasErrors', 5],
+  ['两目录齐读的页数', 2], ['两目录齐读的断链数', 3], ['两目录齐读的 hasErrors', 5],
+  ['`summary` 留空时 lint 条数', 2], ['补上 summary 后 lint 条数', 2],
+]);
+function rawCellFor(label) {
+  const row = LABEL_TO_ROW.get(label);
+  const col = LABEL_TO_COL.get(label);
+  if (!row || col === undefined) return null;
+  return cell(row, col);
+}
+
+/**
+ * 一格一格地核：文档里没有就红（而不是拿默认值蒙过去）。
+ *
+ * ⚠️ **2026-09-29：诊断从「取不到值」细分成两种。**
+ *
+ * 原来只说「文档表格里找不到这个数字——判据没跟上文档的改写」，
+ * 而**那一句把两种处置相反的情况合并了**：
+ * ① **那一格是占位**（`—` / `无` / `（略）`）→ 这里**本来就不该有数**
+ * ② **那一格没写**（表格被改写、或整行不见了）→ **漏了**
+ *
+ * > **两者都该让人看一眼，但看到「判据过时」就去改判据的人会改错东西**——
+ * > 而真正要改的可能是文档那一格。
+ *
+ * 做法：**多带一个「那一格的原文」**，据它区分。
+ * ⚠️ **不改动 8 个调用点**——那正是我上一次用正则批量改时把两个调用点改坏的地方。
+ */
 function checkRow(label, fromDoc, measured) {
   if (fromDoc === null || fromDoc === undefined) {
-    problems.push(`文档表格里找不到「${label}」的数字——判据没跟上文档的改写`);
-    console.log(`  ✗ ${label}：文档表格里取不到这个值`);
+    // 找回来那一格到底写了什么：按 label 反查它在表格里的原文。
+    // ⚠️ **查不到就退回去说「没有值」**——**不猜**。
+    const raw = rawCellFor(label);
+    const looksPlaceholder = raw !== null && raw !== '' && !/\d/.test(raw.replace(/[`*]/g, ''));
+    const how = looksPlaceholder
+      ? `那一格写的是 \`${raw}\`（**没有数字**）——要么那里本来就不该有数，要么该把数写进去`
+      : (raw === null
+        ? '表格里找不到对应的那一行（它可能被改写或删了）'
+        : '那一格是空的');
+    problems.push(
+      `文档表格里找不到「${label}」的数字：${how}。\n`
+      + '    → 两种情况处置相反：**占位**是「这里本就不该有数」，**没写**是「漏了」。'
+      + '别一律当成「判据过时」去改判据。',
+    );
+    console.log(`  ✗ ${label}：文档表格里取不到这个值（${how}）`);
     return;
   }
   if (String(fromDoc) !== String(measured)) {
