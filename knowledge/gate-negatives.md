@@ -78,6 +78,40 @@
 `::error::以下门禁在 CI 上是红的： check:onboarding-doc`、退出码 1、
 **21 步全部执行完**（证明失败不提前终止）。
 
+## `verify:migrate` 靠「别人已经建过目录」而绿（2026-09-28）
+
+CI 上「知识层门禁（子进程）」连续三次红。定位过程本身值得记：
+
+1. **读不到失败详情**：job 日志要 admin 权限（匿名 API `403 Must have admin rights`）；
+   `::error::` 只出现在日志里、不映射到 check annotation；
+   `GITHUB_STEP_SUMMARY` 的内容也不在 check-run output 里。
+   **唯一匿名可读的是「哪个 step 红了」**。
+2. 靠这一点把 21 道拆成两个 job（纯计算 / 起子进程）→ 定位到子进程组；
+   再把 8 道拆成 8 个 step → 定位到 `verify:migrate`；
+   再把 5 条坏法拆成 5 个 step（为此给脚本加 `--only N`）→ **定位到第 ① 条「缺 id」**。
+3. 已排除且**都不是**原因：单独跑绿、组合跑绿、`full-gates` 的 `verify:all` 里也绿、
+   `.verify/` 被 gitignore、无 locale / 排序 / 时区依赖、
+   从 git 对象读的字节与工作区逐字节相同、`e.stdout`/`e.stderr` 实测都是 string。
+
+**根因**：`TMP = .verify/manifest-mutated.json`，而脚本**从不建那个目录**。
+`.verify/` 在 `.gitignore` 里，所以：
+
+| 环境 | `.verify/` 在吗 | 结果 |
+|---|---|---|
+| 本地 | 在（**别的门禁留下的**） | 绿 |
+| CI 全新 checkout | **不在** | `ENOENT` → 红 |
+| `full-gates` 的 `verify:all` | 在（第 5 步 `verify:testcount` 刚写过报告） | 绿 |
+
+> **同一批门禁，因为前面的步骤做过什么而结果不同。**
+> 而「本地绿、CI 红」这个症状指向的却是「平台差异」——方向完全错。
+
+修法是一行 `mkdirSync(…, { recursive: true })`（已存在时不报错，不改变任何已有行为）。
+**变异验证**：删掉 `.verify/` 后绿；撤掉 `mkdirSync` 后红（退出码 1）。
+
+⚠️ 这一条与 [[comment_planned_not_implemented]] 是同一个家族：
+**依赖一个没人声明的前置条件**。区别是那次写在注释里，
+这次**连注释都没有**——它只是「碰巧在本地成立」。
+
 ## 「接了线」不等于「线通了」——`full-gates` job 生下来就是红的（2026-09-28）
 
 `origin/test` 上有一个 2026-09-26 的提交 `4f75c77`「ci: 在 test 分支运行完整门禁」，

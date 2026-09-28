@@ -23,7 +23,7 @@
  * 跑法：`node scripts/migrate-manifest.mutations.mjs`
  * 退出码 0 = 五次都真的报出了精确诊断。
  */
-import { readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -36,6 +36,24 @@ const DIR = join(ROOT, 'knowledge/fixtures');
 const SRC = join(DIR, 'manifest-v1.json');
 const SCRIPT = join(ROOT, 'scripts/migrate-manifest.mjs');
 const TMP = join(ROOT, '.verify/manifest-mutated.json');
+
+/*
+ * ⚠️ **2026-09-28 修：这个目录原先靠「别人已经建过」而存在。**
+ *
+ * `.verify/` 在 `.gitignore` 里，所以**全新 checkout 上它不存在**——
+ * `writeFileSync(TMP, …)` 直接 `ENOENT`，第 1 条坏法就红。
+ *
+ * > 症状极具欺骗性：**本地绿、CI 红**，而且**只在 CI 全新 checkout 上红**。
+ * > 而 `full-gates`（`verify:all`）里它绿——因为第 5 步 `verify:testcount`
+ * > 刚往 `.verify/` 写过报告，**目录已经在了**。
+ * >
+ * > 也就是说：**同一批门禁，因为前面的步骤做过什么而结果不同。**
+ * > 本地也复现得了：`.verify/` 存在时绿、删掉时红。
+ *
+ * `mkdirSync(..., { recursive: true })` 在已存在时**不报错**，
+ * 所以这行不改变任何已有行为，只是让它不再依赖别人的副作用。
+ */
+mkdirSync(join(ROOT, '.verify'), { recursive: true });
 
 const runMigrate = () => {
   try {
