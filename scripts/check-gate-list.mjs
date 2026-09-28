@@ -483,8 +483,24 @@ const GATES_WITH_MUTATIONS = [
   { gate: 'scripts/check-site-agnostic.mjs', mutations: 'scripts/site-agnostic.mutations.mjs' },
 ];
 
+/**
+ * 4b 那一节的标题。
+ *
+ * ⚠️ **它是被 4h 核的那个对象**——所以**必须只有一处**。
+ * 第一版它在 `console.log` 里写一遍、在 4h 里又抄一遍，
+ * **而 4h 核的是「它有没有写明范围」**——
+ * **同一句话写两遍，改一处就核到的是另一处**（形态八）。
+ *
+ * ⚠️ **而这个字符串本身是被改过的**：原话是
+ * 「负向验证是否覆盖了被测门禁的**每一项**判据」，
+ * 而实测它只遍历一张**只有一道**的登记表——
+ * **「标题声称的范围」与「实际核到的范围」在输出上完全一样**。
+ */
+const SECTION_4B_TITLE =
+  '负向验证是否覆盖了**有 REQUIREMENTS 式清单的**门禁的每一项判据';
+
 console.log('');
-console.log('负向验证是否覆盖了被测门禁的每一项判据');
+console.log(SECTION_4B_TITLE);
 console.log('─'.repeat(64));
 
 for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
@@ -494,7 +510,27 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
   // 判据条数 = `mustMatch: [` 的个数（每条判据一个）
   const criteria = (gateText.match(/mustMatch: \[/g) ?? []).length;
   if (criteria === 0) {
-    console.log(`  – ${gate}：没有 REQUIREMENTS 式的判据清单，跳过`);
+    /*
+     * ⚠️⚠️ **2026-09-29 改了这一行的说法，而原说法在骗人。**
+     *
+     * 原来打印 `  – …：没有 REQUIREMENTS 式的判据清单，跳过`——
+     * **一个 `–`，与上面那些 `✓` 只差一个符号**，
+     * 而「没核」与「核过了」在语义上完全不同。
+     *
+     * > **「跳过」与「已核」在输出上几乎一样**（形态四的变体）——
+     * > 而这一行是**唯一**会打「跳过」的地方。
+     *
+     * 现在改成明说：**本检查核不到它，而它由 4c 核**——
+     * 4c 逐道问「有没有变异脚本覆盖 / 台账里有没有一行 / 登记过理由」，
+     * **那是对每一道都问的**（本轮实测：编排里 44 道，4c 逐道给出去向）。
+     *
+     * ⚠️ 而**「4c 会核它」这件事必须写出来**——
+     * 不然读者看到「跳过」只会以为**没人管它**。
+     */
+    console.log(
+      `  – ${gate}：本检查核不到它（没有 \`mustMatch: [\` 式的判据清单，`
+      + '数那些 `if` 不可信）；**它由 4c 核**——「有没有变异脚本覆盖它」',
+    );
     continue;
   }
   const mutPath = join(ROOT, mutations);
@@ -1229,6 +1265,61 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
           `    实际是：${expectedNames.join(' → ')}`,
       );
     }
+  }
+}
+
+/*
+ * ── 4h. 4b 的**声称范围**必须与它实际核到的一致 ────────────────────────
+ *
+ * ⚠️ **2026-09-29 实测：4b 的标题在骗人。**
+ *
+ * 它打印的是「负向验证是否覆盖了被测门禁的每一项判据」——
+ * 而它的循环只遍历 `GATES_WITH_MUTATIONS`，**实测那张表里只有一道**
+ * （`check-site-agnostic`）。量出来：
+ *
+ * - 有 `mustMatch: [` 式清单的（4b 能核）：**2 个**（`check-gate-list`、`check-site-agnostic`）
+ * - 没有清单的（4b 那个出口）：**46 个**
+ *
+ * > **「标题声称的范围」与「实际核到的范围」在输出上完全一样**——
+ * > 读者读到「每一项判据」，会以为那 46 个平铺 `problems.push` 的脚本
+ * > 也被核过了。**而它们一次都没进过那个循环。**
+ *
+ * 所以判据：**4b 的标题里若出现「每一项」/「所有」这类全称词，
+ * 而它遍历的登记表门禁数 < 编排里的门禁数，就必须写明差在哪。**
+ *
+ * ⚠️ **而 4c 才是逐道核的那一道**（编排里 44 道它逐道给出去向）——
+ * **所以这不是「没人管」，而是「管它的不是这一道」**，
+ * **而那句话必须写在输出里**，否则读者以为那 46 个没人管。
+ */
+{
+  const title = SECTION_4B_TITLE;
+  const registered = GATES_WITH_MUTATIONS.length;
+  const orchestration = new Set(
+    steps
+      .map((s) => /^npm run ([\w:-]+)$/.exec(s)?.[1])
+      .filter(Boolean)
+      .map((c) => (/node (scripts\/[\w.-]+\.mjs)/.exec(scripts[c] ?? '') ?? [])[1])
+      .filter(Boolean)
+      .filter((f) => !f.includes('mutations')),
+  ).size;
+
+  console.log('');
+  console.log('4b 的声称范围（4h）');
+  console.log('─'.repeat(64));
+  const namesOut = /没有 .*式清单|有 REQUIREMENTS/.test(title);
+  if (registered < orchestration && !namesOut) {
+    problems.push(
+      `4b 的标题声称核「每一项判据」，而它只遍历 ${registered} 道`
+      + `（编排里有 ${orchestration} 道脚本门禁）。\n`
+      + '    → **「标题声称的范围」与「实际核到的范围」在输出上完全一样**，\n'
+      + '    而读者读到「每一项」会以为那些平铺 `problems.push` 的脚本也核过了。\n'
+      + '    → 而 **4c 才是逐道核的那一道**——所以那句话必须写明。',
+    );
+    console.log(`  ✗ 4b 声称「每一项」而只遍历 ${registered}/${orchestration} 道`);
+  } else {
+    console.log(`  ✓ 4b 的标题已写明它只核「有 REQUIREMENTS 式清单的」那些（${registered} 道，编排里共 ${orchestration} 道）`);
+    console.log(`    ⚠️ 而**其余 ${orchestration - registered} 道由 4c 逐道核**（有没有变异脚本覆盖 / 台账里有没有一行 / 登记过理由）——`);
+    console.log('    **「本检查核不到」与「没人管」不是一回事。**');
   }
 }
 
