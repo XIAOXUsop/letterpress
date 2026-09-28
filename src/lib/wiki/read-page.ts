@@ -129,7 +129,30 @@ export function readContentPage(dir: string, file: string): {
   // sources 是块状数组，逐条抓 sourceId / revision / locator
   const refs: PageSourceRef[] = [];
   let current: { sourceId: string; revision: string; locator: string } | null = null;
-  for (const line of block.split('\n')) {
+  /*
+   * ⚠️ **2026-09-28 修一个实测出来的真 bug：只扫 `sources:` 块内。**
+   *
+   * 原先这里遍历**整个 frontmatter**，规则是「`if (!current) continue`」——
+   * 而那只在**还没开始**时跳过。于是**一旦进了某一条 `sources`**，
+   * 后面**任何块**里的 `revision:` / `locator:` 都会**覆盖当前那一条**。
+   *
+   * 实测（造一份 `sources` 里有 `revision: WD-20240312`、
+   * 而 `review:` 块里有 `revision: 不该出现在这里` 的 frontmatter）：
+   * 读出来是 `css-values-4  revision="不该出现在这里"`——
+   * **来源被别的块污染了，而它不报错**。
+   *
+   * > 后果不是「解析失败」，是**来源的版本日期变成别人的值**——
+   * > 而 `revision` 正是「结论钉在哪一版规范上」那个字段。
+   * > 现有 5 篇内容**恰好没有受害**（它们的 `review:` 块里没有 `revision:`），
+   * > **但那是因为运气，不是设计**。
+   *
+   * ⚠️ `origin/main` 为此把整个 frontmatter 换成 YAML 解析（`17436e9`）。
+   * 那是根治，**但它要先决定「`frontmatterField` 与 YAML 解析器谁做标量」**，
+   * 那是一个设计决定。**这一轮先治标**——而**治标的正确做法不是再写一份切块**，
+   * 是**把 `parseReview` 里那套切块抽出来共用**（它已经写对过一次，
+   * 注释里记着「试过三次正则，三次都不对」）。
+   */
+  for (const line of indentedBlockOf(block, 'sources')) {
     const sid = /^\s*-\s*sourceId:\s*(.+?)\s*$/.exec(line);
     if (sid) {
       if (current) refs.push(current);
@@ -324,40 +347,48 @@ export function originalOf(source: string): string | undefined {
  * 它在第二次修好之前一直是「6 个全部跳过」——
  * **一个静默跳过全部被测对象的检查，等于没有检查。**
  */
-function parseReview(block: string): PageReview | undefined {
-  /*
-   * 块 = 「从 review: 后到下一个**顶层**字段之前」的所有**缩进**行，
-   * **外加夹在它们之间的空行**。
-   *
-   * ⚠️ **这里试过三次正则，三次都不对。**
-   *
-   * ① `(?=\n[^\s]|\r?\n?$)` —— `\r?\n?` 的 `\n?` 可选，
-   *    多行模式下 `$` 匹配每行行尾，于是在 `status` 行末**零消耗**成立，
-   *    捕获组只有第一行。
-   * ② `(?:^[ \t]+.*\r?\n?)+` —— 能吃全部缩进行，但**遇到空行就停**：
-   *    `review:` 块里夹一个空行（YAML 里完全合法），
-   *    后面的 `contentDigest` **静默丢失**。
-   * ③ 在 ② 后面补一个「吃空行」的组 —— **仍然不对**：
-   *    两组都要求「行」在前，而空行恰好把它们卡在中间。
-   *
-   * > 根因是**同一个**：用正则同时表达「缩进」与「直到下一个顶层字段」
-   * > 这两件事，就得处理它们在空行处交错的情形——
-   * > 而 `\r?\n?` 这种**可选量词**正是让边界悄悄提前成立的元凶。
-   *
-   * 现在**不用正则**：逐行扫，规则一句话说完——**缩进行属于块，空行忽略，
-   * 任何非缩进的非空行结束块**。可读性换来的正确性，在这个场景更划算。
-   */
+/**
+ * **一个顶层字段下面那些缩进行**（不含该字段本身那一行）。
+ *
+ * 规则一句话：**缩进行属于块，空行忽略，任何非缩进的非空行结束块。**
+ *
+ * ⚠️ **这里试过三次正则，三次都不对**（记录在 `parseReview` 的注释里）：
+ * ① `(?=\n[^\s]|\r?\n?$)` —— `\r?\n?` 的 `\n?` 可选，多行模式下 `$`
+ *    匹配每行行尾，于是在 `status` 行末**零消耗**成立，捕获组只有第一行。
+ * ② `(?:^[ \t]+.*\r?\n?)+` —— 能吃全部缩进行，但**遇到空行就停**：
+ *    块里夹一个空行（YAML 里完全合法），后面的 `contentDigest` **静默丢失**。
+ * ③ 在 ② 后面补一个「吃空行」的组 —— **仍然不对**：两组都要求「行」在前，
+ *    而空行恰好把它们卡在中间。
+ *
+ * > 根因是**同一个**：用正则同时表达「缩进」与「直到下一个顶层字段」
+ * > 这两件事，就得处理它们在空行处交错的情形。
+ *
+ * ⚠️ **2026-09-28 抽出来的**：`sources` 与 `review` 两处原先各写一份，
+ * 而 **`sources` 那份漏了「遇到顶层字段就停」**——
+ * 于是**别的块里的 `revision:` 会覆盖当前那条来源**（实测复现，见调用处注释）。
+ * **两处共用这一份，bug 与重复一起消掉。**
+ */
+function indentedBlockOf(block: string, field: string): string[] {
   const lines = block.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^review:[ \t]*$/.test(l));
-  if (start === -1) return undefined;
-
-  const fields: string[] = [];
+  const start = lines.findIndex((l) => new RegExp(`^${field}:[ \\t]*$`).test(l));
+  if (start === -1) return [];
+  const out: string[] = [];
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? '';
     if (line.trim() === '') continue; // 空行不终止块
     if (!/^[ \t]/.test(line)) break; // 下一个顶层字段 → 块结束
-    fields.push(line);
+    out.push(line);
   }
+  return out;
+}
+
+/**
+ * 解析 frontmatter 里的 `review:` 块。
+ *
+ * 切块规则与理由见 `indentedBlockOf` 的注释（三次正则都失败的记录也在那里）。
+ */
+function parseReview(block: string): PageReview | undefined {
+  const fields = indentedBlockOf(block, 'review');
   if (fields.length === 0) return undefined;
 
   const get = (k: string) =>

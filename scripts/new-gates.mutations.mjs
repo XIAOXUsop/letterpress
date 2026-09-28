@@ -344,6 +344,17 @@ const GATES = [
 
 const CASES = [
   {
+    // ⚠️ 守着 2026-09-28 修的那个**实测出来的真 bug**：
+    // 逐行扫 `sources` 时若不限定「只扫该块内」，**别的顶层块里的
+    // `revision:` 会覆盖当前那条来源**——症状**静默**（来源的版本日期
+    // 变成别人的值，不报错）。现有 5 篇内容恰好没受害，**但那是运气**。
+    why: 'check:field-coverage — sources 的字段被别的顶层块覆盖（静默的来源污染）',
+    file: 'src/lib/wiki/read-page.ts',
+    find: "  for (const line of indentedBlockOf(block, 'sources')) {",
+    replace: "  for (const line of block.split(String.fromCharCode(10))) { // MUTATION：退回整份 frontmatter",
+    target: 'check-field-coverage.mjs',
+  },
+  {
     why: `check:agents-coverage — 某类声明「无门禁认领」（空白归属比错的归属更隐蔽）`,
     file: 'scripts/check-agents-coverage.mjs',
     find: "    gate: 'check:field-coverage',",

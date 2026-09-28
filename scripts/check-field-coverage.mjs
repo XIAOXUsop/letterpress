@@ -117,6 +117,60 @@ const readable = checks.filter(([, ok]) => ok).map(([f]) => f);
 const missing = checks.filter(([, ok]) => !ok).map(([f]) => f);
 const skipped = [...DELIBERATELY_UNREAD.keys()];
 
+/*
+ * ── 第 6 条：别的顶层块**不得覆盖** `sources` 里的字段（2026-09-28 实测的真 bug）
+ *
+ * 上一条只核「`sources` 读得到 `sourceId`」——**而「读到的是不是**这一条**的
+ * `revision`」是另一回事**。
+ *
+ * 实测的 bug：逐行扫 `sources` 时规则是「`if (!current) continue`」，
+ * 而那只在**还没开始**时跳过。于是**一旦进了某一条 `sources`**，
+ * 后面**任何块**里的 `revision:` / `locator:` 都会**覆盖当前那一条**：
+ *
+ *   sources:
+ *     - sourceId: css-values-4
+ *       revision: WD-20240312        ← 真正的值
+ *   review:
+ *     revision: 不该出现在这里        ← 读出来的是这个
+ *
+ * > **症状是静默的**：来源的版本日期变成别人的值，**而它不报错**。
+ * > 现有 5 篇内容**恰好没受害**（它们的 `review:` 里没有 `revision:`），
+ * > **但那是因为运气，不是设计**。
+ *
+ * ⚠️ 而这一条是**行为判据**：造一份带污染的 frontmatter，读回来，
+ * 断言 `revision` 仍是**它自己的值**。**不是 grep 源码**——
+ * 逐行扫描的写法千变万化，字面匹配量不到。
+ */
+{
+  const polluted = mkdtempSync(join(tmpdir(), 'field-coverage-'));
+  try {
+    writeFileSync(
+      join(polluted, '污染.md'),
+      `---\ntitle: 污染\nslug: 污染\nsummary: 一句话。\n`
+      + `sources:\n  - sourceId: css-values-4\n    revision: WD-20240312\n    locator: §5.1.1\n`
+      + `review:\n  status: reviewed\n  revision: 不该出现在这里\n---\n\n正文。\n`,
+      'utf8',
+    );
+    const p = readContentPage(polluted, '污染.md');
+    const own = p.sources[0]?.revision === 'WD-20240312';
+    const locatorOwn = p.sources[0]?.locator === '§5.1.1';
+    if (own && locatorOwn) {
+      console.log('  ✓ sources 不被别的顶层块覆盖（造了带污染的 frontmatter，读回来源自己的值）');
+    } else {
+      problems.push(
+        `\`sources\` 里的 \`revision\`/\`locator\` **被别的顶层块覆盖了**——`
+        + `读出来是 ${JSON.stringify({ revision: p.sources[0]?.revision, locator: p.sources[0]?.locator })}。\n`
+        + '    → 症状**静默**：来源的版本日期变成别人的值，而它不报错。\n'
+        + '    2026-09-28 实测过：逐行扫 `sources` 时若不限定「只扫该块内」，'
+        + '后面任何块的 `revision:` 都会覆盖当前那条。',
+      );
+      console.log(`  ✗ sources 被别的块覆盖（revision=${JSON.stringify(p.sources[0]?.revision)}）`);
+    }
+  } finally {
+    rmSync(polluted, { recursive: true, force: true });
+  }
+}
+
 console.log(`  读得到 ${readable.length} 个：${readable.join('、')}`);
 console.log(`  刻意不读 ${skipped.length} 个：${skipped.join('、')}\n`);
 

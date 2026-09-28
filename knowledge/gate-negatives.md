@@ -458,6 +458,60 @@ MD 侧实测 `2852 / 3919 / 1106`，与 docs 的表格和输出块**逐字一致
 于是报「产物不存在」——**而那一句与「实测为 0」在结果上无法区分**。
 改成**按 slug 在 dist 里找**，且报「找到几份」而不是「我猜的路径对不对」。
 
+## 合并 `main` 时实测到一个**真 bug**：别的块会覆盖 `sources` 里的字段（2026-09-28 深夜）
+
+处理第三道冲突（`read-page.ts`）时，先读 `main` 引入 YAML 解析的**动机**
+（提交 `17436e9`「align CLI parsing with published schema」），
+它给出的理由不是「更优雅」，而是**两条具体的**：
+
+> 「**Astro 读取的是 YAML。结构字段也必须按 YAML 解析**，
+> 否则合法的行内数组会被漏掉，且**另一个顶层块的 `revision`/`locator`
+> 会误覆盖上一条来源**。」
+
+**第二条我实测复现了**（造一份 `sources` 里有 `revision: WD-20240312`、
+而 `review:` 块里有 `revision: 不该出现在这里` 的 frontmatter）：
+
+```
+css-values-4  revision="不该出现在这里"  locator="§5.1.1"
+```
+
+**根因**：`sources` 那段循环遍历**整份 frontmatter**，规则是
+「`if (!current) continue`」—— 而那只在**还没开始**时跳过。
+一旦进了某一条 `sources`，**后面任何块**里的 `revision:` 都会覆盖它。
+
+> **症状是静默的**：来源的版本日期变成别人的值，**而它不报错**。
+> 而 `revision` 正是「结论钉在哪一版规范上」那个字段。
+>
+> 现有 5 篇内容**恰好没受害**（它们的 `review:` 块里没有 `revision:`）——
+> **但那是因为运气，不是设计**。
+
+**修法不是「再写一份切块」**，而是**把 `parseReview` 里那套已经写对的切块逻辑
+抽成 `indentedBlockOf(block, field)`、两处共用**（它注释里记着
+「试过三次正则，三次都不对」——**那套逻辑值得复用，不值得重写**）。
+**bug 与重复一起消掉。**
+
+⚠️ 而 `origin/main` 是**用 YAML 解析根治**的。**这一轮先治标**——
+因为根治要先决定「`frontmatterField` 与 YAML 解析器谁做标量、谁做块」，
+**那是一个设计决定，不是脚本能替我做的**。
+
+### 而 `check:single-literal` 在那一刻红了，**而且它红得对**（2026-09-28）
+
+它的判据是 `for (const line of block.split`（逐行扫整份 frontmatter），
+而我把那处换成了 `indentedBlockOf(block, 'sources')` —— **那个标志消失了**。
+
+它的诊断是：
+
+> 登记的清单「frontmatter 块的逐行解析」在 `read-page.ts` 里找不到了——
+> 要么它被改名 / 挪走（那要更新这条登记），要么它**真的没了**。
+
+**它抓到了「实现变了」而不是「实现坏了」——而这两者要靠人去分。**
+登记已更新（标志改成 `indentedBlockOf(block, 'sources'|…)`），
+并把那个 bug 写进了这条登记的 `why`，**好让下一个人知道这条判据为什么长这样**。
+
+新断言进了 `check:field-coverage`（第 6 条）：**造一份带污染的 frontmatter，
+读回来断言 `revision` 仍是它自己的值**。变异验证：把修复退回去 → 红，
+诊断带上了实际读到的值。
+
 ## 合并 `main` 的三道冲突：两边都只有一半，而「选一边」会丢东西（2026-09-28 深夜）
 
 `test` 领先 87 个提交、`main` 独有 4 个（试合并得到的结论）：
@@ -929,7 +983,7 @@ spawnSync('npm.cmd', ['run','build'])
 「五道检索闸每道有专属用例」那句话**曾经是假的**，由 `verify:retrieval-gates` 揭穿。
 
 **语料一扩、判据一改，遮住关系就变了。** 已固化为
-`scripts/new-gates.mutations.mjs`（37 条变异 / 13 道门禁），每次 CI 都跑：
+`scripts/new-gates.mutations.mjs`（38 条变异 / 13 道门禁），每次 CI 都跑：
 
 | 被测门禁 | 变异 |
 |---|---|

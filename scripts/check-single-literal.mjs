@@ -53,13 +53,23 @@ const SHARED_LITERALS = [
   },
   {
     // 「解析 frontmatter 里的 sources / review / original」没有单一字面量——
-    // 它的实现标志是**逐行扫块**（`for (const line of block.split`）。
+    // 它的实现标志是**取一个顶层字段下面那些缩进行**。
     // 所以这条走 `implOf` 而不是 `literal`。
-    implOf: (t) => /for \(const line of block\.split/.test(t),
+    //
+    // ⚠️ **2026-09-28 改过两次标志**：
+    // ① 原先认 `for (const line of block.split`（逐行扫整份 frontmatter），
+    //    而那**正是下面 `sources` 被别的块覆盖那个 bug 的成因**；
+    // ② 修 bug 时把切块逻辑抽成 `indentedBlockOf`，两处共用。
+    //
+    // > **这个门禁在那一刻红了，而它红得对**——判据指向的写法真的变了。
+    // > 它的诊断（「要么它被改名，要么它真的没了」）正是为这种情况写的。
+    // > **判据抓到了「实现变了」而不是「实现坏了」**——而这要靠人去分。
+    implOf: (t) => /indentedBlockOf\(block, '(?:sources|review|original)'\)/.test(t),
     where: 'src/lib/wiki/read-page.ts',
-    what: 'frontmatter 块（sources / review / original）的逐行解析',
+    what: 'frontmatter 块（sources / review / original）的切块与解析',
     why: '两份实现时 wiki:impact 与 check:impact 会对同一页给出不同的引用集，'
-      + '**而两个命令都是绿的**',
+      + '**而两个命令都是绿的**；而逐行扫整份 frontmatter 时，'
+      + '**别的块里的 `revision:` 会覆盖当前那条来源**（实测复现，2026-09-28 已修）',
   },
   {
     // ⚠️ **2026-09-28 补登记。** 收敛 `['scripts','src']` 那天，
