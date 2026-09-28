@@ -348,10 +348,41 @@ function mutate({ file, find, replace, alsoEdit, target, why }) {
  *
  * ⚠️ **选锚点的规矩：优先挑一个单行、不含反引号的。** 跨多行的锚点
  * 一旦行内有任何细微差异就匹配不上，而报错信息**不告诉你差在哪**。
+ *
+ * ⚠️⚠️ **更强的规矩（2026-09-28 补）：锚点该从目标文件里「切」出来，不该手写。**
+ *
+ * 给 `check:two-paths` 写两条变异时，我为**同一个**剥离语句手拼了**五次**
+ * （反斜杠层数猜错两次、漏一个 `*`、把 `\\` 当成两个反斜杠、末尾分号差一个），
+ * 而 `mutate()` 每次只说「**出现 0 次**」——那句话在「锚点不对」与「门禁没盲区」
+ * 之间是同义的。
+ *
+ * > 最后一次是**逐字符对比**才看清的（真实那行含 `\\*` 两个反斜杠）。
+ * > 而**更便宜的做法我一直没做**：让一段一次性脚本
+ * > **从目标文件里读出那几行**，写进本文件当锚点——
+ * > 那是**唯一正确**的字节序列，不需要猜任何转义层。
+ * > 我删了那个脚本，但结论留在这里：**下一个人照做，别手拼。**
  */
 const Q = String.fromCharCode(39);
 const SINGLE_LINE = (name, reason) =>
   `  [${Q}${name}${Q}, ${Q}${reason}${Q}],`;
+
+/**
+ * 判据 ① 剥注释的那两行——`check-two-paths.mjs` 里数基准的那一步。
+ *
+ * ⚠️ **用码点拼，不要手写转义。** 这一行含正则里的反斜杠与单引号，
+ * 手写进本文件要过好几层（我为此试错多次，而 `mutate()` 只说「出现 0 次」）。
+ */
+const STRIP_COMMENTS_TWO_LINES =
+  '  .replace(/\\/\\*[\\s\\S]*?\\*\\//g, (m) => \' \'.repeat(m.length))\n  .replace(/^\\s*\\/\\/.*$/gm, (m) => \' \'.repeat(m.length));';
+
+/**
+ * `content.ts` 里 `review` 那处判定的前半截（`kind === 'wiki' ? ` 那一段）。
+ *
+ * ⚠️ **锚点一律从目标文件里切，不手写。** 这一段含正则字符与单引号，
+ * 我手拼过四次都错，而 `mutate()` 每次只说「出现 0 次」。
+ */
+const ANCHOR2 = () => '  const review = kind === \'wiki\' ? ';
+const ANCHOR2_TAIL = '(data as { review?: Doc[\'review\'] }).review : undefined;';
 
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
@@ -702,6 +733,51 @@ const CASES = [
     find: '| **GitHub Pages（项目站）** | `SITE_BASE=/仓库名 npm run build` |',
     replace: '| **GitHub Pages（项目站）** | `SITE_BASE=/仓库名 npm run buildx` |',
     target: 'check-onboarding-doc.mjs',
+  },
+  {
+    /*
+     * ⚠️⚠️ **这一条的方向换过三次，每次都是「变异无效」不是「判据失效」。**
+     *
+     * ① 锚点写了一个**不存在的注释行**（我照着 `check-two-paths.mjs`
+     *    自己的注释去 `content.ts` 里找）→ 报「锚点出现 0 次」。
+     * ② 注入加在**代码后面的行尾注释**里，而判据剥的是**整行**注释
+     *    → 注入压根没进判据视野，门禁照样绿。
+     * ③ 注入了一整行注释，**基准仍是 4**——我这才明白：
+     *    **那道守卫本来就在工作**，而我一直想验的是「它工作」，那当然绿。
+     *
+     * > **变异要注入的是缺陷，不是「正确的实现」。**
+     * > 守卫型的判据，正确时必然绿；要让它红，得**把守卫拆掉**。
+     *
+     * ⚠️ **拆守卫后不需要额外注入。** `content.ts` 第 82 行**本来就有**一句
+     * 行注释写着那个三元的解释（那是 2026-09-28 那次误报的现场记录，一直留着）——
+     * 守卫一失效，基准立刻 4 → 6，门禁报红。**实测过**。
+     *
+     * 而「拆守卫 + 塞注释」那种写法需要改两个文件，**`mutate()` 做不到**
+     * （`alsoEdit` 作用在同一个文件的注入结果上，试过，报「第二处锚点 0 次」）。
+     * **能只用一处达成同一状态，就不要用两处。**
+     */
+    why: "check:two-paths — 剥注释的守卫被拆掉（基准 4 → 6，注释里那句被算进去）",
+    file: 'scripts/check-two-paths.mjs',
+    find: STRIP_COMMENTS_TWO_LINES,
+    replace: '  /* 不再剥离注释 */',
+    target: 'check-two-paths.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着判据①的「精确相等」——而那正是它被写成这样的原因。**
+     *
+     * 第一版只判 `gates === 0`，于是把构建侧 `review` 那处判定删掉
+     * （4 → 3）时它照样报「✓ 构建侧有 3 处判定」——
+     * **基准掉了一格，而它把这当成正常。**
+     *
+     * > 「基准还在」与「基准没变过」是两件事，
+     * > 而这条门禁的全部价值就在后者。
+     */
+    why: 'check:two-paths — 构建侧少一处判定（基准 4 → 3，必须报而不是「正常」）',
+    file: 'src/lib/content.ts',
+    find: ANCHOR2(),
+    replace: ANCHOR2_TAIL,
+    target: 'check-two-paths.mjs',
   },
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
