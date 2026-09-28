@@ -912,6 +912,27 @@ const CASES = [
     target: 'check-onboarding-doc.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着 4f——而它的第一版判据量错了东西。**
+     *
+     * 4f 要核「每道读 `scripts/` 源码的门禁都排除了 `*.mutations.mjs`」。
+     * 第一版判据是「有 `readdirSync` 的门禁」，报出 **12 个「没排除」**——
+     * **而那 12 个扫的是 `dist` / `docs` / `src/content`，
+     * 压根不读 `scripts/` 的源码**，所以不会误报。
+     *
+     * > **「没排除」≠「会误报」**——那是我拿「有没有这个调用」
+     * > 当成了「这个调用扫的是哪里」。
+     *
+     * 所以这条变异删掉 `check-field-coverage` 的那行排除：
+     * 若 4f 的口径是对的（先确定扫哪个目录），它必须红。
+     */
+    why: 'check:gate-list — 有门禁读 scripts/ 源码却不再排除变异脚本（4f 必须红）',
+    file: 'scripts/check-field-coverage.mjs',
+    find: "      if (name.endsWith('.mutations.mjs')) continue;\n      const src = readFileSync(join(scriptDir, name), 'utf8')",
+    replace: "      const src = readFileSync(join(scriptDir, name), 'utf8')",
+    target: 'check-gate-list.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",

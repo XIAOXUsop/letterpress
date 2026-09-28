@@ -279,6 +279,24 @@ const checks = [
     const selfBuilding = [];
     for (const name of readdirSync(scriptDir).filter((f) => f.endsWith('.mjs'))) {
       if (ALLOWED.has(name)) continue;
+      /*
+       * ⚠️⚠️ **必须排除 `*.mutations.mjs`——2026-09-29 实测撞到过。**
+       *
+       * 我给判据 6 写一条「`src/content` 不再递归」的变异，
+       * 而那条变异的 `replace` 里写着「遍历一个内容目录」那个调用——
+       * **而本条判据扫的正是这个形状。**
+       * 注释被剥掉之后，**字符串字面量与真调用逐字相同**，
+       * 于是**干净态就红了**，而门禁说的那件事压根不存在。
+       *
+       * > **变异脚本天生握着别的门禁判据要看的形状**——
+       * > 而它并不「自己遍历内容目录」，它只是**在描述**那种遍历。
+       *
+       * ⚠️ **而这个排除是三道门禁里最容易被发现的缺口**：
+       * `check-single-literal` / `check-no-duplicate-lists` / `check-single-source`
+       * **都排除了** `*.mutations.mjs`，**只有本条没排**。
+       * 排除规则不统一，而**不统一的那一处会在第一次写变异时发作**。
+       */
+      if (name.endsWith('.mutations.mjs')) continue;
       const src = readFileSync(join(scriptDir, name), 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');

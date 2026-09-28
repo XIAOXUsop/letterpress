@@ -816,6 +816,74 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
   }
 }
 
+/*
+ * ── 4f. 每道**扫 `scripts/` 源码**的门禁，都必须排除 `*.mutations.mjs` ────
+ *
+ * ⚠️ **2026-09-29 实测撞到过一次，代价是「干净态就红」。**
+ *
+ * 我给判据 6 写一条「`src/content` 不再递归」的变异，
+ * 而那条变异的 `replace` 里写着「遍历一个内容目录」那个调用——
+ * **而 `check-field-coverage` 有一条判据扫的正是这个形状。**
+ * 注释被剥掉后，**字符串字面量与真调用逐字相同**。
+ *
+ * > **变异脚本天生握着别的门禁判据要看的形状**——
+ * > 而它并不「自己遍历内容目录」，它只是**在描述**那种遍历。
+ *
+ * 处置：`check-field-coverage` 补上了排除。**而那三道早就排除了**——
+ * 于是「不统一的那一处」在**第一次写变异时**才发作。
+ *
+ * 判据：**从文件系统扫出「哪些门禁读 `scripts/` 源码」**，
+ * 逐个查它排不排除 `*.mutations.mjs`。
+ *
+ * ⚠️⚠️ **判据的形状被坑过一次：先量「有 readdirSync 的门禁」，
+ * 报出 12 个「没排除」——而那 12 个扫的是 `dist` / `docs` / `src/content`，
+ * **压根不读 `scripts/` 的源码**，所以不会误报。**
+ * **「没排除」≠「会误报」**——那是我拿「有没有这个调用」当成了
+ * 「这个调用扫的是哪里」。
+ *
+ * 所以判据要**先确定扫的是哪个目录**，再问排不排除。
+ * 实测：**只有 2 道**门禁读 `scripts/` 源码。
+ */
+{
+  const SCRIPTS = join(ROOT, 'scripts');
+  const scansScripts = (src) =>
+    /readdirSync\(\s*(?:scriptDir|SCRIPTS|join\([^)]*'scripts'\))/i.test(src);
+
+  const offenders = readdirSync(SCRIPTS)
+    .filter((f) => f.endsWith('.mjs'))
+    .map((f) => {
+      const src = readFileSync(join(SCRIPTS, f), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      return { f, scans: scansScripts(src), excludes: src.includes('mutations') };
+    })
+    .filter((x) => x.scans && !x.excludes)
+    .map((x) => x.f);
+
+  const readers = readdirSync(SCRIPTS)
+    .filter((f) => f.endsWith('.mjs'))
+    .filter((f) => scansScripts(
+      readFileSync(join(SCRIPTS, f), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, ''),
+    )).length;
+
+  console.log('');
+  console.log('扫 scripts/ 源码的门禁是否排除了变异脚本（4f）');
+  console.log('─'.repeat(64));
+  if (offenders.length > 0) {
+    problems.push(
+      `这些门禁**读 \`scripts/\` 源码**，而没排除 \`*.mutations.mjs\`：\n`
+      + offenders.map((f) => `        scripts/${f}`).join('\n') + '\n'
+      + '    → 变异脚本里**描述**某个调用形状的字符串，会被当成真的调用。\n'
+      + '    **代价是「干净态就红」**——而门禁说的那件事压根不存在（2026-09-29 实测）。',
+    );
+    console.log(`  ✗ ${offenders.length} 道没排除：${offenders.join('、')}`);
+  } else {
+    console.log(`  ✓ ${readers} 道读 scripts/ 源码的门禁都排除了变异脚本`);
+  }
+}
+
 // ── 5. 文档里转述的步骤数与实际一致 ────────────────────────────
 /*
  * **两份文档，不是一份。**
