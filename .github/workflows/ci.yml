@@ -216,6 +216,7 @@ jobs:
           check:agents-doc
           check:onboarding-doc
           check:two-paths
+          check:field-coverage
           check:adapter-size"
           total="$(printf '%s\n' "$steps" | grep -c .)"
           for step in $steps; do

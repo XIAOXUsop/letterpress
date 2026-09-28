@@ -95,6 +95,10 @@ export function readContentPage(dir: string, file: string): {
   readonly related: readonly string[];
   /** 2026-09-28 补：之前完全不读它，于是 buildGraph 的草稿过滤形同虚设。 */
   readonly draft: boolean;
+  /** 2026-09-28：与 readContentDirs 对齐——此前只有那边有。 */
+  readonly summary: string;
+  /** 2026-09-28：与 readContentDirs 对齐；空 reason 时键不出现。 */
+  readonly original?: { readonly reason: string };
   /** frontmatter 之后的正文（不含 frontmatter）。**已 trim，与 Astro 的 `entry.body` 同口径。** */
   readonly body: string;
 } {
@@ -143,6 +147,7 @@ export function readContentPage(dir: string, file: string): {
   // review 是一个块（`review:` 下面缩进跟着 status / checkedAt），
   // 与 sources 一样只能逐行扫，取顶层字段会取错。
   const review = parseReview(block);
+  const originalReason = originalOf(source);
 
   return {
     explicitSlug: Boolean(frontmatterField(source, 'slug')?.trim()),
@@ -210,6 +215,21 @@ export function readContentPage(dir: string, file: string): {
     ...(review ? { review } : {}),
     related: relationList(source, 'related'),
     /*
+     * ⚠️ **2026-09-28：`summary` 与 `original` 现在单读也有了。**
+     *
+     * 此前它们**只在 `readContentDirs` 里**——那是我自己造成的不一致：
+     * 补这两处时只改了「读多个目录」那条路。
+     *
+     * 后果不是「少一个字段」这么轻：**`readContentDirs` 的实现里
+     * 还会再补一次**（见那边的同名代码），于是**同一个字段有两个真值**——
+     * 改一处，另一处悄悄给出不同的结果。
+     *
+     * 由 `check:field-coverage.mjs` 抓出来的：它对**单读**断言，
+     * 而单读那会儿真的没有这两个。
+     */
+    summary: frontmatterField(source, 'summary') ?? '',
+    ...(originalReason ? { original: { reason: originalReason } } : {}),
+    /*
      * ⚠️ **2026-09-28 补 `draft`。**
      *
      * 之前 `readContentPage` **完全不读它**，于是 `pageToDoc` 恒给 `false`、
@@ -251,6 +271,27 @@ export function relationList(source: string, field: string): string[] {
     .split(/[、,，]/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/**
+ * 读 `original:` 块里的 `reason`。
+ *
+ * ⚠️ **2026-09-28 抽出来，因为它一度有两个真值。**
+ * `readContentDirs` 里算过一次、`readContentPage` 里又算一次——
+ * 而**改一处，另一处悄悄给出不同的结果**。
+ *
+ * ⚠️ **必须限定在 `original:` 那个块内**：`/^ {2}reason:/m` 全文扫会抓到
+ * **任何**缩进两格的 `reason:` 行，而 `review:` 块里若也有同名字段就会串味。
+ *
+ * 只取 `reason` 一行——`content.config.ts` 的 schema 也只要求它，
+ * 多出来的键 zod 会剥掉，核心不必认识。
+ *
+ * @returns `reason` 非空时返回它，否则 `undefined`（**空理由等于没声明**）。
+ */
+export function originalOf(source: string): string | undefined {
+  const block = /^original:[ \t]*$\n(?<b>(?:^[ \t]+.*\n?)*)/m.exec(source)?.groups?.b ?? '';
+  const m = /^ {2}reason:\s*(.+)$/m.exec(block);
+  return m?.[1]?.trim() || undefined;
 }
 
 /**
@@ -406,20 +447,7 @@ export function readContentDirs(
       const page = readContentPage(dir, file);
       const full = join(dir, file);
       const source = readFileSync(full, 'utf8');
-      /*
-       * ⚠️ `original` 是**嵌套块**（`original:` 下面缩进一行 `reason:`），
-       * 而 `frontmatterField` **只认顶层标量**——直接问它会拿到 `''`。
-       *
-       * 它和 `review:` / `sources:` 一样是块，**但那几个由 `readContentPage`
-       * 解析了**。`original` 当时漏了（2026-09-28 补）。
-       *
-       * 这里只取 `reason` 一行——`content.config.ts` 的 schema 也只要求它，
-       * 多出来的键 zod 会剥掉，核心不必认识。
-       */
-      const originalMatch = /^ {2}reason:\s*(.+)$/m.exec(
-        /^original:\s*$\n(?<block>(?:^[ \t]+.*\n?)*)/m.exec(source)?.groups?.block ?? '',
-      );
-      const originalReason = originalMatch?.[1]?.trim() || undefined;
+      const originalReason = originalOf(source);
       /*
        * ⚠️ **2026-09-28 加：顺带补上 `summary`。**
        *
