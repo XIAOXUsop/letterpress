@@ -218,7 +218,8 @@ jobs:
           check:two-paths
           check:field-coverage
           check:single-literal
-          check:adapter-size"
+          check:adapter-size
+          check:not-a-demo"
           total="$(printf '%s\n' "$steps" | grep -c .)"
           for step in $steps; do
             printf '::group::%s\n' "$step"

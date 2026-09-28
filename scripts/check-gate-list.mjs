@@ -71,6 +71,7 @@ const EXPECTED = [
   ['npm run check:field-coverage', '**读路径读得到构建侧读的那些 frontmatter 字段**——用行为测（造一份写满字段的 frontmatter 读回来），不靠 grep 源码'],
   ['npm run check:single-literal', '**同一份清单不许写两遍**（2026-09-28 一天内找到四处「同一件事两处实现」）'],
   ['npm run check:adapter-size', '**站点专属接线只剩「站点事实」**（阶段 4 第 4 条的代理指标）——行数只能降不能升，且不能靠「不接核心」变小'],
+  ['npm run check:not-a-demo', '**「接入」而不是「演示」**：核心的算法行为在两个消费者上逐字相同，而异构点那一项**必须**分叉——两边都空正是演示的典型形态'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
 ];
 
