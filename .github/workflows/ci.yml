@@ -217,6 +217,7 @@ jobs:
           check:onboarding-doc
           check:two-paths
           check:field-coverage
+          check:single-literal
           check:adapter-size"
           total="$(printf '%s\n' "$steps" | grep -c .)"
           for step in $steps; do

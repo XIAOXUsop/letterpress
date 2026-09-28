@@ -68,6 +68,7 @@ const EXPECTED = [
   ['npm run check:onboarding-doc', '**接线文档里的实测数字与现在跑出来的一致**（判据从文档表格里解析数字，不核脚本里的常量）'],
   ['npm run check:two-paths', '**读路径与构建路径对「post 拿不到什么」同一口径**（`related` / `review` / `original` / `wikiKind`）——本站 posts 里 0 篇写这些字段，所以那处分歧从未发作过'],
   ['npm run check:field-coverage', '**读路径读得到构建侧读的那些 frontmatter 字段**——用行为测（造一份写满字段的 frontmatter 读回来），不靠 grep 源码'],
+  ['npm run check:single-literal', '**同一份清单不许写两遍**（2026-09-28 一天内找到四处「同一件事两处实现」）'],
   ['npm run check:adapter-size', '**站点专属接线只剩「站点事实」**（阶段 4 第 4 条的代理指标）——行数只能降不能升，且不能靠「不接核心」变小'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
 ];
