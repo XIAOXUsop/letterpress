@@ -1334,7 +1334,7 @@ const CASES = [
      * **而 4h 核的正是那一句**——**改一处就核到的是另一处**（形态八）。
      */
     why: 'check:gate-list — 4b 的标题回到全称「每一项判据」（而它只遍历一道）',
-    covers: ['4b'],
+    covers: ['4h'],
     file: 'scripts/check-gate-list.mjs',
     find: "  '负向验证是否覆盖了**有 REQUIREMENTS 式清单的**门禁的每一项判据';",
     replace: "  '负向验证是否覆盖了被测门禁的每一项判据';",
