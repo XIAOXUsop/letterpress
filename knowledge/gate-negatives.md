@@ -75,6 +75,28 @@
 | `check:adapter-size`（新） | **切片切到 `const docs =` 为止**（第一版） | ⚠️ **判据自己红了**——`pageToDoc` 那整行落在段外，于是「仍调用核心」报红而实现是对的。改成切到 `buildGraph` 之前 | 2026-09-28 |
 | `read-page` 的 `draft` 读取 | 把 `draft` 恒给 `false`（修好前的行为） | ✅ 红（3 条，含「草稿会被 buildGraph 滤掉」那条**结果级**判据） | 2026-09-28 |
 | `read-page` 的 `status` 校验 | 撤掉「非法值当没写」那三行 | ✅ 红（1 条） | 2026-09-28 |
+| `check:field-coverage`（新） | 把 `sources` / `review` / `original` 三个**块字段**逐一弄坏 | ✅ 红（三种都验过——它们字面上不出现 `data.x`，字面匹配量不到） | 2026-09-28 |
+| `check:field-coverage`（新） | **第一版用字面匹配**（grep 两边源码） | ⚠️ **判据三次自己失败**：构建侧 `kind` 写成 `data as { kind?: … }` 没被认；读路径 `tags` 走 `relationList` 不是 `frontmatterField`；加上后 `sources`/`review`/`original` 全被报成「不读」——**块字段逐行扫描解析，字面上不出现调用**。改成造一份写满字段的 frontmatter 读回来 | 2026-09-28 |
+| `check:two-paths` 第 5 条 | 让多读那条给 `summary` 换个值 | ✅ 红（11 处，逐页报出） | 2026-09-28 |
+| `check:two-paths` 第 5 条 | 变异写成 `page.summary + ""`（值其实相同） | ⚠️ **仍然绿**——`JSON.stringify` 后两者一致。**变异必须真的分叉**，否则验的是「判据跑完了」不是「判据会红」 | 2026-09-28 |
+
+## 同一个字段的两个真值：`readContentDirs` 重算了一遍（2026-09-28）
+
+`readContentDirs` 把 `summary` / `original` / `slug` / `date` / `tags`
+**全部重算了一遍**——而 `readContentPage` 也在算。
+
+**那不是「无害的保险」，是同一个字段有两个真值**：改一处，另一处悄悄不同。
+`check:field-coverage` 抓到它的后果时，差异恰好是**两个方向各缺一半**
+（`summary` / `original` 只在单读有，而多处读取那里补的是另两个）。
+
+处置：`readContentPage` 读全，`readContentDirs` **只做它做不到的事**
+（`relationField` 换字段名、`docKind` 带站点事实）；
+并在 `check:two-paths` 加第 5 条「单读与多读对同一页逐字段一致」
+（拿**本站真实内容**比 11 页，而不是临时固件——真实内容里那些**没写的字段**
+才是分歧高发处，`undefined` / `''` / 键不存在，三种都「看起来对」）。
+
+> 那条「只做做不到的事」很容易在下次重构时又长回来，
+> 所以**把「两条路逐字段相同」变成门禁**，而不是靠代码整洁。
 
 ## 读路径的 `draft` 曾经完全不读（2026-09-28，第 6 处分歧）
 

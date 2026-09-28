@@ -40,11 +40,11 @@
  *
  * 用法：`node scripts/check-two-paths.mjs`
  */
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
-import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { readContentDirs, readContentPage } from '../src/lib/wiki/read-page.ts';
 import { buildGraph } from '../src/lib/wiki/graph.ts';
 
 const ROOT = process.cwd();
@@ -239,6 +239,64 @@ if (guessed.kind !== 'wiki' || explicitlyWiki.kind !== 'wiki') {
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/*
+ * ── ⑤ 单读与多读对**同一页**必须逐字段一致 ───────────────────────
+ *
+ * ⚠️ **2026-09-28 加。** 那之前 `readContentDirs` 把 `summary` / `original` /
+ * `slug` / `date` / `tags` **全部重算了一遍**——**同一个字段两个真值**，
+ * 改一处，另一处悄悄不同。`check:field-coverage` 抓到它的后果时，
+ * 差异恰好是「两个方向各缺一半」，而**没有任何门禁比对过这两条路**。
+ *
+ * 现在 `readContentPage` 读全了、`readContentDirs` 只做它做不到的事。
+ * 那条「只做做不到的事」很容易在下次重构时又长回来——
+ * **所以把「两条路逐字段相同」变成门禁。**
+ *
+ * ⚠️ 比的是**本站真实内容**，不是临时造的固件：
+ * 固件只能证明「这个形状一致」，而真实内容里那些**没写的字段**才是分歧高发处
+ * （`undefined` vs `''` vs 键不存在，三种都「看起来对」）。
+ */
+{
+  const dirs = [join(ROOT, 'src', 'content', 'wiki'), join(ROOT, 'src', 'content', 'posts')];
+  let compared = 0;
+  const diffs = [];
+  for (const dir of dirs) {
+    let files;
+    try {
+      files = readdirSync(dir).filter((f) => /\.mdx?$/.test(f));
+    } catch {
+      continue; // 目录不存在（不是本站布局）——跳过而不是当成 0 页
+    }
+    const { pages } = readContentDirs([dir]);
+    const bySlug = new Map(pages.map((p) => [p.slug, p]));
+    for (const file of files) {
+      const single = readContentPage(dir, file);
+      const multi = bySlug.get(single.slug);
+      if (!multi) {
+        diffs.push(`${single.slug}：多读那条里找不到它`);
+        continue;
+      }
+      compared++;
+      for (const k of Object.keys(single)) {
+        const a = JSON.stringify(single[k]);
+        const b = JSON.stringify(multi[k]);
+        if (a !== b) diffs.push(`${single.slug}.${k}：单读 ${a} vs 多读 ${b}`);
+      }
+    }
+  }
+  if (compared === 0) {
+    problems.push('一条内容都没比到——「单读 vs 多读」这条判据此刻量不到任何东西');
+    console.log('  ✗ 没有可比的内容');
+  } else if (diffs.length > 0) {
+    problems.push(
+      `单读与多读对同一页给出不同结果（${diffs.length} 处）：\n`
+      + diffs.slice(0, 8).map((d) => `      ${d}`).join('\n'),
+    );
+    console.log(`  ✗ 单读 vs 多读：${diffs.length} 处不一致`);
+  } else {
+    console.log(`  ✓ 单读与多读对 ${compared} 页逐字段一致`);
   }
 }
 

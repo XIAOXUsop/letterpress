@@ -445,44 +445,27 @@ export function readContentDirs(
     counts.set(dir, files.length);
     for (const file of files) {
       const page = readContentPage(dir, file);
-      const full = join(dir, file);
-      const source = readFileSync(full, 'utf8');
-      const originalReason = originalOf(source);
       /*
-       * ⚠️ **2026-09-28 加：顺带补上 `summary`。**
+       * ⚠️ **2026-09-28 大幅收窄：这一层现在只做 `readContentPage` 做不了的事。**
        *
-       * 它是顶层标量，而 `readContentPage` 只解析**嵌套块**——
-       * 所以拿不到是设计如此，不是漏了。原先每个要摘要的调用方都得
-       * 自己重走一遍「遍历目录 → 读文件 → `frontmatterField`」，
-       * **而那段代码里最容易漏的是 `.sort()`**：
-       * 漏了它，页面顺序就取决于文件系统的返回顺序
-       * （本机 NTFS 恰好已排序，于是**漏了也看不出**——
-       *  与「本站 0 篇写 slug:，所以那个 bug 从未发作」同型）。
+       * 原先这里把 `summary` / `original` / `slug` / `date` / `tags`
+       * **全部重算了一遍**——而那些重复不是「无害的保险」：
+       * **同一个字段有两个真值**，改一处，另一处悄悄给出不同的结果。
        *
-       * 补在这里，`pageToDoc(page)` 不传 `summary` 也能算对摘要。
-       * 四个现有调用方只用 `slug` / `sources` / `body`，**不受影响**。
+       * `check:field-coverage` 当场抓到它的后果：`summary` 与 `original`
+       * 只在**单读**那条路上有，而这里补上了——**差异是两个方向各缺一半**。
+       * 现在 `readContentPage` 读全了，两边共用同一份实现。
+       *
+       * 剩下的两件是它**做不到**的：
+       * ① 按 `relationField` 换关系字段名（单读的 API 没有这个参数）；
+       * ② 带上 `docKind`——那是**站点事实**，只有调用方知道。
        */
+      const source = relationField ? readFileSync(join(dir, file), 'utf8') : null;
       pages.push({
         ...page,
-        summary: frontmatterField(source, 'summary') ?? '',
-        // ⚠️ **只在显式给了字段名时覆盖。** 不给就沿用 `readContentPage` 的
-        // `related:` 解析——而那个解析与 `relationList` 是同一套逻辑
-        // （`readContentPage` 内部就调它），所以两条路不会漂。
-        ...(relationField ? { related: relationList(source, relationField) } : {}),
+        // ⚠️ 不给 `relationField` 时**不读文件**——那会是同一份内容读两遍。
+        ...(relationField ? { related: relationList(source!, relationField) } : {}),
         ...(options.docKind ? { docKind: options.docKind } : {}),
-        // ⚠️ **2026-09-28 补 `original`。**
-        //
-        // `content.ts` 的 `toDoc` 会带它（知识层专属，post 给 `undefined`），
-        // 而读路径原先**完全不认识这个字段**——两条路径的 `Doc` 不等价。
-        // **本站 3 篇 wiki 真的写了它**（`build-probe` / `design-tokens` /
-        // `letterpress`），所以这不是「数据不存在」，是**读路径漏读**。
-        //
-        // 为什么至今没发作：`original` 唯一的消费者是 `content-manifest.ts`，
-        // 而那走**构建期**的 `doc`。将来若有 lint 规则看它，读路径就会漏。
-        //
-        // ⚠️ **空 `reason` 不给**——`content.config.ts` 的 schema 要求
-        // `min(1)`，而「空理由等于没声明」是那条注释的原话。
-        ...(originalReason ? { original: { reason: originalReason } } : {}),
       });
     }
   }
