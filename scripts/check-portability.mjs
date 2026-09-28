@@ -284,10 +284,24 @@ if (files.length === 0) {
 const PROD_CALLERS = ['scripts', 'src'];
 
 console.log('');
-console.log('核心模块有没有真实调用方（排除测试与检查脚本）');
+console.log('核心模块有没有真实调用方（排除测试与变异注入；检查脚本**算**调用方）');
 console.log('─'.repeat(64));
 
-/** 这些脚本是「检查器」，不是产品的调用方。 */
+/*
+ * ⚠️ **2026-09-28 修正：检查脚本**算**调用方。**
+ *
+ * 原来排除 `scripts/check-*` 与 `scripts/verify-*`，理由写的是
+ * 「它们是检查器，不是产品的调用方」。**那个理由对「≥1」成立，对「≥2」不成立。**
+ *
+ * 实测：`check-questions.mjs` import 了 `splitPassages`——
+ * 它**拿那道金标量检索**，改坏了 `splitPassages` 它就会红。
+ * **那是真实的第二个消费者。** 把它排除，等于让门禁在
+ * 「只有一个消费者」时误报，而处置会误导人去**拆掉分层**
+ * （`retrieve` → `context-pack` → `wiki-ask` 是一条链，不是重复）。
+ *
+ * 真正该排除的是**故意弄坏它**的那些：`*.mutations.mjs`
+ * 与本文件自身（它们的职责就是把核心改坏）。
+ */
 const INSPECTOR = /^scripts[/\\](check-|verify-)/;
 
 for (const file of CORE) {
@@ -311,7 +325,8 @@ for (const file of CORE) {
       const p = join(entry.parentPath ?? entry.path, entry.name);
       const rel = relative(ROOT, p).replace(/\\/g, '/');
       if (rel === `src/lib/wiki/${file}`) continue; // 自己
-      if (INSPECTOR.test(rel)) continue;
+      // ⚠️ **不再排除检查脚本**（理由见上面 `INSPECTOR` 的注释）。
+      // 只排除「故意弄坏核心」的那些——`*.mutations.mjs` 已在上面按文件名排除。
       const text = readFileSync(p, 'utf8');
       // 必须在 import 语句里出现，而不是正文里提到这个名字。
       if (names.some((n) => new RegExp(`import[^;]*\\b${n}\\b[^;]*from`).test(text))) hits.add(rel);
@@ -324,6 +339,24 @@ for (const file of CORE) {
         `    要么接进真实的读取/CLI 路径，要么把它删掉。`,
     );
     console.log(`  ✗ ${file}（${names.join(' / ')}）没有真实调用方`);
+  } else if (hits.size === 1) {
+    /*
+     * ⚠️ **2026-09-28 从「≥1」收紧到「≥2」。**
+     *
+     * 一个调用方时，「抽成核心」和「就地写一个工具函数」**效果完全一样**——
+     * 改它仍然要改那一个地方。而阶段 4 第 1 项要的是
+     * 「一处修好处处受益」，那要求**至少两个互不相干的消费者**。
+     *
+     * 2026-09-28 实测最少的那个也有 2 个（`digest.ts`：`wiki-review` 与
+     * `content.ts`），所以这条不是为了让门禁变严而严——**它已经是事实**。
+     */
+    problems.push(
+      `${file}（${names.join(' / ')}）**只有一个真实调用方**：[${[...hits].join('、')}]\n` +
+        '    一个调用方时，抽成核心与「就地写个函数」效果一样——改它仍要改那一处。\n' +
+        '    阶段 4 第 1 项要的是「一处修好处处受益」，那要求**至少两个互不相干的消费者**。\n' +
+        '    要么把它接进第二条真实路径，要么承认它不是核心（降级成普通工具模块）。',
+    );
+    console.log(`  ✗ ${file}（${names.join(' / ')}）只有一个调用方：${[...hits].join('、')}`);
   } else {
     console.log(`  ✓ ${file}（${names.join(' / ')}）被 ${hits.size} 处使用：${[...hits].join('、')}`);
   }
