@@ -191,12 +191,38 @@ const NOT_IN_ALL = new Map([
  * > 所以判据是：理由里**必须出现一个当前仍然成立的引用**——
  * > 一个命令名、一步的序号、或一个文件路径。
  *
- * ⚠️ **这只保证「引用还在」，不保证「理由还准确」**——
- * 语义判断仍然是人的事，而机器能做的只是**让过时的那类失效可见**。
+ * ⚠️ **而且那个引用必须真的存在。** 第一版只查「长得像」，
+ * 于是 `npm run verify:reviw`（拼错）也能过——**那是形态九的同族**：
+ * 「有引用」不等于「引用还成立」。
+ * 所以下面逐个**真的去查**：文件存在、命令在 package.json 里有定义。
+ *
+ * ⚠️ **它量不到「理由是否还准确」**——语义判断仍然是人的事。
+ * 机器能做的只是让**过时的那类失效**变得可见。
  */
-const EXEMPT_REASON_MUST_CITE = /`(npm run [\w:-]+|[\w./-]+\.(mjs|ts|json|md))`|第 \d+ 步|check-formats|check:refs/;
+const pkgForRefs = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 for (const [name, why] of NOT_IN_ALL) {
-  if (!EXEMPT_REASON_MUST_CITE.test(why)) {
+  // ① 抽出所有 `npm run <名字>`
+  for (const m of why.matchAll(/npm run ([\w:-]+)/g)) {
+    if (typeof pkgForRefs.scripts?.[m[1]] !== 'string') {
+      problems.push(
+        `\`${name}\` 的豁免理由引用了 \`npm run ${m[1]}\`——**而 package.json 里没有这个脚本**。\n`
+        + '    引用本身不存在，那条理由就是空的。',
+      );
+    }
+  }
+  // ② 抽出所有看起来像路径的引用（带扩展名）
+  for (const m of why.matchAll(/`([\w./-]+\.(?:mjs|ts|json|md))`/g)) {
+    const p = m[1];
+    // 去掉 `node ` 前缀那一类
+    if (!existsSync(join(ROOT, p))) {
+      problems.push(
+        `\`${name}\` 的豁免理由引用了 \`${p}\`——**而那个文件不存在**。\n`
+        + '    引用本身不存在，那条理由就是空的。',
+      );
+    }
+  }
+  // ③ 至少要有一个引用
+  if (!/`(npm run [\w:-]+|[\w./-]+\.(?:mjs|ts|json|md))`|第 \d+ 步/.test(why)) {
     problems.push(
       `\`${name}\` 的豁免理由里没有任何**可验证的引用**（命令名 / 文件路径 / 第几步）。\n`
       + `    理由是散文就会随代码变动而失效，而没有人会回头看它——\n`
