@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * **2026-09-28 新增的五道门禁的负向验证。**
+ * **2026-09-28 新增的七道门禁的负向验证。**
  *
  * ── 为什么单独一个文件 ──────────────────────────────────────────────
  *
- * 那六道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
- * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists`。
+ * 那七道是 `check:two-paths` / `check:field-coverage` / `check:single-literal` /
+ * `check:adapter-size` / `check:not-a-demo` / `check:no-duplicate-lists` / `check:onboarding-doc`。
  * 加上它们时我**手工**验过每一条会红——但**手工验过一次不等于一直成立**：
  * 语料一扩、判据一改，遮住关系就变了。
  *
@@ -114,9 +114,38 @@ function mutate({ file, find, replace, target, why }) {
 const GATES = [
   'check-two-paths.mjs', 'check-field-coverage.mjs', 'check-single-literal.mjs',
   'check-adapter-size.mjs', 'check-not-a-demo.mjs', 'check-no-duplicate-lists.mjs',
+  'check-onboarding-doc.mjs',
 ];
 
 const CASES = [
+  {
+    // ⚠️ **变异的是文档，不是源码。**
+    // `check:onboarding-doc` 声称核的是「文档里的实测数字与现在跑出来的一致」，
+    // 而它**没被任何东西证明过会红**——2026-09-28 实测之前它守得住，
+    // 但「这一次守住了」不等于「它一直在守」。
+    why: 'check:onboarding-doc — 文档表里的断链数被改（3 → 7）',
+    file: 'docs/onboarding-a-new-site.md',
+    find: '| **只读 `wiki`** | 6 | **3** | 4 条 | **`true`** |',
+    replace: '| **只读 `wiki`** | 6 | **7** | 4 条 | **`true`** |',
+    target: 'check-onboarding-doc.mjs',
+  },
+  {
+    why: 'check:onboarding-doc — 文档表里的 lint 条数被改（10 → 13）',
+    file: 'docs/onboarding-a-new-site.md',
+    find: "| `''`（不传） | **10** |",
+    replace: "| `''`（不传） | **13** |",
+    target: 'check-onboarding-doc.mjs',
+  },
+  {
+    // ⚠️ 这一条守着「白名单改成按位置排除」那个改动本身。
+    // 原来只核 `docs/cli.md` 与 `README.md`，于是这份文档里的两处幽灵命令
+    // （真名是 `verify:portability`，写的是 `check:portability`）躲过了检查。
+    why: 'check:onboarding-doc — 正文里出现一个不存在的命令（不只核那两份文档）',
+    file: 'docs/onboarding-a-new-site.md',
+    find: 'npm run verify:portability',
+    replace: 'npm run verify:portability-typo',
+    target: 'check-onboarding-doc.mjs',
+  },
   {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',

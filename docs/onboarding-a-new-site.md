@@ -20,16 +20,12 @@ if (hasErrors(issues)) throw new Error(JSON.stringify(issues));
 ```
 
 **为什么是这四个模块、这个顺序**：前三个是纯逻辑、零耦合，第四个消费第三个的产物。
-它们都能被**裸 Node** 直接 `import`（`npm run check:portability` 守着这条），
+它们都能被**裸 Node** 直接 `import`（`npm run verify:portability` 守着这条），
 所以维护脚本、CLI、一次性分析都不必先跑 bundler。
 
 ⚠️ 下面第 ② 条讲的坑**曾经要写 12 行代码才能绕开**——
 2026-09-28 已把 `summary` 收进 `readContentDirs`，所以第 ② 步现在只是 `pageToDoc(p)`。
 保留那一节是因为**它解释了这个设计是怎么来的**，以及单个 `readContentPage` 仍然要自己补。
-
-**为什么是这四个模块、这个顺序**：前三个是纯逻辑、零耦合，第四个消费第三个的产物。
-它们都能被**裸 Node** 直接 `import`（`npm run check:portability` 守着这条），
-所以维护脚本、CLI、一次性分析都不必先跑 bundler。
 
 ## 两个会咬人的地方
 

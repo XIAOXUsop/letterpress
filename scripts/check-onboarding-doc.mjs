@@ -267,16 +267,43 @@ checkMention('README 的断言条数', readmeText, new RegExp(`${assertionCount}
  * > （`verify:all` 第 12 步跑的是正确名字，而所有门禁都绿）。
  * > **文档里的命令名是一次转述，转述就会漂。**
  *
- * ⚠️ 只核 `docs/cli.md` 与 `README.md`——它们是**命令清单**所在的地方。
- * 正文里举例写的 `npm run xxx` 可能在讲「假如有这样一个命令」，不判。
+ * ⚠️ 2026-09-28 再改：白名单从「只核两份文件」放宽到「**除代码块外都核**」。
+ *
+ * 原来的取舍是「只核 `docs/cli.md` 与 `README.md`，正文里举例写的
+ * `npm run xxx` 可能在讲『假如有这样一个命令』，不判」。
+ * 那个假设在 `docs/onboarding-a-new-site.md` 上**不成立**——
+ * 它有两处行内 `npm run check:portability`（`package.json` 里没有这个脚本，
+ * 真名是 `verify:portability`），**读者会照着敲**，
+ * 而它躲在白名单外所以没人查。
+ *
+ * > 白名单是「我不打算核」的意思。而「这份文档的命令名会漂」是**通例**，
+ * > 不是「只有那两份会漂」——把它列成白名单，等于**按文件豁免一类通病**。
+ *
+ * 现在改成**按位置排除**：` ``` ` 代码块里的一律不核
+ * （那里确实可能在讲「假如有这样一个命令」），
+ * **其余每一个 `npm run <名字>` 都要在 `package.json` 里有定义**。
  */
 {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   const defined = new Set(Object.keys(pkg.scripts));
   const ghosts = new Set();
-  for (const [name, text] of [['docs/cli.md', cliText], ['README.md', readmeText]]) {
-    for (const m of text.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)) {
-      if (!defined.has(m[1])) ghosts.add(`${name} → npm run ${m[1]}`);
+  const DOCS_WITH_COMMANDS = ['docs/cli.md', 'README.md', 'docs/onboarding-a-new-site.md'];
+  for (const name of DOCS_WITH_COMMANDS) {
+    // 逐行扫，跳过围栏代码块内部（``` … ```）。
+    //
+    // ⚠️ **不能先 `replace(/```[\s\S]*?```/g, '')`**——那会连带删掉整块内容，
+    // 让人看不出是「有意排除」还是「正则没匹配上」。逐行 + 状态位更直白。
+    let inFence = false;
+    const text = name === 'docs/cli.md' ? cliText : readFileSync(join(ROOT, name), 'utf8');
+    for (const line of text.split('\n')) {
+      if (/^\s*```/.test(line)) {
+        inFence = !inFence;
+        continue;
+      }
+      if (inFence) continue;
+      for (const m of line.matchAll(/npm run ([a-z][a-z0-9:_-]*)/g)) {
+        if (!defined.has(m[1])) ghosts.add(`${name} → npm run ${m[1]}`);
+      }
     }
   }
   if (ghosts.size > 0) {
