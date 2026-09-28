@@ -90,17 +90,25 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 > **写好的门禁没接线，和没有门禁是同一件事**；
 > 而「本地 33 步全绿、CI 也绿」会让人以为那些门禁在把关。
 
-现在新增 `knowledge-gates` job，串行跑 **21 道不依赖 `dist` 的门禁**：
+现在 CI 上有两个把关 job：
 
-- **必须串行**——`verify:site-mutations` / `verify:exit-codes` /
-  `verify:json-mutations` 靠「改坏源码再还原」证明自己不是装饰，**并发会互相踩**；
-- **失败不立即退出**——一次跑完才知道还剩几道红。`set -e` 会在第一道就停，
-  剩下的就没人知道了；
-- **跑完检查 `git diff` 是否干净**——变异注入那三道若没还原，
-  后面几步量的是被改坏的代码。
+| job | 跑什么 | 特点 |
+|---|---|---|
+| `full-gates` | `npm run verify:all`（全部 33 步） | ⚠️ **必须在 `verify:all` 之前 build**——第 4 步 `verify` 打在 `dist` 上，而 CI 是全新 checkout。**这个 job 从被加上那天起就是红的**，只是没人推过那个分支 |
+| `knowledge-gates` | 21 道**不依赖 `dist`** 的门禁 | 失败不提前退出（跑完才知道还剩几道红）；跑完检查 `git diff` 是否干净 |
 
-不在该 job 里的：`verify:anchors` / `check:manifest-schema` / `check:refs` 读 `dist`
-（由 `build` job 覆盖）；`check:staged` 是提交前自检，CI 上暂存区恒为空；
+两者都**必须串行**——`verify:site-mutations` / `verify:exit-codes` /
+`verify:json-mutations` 靠「改坏源码再还原」证明自己不是装饰，**并发会互相踩**。
+
+这两条接线由 `scripts/ci-wiring.mjs` 守着，它自己带**五条**负向验证
+（改坏 CI 接线后门禁必须报：去掉 `test` 分支 / 去掉 job / 换掉命令 /
+删掉 build / 把 build 挪到 `verify:all` 之后）。
+
+> `full-gates` 那个 job 提供了一个反面教材：
+> **「接了线」不等于「线通了」**——它接得 neatly、门禁也认它，
+> **而它跑起来是红的**。要问的从来不是「接线在不在」，是「它跑起来是什么结果」。
+
+不在任何 job 里的：`check:staged` 是提交前自检，CI 上暂存区恒为空；
 `verify:online` 需要外部环境。
 
 ### 哪几道验证会改写**源码**

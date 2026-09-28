@@ -78,6 +78,33 @@
 `::error::以下门禁在 CI 上是红的： check:onboarding-doc`、退出码 1、
 **21 步全部执行完**（证明失败不提前终止）。
 
+## 「接了线」不等于「线通了」——`full-gates` job 生下来就是红的（2026-09-28）
+
+`origin/test` 上有一个 2026-09-26 的提交 `4f75c77`「ci: 在 test 分支运行完整门禁」，
+加了个 `full-gates` job 直接跑 `npm run verify:all`，并带了 `scripts/ci-wiring.mjs`
+守着接线（含三条自测）。**与本轮我做的 `knowledge-gates` 是同一个问题的两种解法。**
+
+合并后查出一件事：**那个 job 从被加上那天起就是红的。**
+
+`verify:all` 第 4 步 `npm run verify` **打在 `dist` 上**（数页数、量 token、查响应头），
+而 CI 是全新 checkout——**没有 `dist`**。实测把 `dist` 移走再跑 `verify`：**退出码 2**。
+
+> **它接得整齐、`ci-wiring` 也认它，而它跑起来是红的。**
+> 没人推过那个分支，所以从没暴露。
+>
+> **「接线在不在」和「它跑起来是什么结果」是两个问题**，
+> 而门禁守的往往是前者。缺口在于**没有任何东西真的执行过那个 job**。
+
+已处置：① `full-gates` 补 `npm run build`（必须是 `verify:all` 自己那套，
+不能用 `verify:base`——后者用假 base 重建且跑完清空产物）；② `ci-wiring.mjs`
+加判据「`verify:all` 之前必须存在一次 build」，并接进 `check-gate-list` 的自测表
+（补两条：删掉 build / 把 build 挪到 `verify:all` 之后，两条都已验会红）。
+
+⚠️ 加判据时**它自己先红了一次**：正则只认 `- run: npm run build`，
+而实际写法是 `- name: …` + 换行 + `run: npm run build`——
+**判据自己红了而被测对象是对的**，那是最坏的一种失败。
+两种写法现在都认（`^\s*(?:- run: |run: )npm run build\s*$`）。
+
 ## 剩下的一条「未验」
 
 **`verify:online`**：它对着 GitHub Pages 上的 Demo 跑，而 Pages 跑不了内容协商
