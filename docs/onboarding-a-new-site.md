@@ -84,21 +84,57 @@ const summary = frontmatterField(readFileSync(file, 'utf8'), 'summary') ?? '';
 这个结论是实测来的，不是设计偏好——`scripts/wiki-review.mjs` 的注释记着
 它第一版只用一个、在 `toLf(undefined)` 上崩掉的全过程。
 
-## 站点专属的部分只有一处
+## 站点专属的部分：两样，都是「站点事实」
 
-上面五行里，**只有目录布局是站点专属的**。
-剩下的（slug 规则、关系声明、字段名、摘要）核心都认。
+上面四行里，**只有两样是站点专属的**：
+**内容在哪个目录**、**关系字段叫什么**。
+剩下的（slug 规则、摘要、`original`、字段名解析）核心都认。
 
-唯一必须翻译的是**关系字段名**——本仓库叫 `related:`，别的站点可能叫 `audience:`：
+关系字段名的传递方式（**2026-09-28 起是参数，不再是手写翻译**）：
 
 ```js
-pageToDoc(page, { summary, relations: 翻译好的数组 })
+// 站点把关系声明叫 audience → 告诉核心字段叫什么
+const { pages } = readContentDirs(['content/wiki', 'content/posts'], {
+  relationField: 'audience',
+});
+const docs = pages.map((p) => pageToDoc(p));
 ```
 
-不传 `relations` 时 `pageToDoc` 会退回 `page.related`，
-而 `readContentPage` **只认 `related:` 这个名字**（实测：
-`knowledge/fixtures/second-site/` 那 9 篇全部用 `audience:`，
-`page.related` 在那里恒为 `[]`——**这个兜底分支只有用 `related:` 的站点才走得到**）。
+**三条路径的行为不一样，实测（2026-09-28）：**
+
+| 调用 | 那 9 篇里解析出关系的页数 |
+|---|---|
+| `readContentDirs([DIR])`（不传） | **0** |
+| `readContentDirs([DIR], { relationField: 'audience' })` | **1** |
+| `readContentPage(DIR, '数据留存.md')`（单读） | **0**（`related` 恒为 `[]`） |
+
+⚠️ **`readContentPage` 不接受 `relationField`**——它一次只读一页，
+而那个参数是 `readContentDirs` 的。要按自定义字段名读**单页**，
+自己调 `relationList(source, 'audience')`（核心导出，剥方括号那套逻辑在里面）。
+
+## 有了 `post` 与 `wiki` 之分时：告诉核心
+
+有些站点分「文章」与「知识页」两类（Astro 那边叫 post / wiki）。
+构建侧对文章一律丢掉知识层专属的四样：`related` / `review` / `original` / `wikiKind`
+——**读路径必须同口径**，否则同一页在构建产物与 CLI 回答里形状不同。
+
+```js
+const { pages } = readContentDirs(['content/posts'], { docKind: 'post' });
+const docs = pages.map((p) => pageToDoc(p));   // 这批页没有关系、没有 review、wikiKind 是 undefined
+```
+
+⚠️ **核心不会自己去猜**，而这是**故意的**：
+
+- 本站 wiki 全写 `kind:` 而 posts 全不写（实测 6/6 vs 0/5），看起来足够判别；
+- 但那是**本站的 schema 巧合**——`knowledge/fixtures/second-site/` 那 9 篇
+  **也都写 `kind:`**，而它们所在的目录既不是 posts 也不是 wiki；
+- 一个新站点若两个目录都写 `kind:`，核心就分不出来；
+- 而**判错的后果是静默的**：文章被当成知识页时，关系照样连进图，
+  而构建产物里没有——分歧回到上一节那个问题的起点。
+
+不传 `docKind` 时默认 `'wiki'`（绝大多数内容是知识页）。
+`npm run check:two-paths` 守着这个口径，**双向验证过**：构建侧的判定处数
+与本节列的四项必须一一对应，多一处少一处都红。
 
 ## 剩下的核心模块
 
