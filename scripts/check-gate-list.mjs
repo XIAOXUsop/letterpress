@@ -151,31 +151,62 @@ const inAll = new Set(
  */
 const NOT_IN_ALL = new Map([
   // 编排自身
-  ['verify:all', '它就是编排本身，不能包含自己'],
+  ['verify:all', '它就是编排本身（`package.json` 里的 verify:all 字段）——把它放进自己会无限递归'],
   ['verify:only', '**`verify` 的别名**——两者都跑 `scripts/bundle-and-verify.mjs`；'
     + '留着是因为它表达了「只跑契约、不跑别的」这个意图。'
     + '⚠️ 2026-09-28 修正：本条原先写的是「被 verify:all 的第 3 步调用」——'
     + '**而第 3 步现在是 `npm test`，它早就不被任何地方调用了。** '
     + '理由过时而没人发现，正是因为**没有东西核「理由是否还成立」**。'],
   // 需要外部环境的
-  ['verify:online', '对着 GitHub Pages 上的 Demo 跑；Pages 跑不了内容协商，'
-    + '基线本身就是红的（README 已写明是限制），不适合做门禁'],
+  ['verify:online', '对着线上 Demo 跑（`scripts/smoke-online.mjs`），需要环境变量 `SITE_ORIGIN`；'
+    + 'GitHub Pages 跑不了内容协商（响应头不可改），'
+    + '**实测那 7 项会红**——README 已写明这是限制，不适合做门禁'],
   // 交互式 / 人工触发
   ['wiki:review', '交互式：它**不写回文件**，只打印该粘进 frontmatter 的片段。'
-    + '「我复核过了」是人的承诺，不能由脚本自动完成'],
+    + '「我复核过了」是人的承诺，不能由脚本自动完成。'
+    + '可测的部分由 `npm run verify:review` 覆盖（逐页比对状态与摘要）'],
   ['wiki:impact', '只读的人工报告：列三组影响面。它不判定对错，'
-    + '判定由 verify:impact（金标）负责'],
+    + '判定由 `verify:impact` 拿 `knowledge/impact-cases.md` 当金标负责'],
   ['wiki:ask', '交互式问答：输入是自然语言问题，没有固定输入就没法当门禁。'
-    + '它的可测部分已抽成 src/lib/wiki/context-pack.ts（15 条测试）'],
+    + '它的可测部分已抽成 `src/lib/wiki/context-pack.ts`，判定由 `verify:answers` 负责'],
   // 人工核对的清单类
-  ['measure', '量产物给**人**看，判定由 check-formats 里对应的门禁做'],
-  ['list:overclaims', '列出可被证伪的声称供人工核对，**退出码恒为 0**'],
+  ['measure', '量产物给**人**看（`scripts/measure.mjs`），判定由 `npm run verify:formats` 里对应的门禁做'],
+  ['list:overclaims', '列出可被证伪的声称供人工核对（`scripts/list-overclaims.mjs`），**退出码恒为 0**——'
+    + '它不判定对错，给它非 0 退出码会让「列清单」变成「门禁」'],
   // 需要显式输入才跑得起来的
-  ['migrate:manifest', '需要 `node migrate-manifest.mjs <v1.json>`——'
-    + '**没有默认输入**：仓库里那份 v1 是真实线上产物（knowledge/fixtures/），'
+  ['migrate:manifest', '需要 `node scripts/migrate-manifest.mjs <v1.json>`——'
+    + '**没有默认输入**：仓库里那份 v1 是真实线上产物（`knowledge/fixtures/manifest-v1.json`），'
     + '但迁移本身是一次性动作，不需要每次构建都跑。它可测的部分（诊断是否精确）'
-    + '已由 verify:migrate 覆盖'],
+    + '已由 `verify:migrate` 覆盖'],
 ]);
+
+/*
+ * ⚠️ **2026-09-28 加：每条豁免理由必须含一个「可验证的具体引用」。**
+ *
+ * 2026-09-28 实测：`verify:only` 的豁免理由写的是
+ * 「被 verify:all 的 **第 3 步**调用」——而第 3 步现在是 `npm test`，
+ * **它早就不被任何地方调用了**。理由过时而没人发现。
+ *
+ * > 散文形式的理由会随代码变动而失效，**而没有任何东西提醒**。
+ * > 所以判据是：理由里**必须出现一个当前仍然成立的引用**——
+ * > 一个命令名、一步的序号、或一个文件路径。
+ *
+ * ⚠️ **这只保证「引用还在」，不保证「理由还准确」**——
+ * 语义判断仍然是人的事，而机器能做的只是**让过时的那类失效可见**。
+ */
+const EXEMPT_REASON_MUST_CITE = /`(npm run [\w:-]+|[\w./-]+\.(mjs|ts|json|md))`|第 \d+ 步|check-formats|check:refs/;
+for (const [name, why] of NOT_IN_ALL) {
+  if (!EXEMPT_REASON_MUST_CITE.test(why)) {
+    problems.push(
+      `\`${name}\` 的豁免理由里没有任何**可验证的引用**（命令名 / 文件路径 / 第几步）。\n`
+      + `    理由是散文就会随代码变动而失效，而没有人会回头看它——\n`
+      + `    2026-09-28 实测 \`verify:only\` 的理由早就过时了（「被第 3 步调用」，`
+      + `而第 3 步早就是别的了）。\n`
+      + `    写清它指向哪个命令 / 文件 / 步骤。`,
+    );
+  }
+}
+
 for (const name of Object.keys(scripts)) {
   /*
    * ⚠️ **前缀必须包含 `check:`。**
@@ -412,5 +443,6 @@ if (problems.length > 0) {
 }
 console.log(`  ✓ ${steps.length} 步齐全、顺序正确、脚本都存在`);
 console.log('  ✓ 没有「定义了却不在编排里」的门禁');
+console.log(`  ✓ ${NOT_IN_ALL.size} 条豁免理由都含可验证的引用（命令 / 文件 / 步骤）`);
 console.log('  ✓ CI 的 test 分支与完整门禁接线均被负向验证');
 console.log(`  ✓ ${DOCS_WITH_STEP_COUNT.join(' 与 ')} 转述的步数与实际一致\n`);
