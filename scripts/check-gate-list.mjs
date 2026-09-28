@@ -1385,7 +1385,7 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     if (!f || f.includes('mutations') || !existsSync(join(ROOT, 'scripts', f))) continue;
     const text = readFileSync(join(ROOT, 'scripts', f), 'utf8');
     const criteria = new Set(
-      [...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤])\.?\s/g)].map((x) => x[1]),
+      [...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤](?:[½⅔⅛])?)\.?\s/g)].map((x) => x[1]),
     ).size;
     if (criteria === 0) continue;
     /*
@@ -1469,7 +1469,7 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     // **于是它一个都匹配不到、`ownIds` 恒为空、后面那行「未覆盖的判据」永远不打印**。
     // 而症状是「输出里少了一行」——**不报错，只是少了**（形态四）。
     const ownIds = [...new Set([
-      ...[...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤])\.?\s/g)].map((x) => x[1]),
+      ...[...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤](?:[½⅔⅛])?)\.?\s/g)].map((x) => x[1]),
       /*
        * ⚠️⚠️ **还要认「行内编号」——2026-09-29 实测漏了 3 条判据。**
        *
@@ -1492,7 +1492,19 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
  * **而描述这个坑时也不能写出那个序列**——我刚才就是这么自我复现的。
        * 而症状不是「编译报错」而是**后面几行被当成代码**（错误信息指向别处）。
        */
-      ...[...text.matchAll(/^\s*\/\/\s*([①-⑤])\s/gm)].map((x) => x[1]),
+      ...[...text.matchAll(/^\s*\/\/\s*([①-⑤](?:[½⅔⅛])?)\s/gm)].map((x) => x[1]),
+      /*
+       * ③ **块注释里那种**（行首是星号）——2026-09-29 实测：
+       * `②½` 与 `②⅔` 两条判据是这么写的，而前两种形状都认不到它们。
+       *
+       * > 于是 `covers: ['②½']` 会被报成「指向不存在的判据」——
+       * > **而那条判据真的存在**。
+       *
+       * ⚠️ 判据编号一共**三种放法**（段标题 / 行内双斜杠 / 块注释内），
+       * 而我**前两版都只认前两种**——
+       * **「同一种编号，三种放法」**（上一轮是两种）。
+       */
+      ...[...text.matchAll(/^\s*\*\s*([①-⑤][½⅔⅛])\s/gm)].map((x) => x[1]),
     ])];
     rows.push({
       cmd,
@@ -1523,9 +1535,16 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
       if (!r.hasCovers) continue;
       const file = scriptOf(r.cmd);
       if (!file) continue;
-      const text = readFileSync(join(ROOT, 'scripts', file), 'utf8');
+      // ⚠️⚠️ **必须复用 `ownIds` 的口径，不能自己再写一遍正则。**
+      //
+      // 2026-09-29 实测：这里原先只有「段标题」那一种形状，
+      // 而上面那个 `ownIds` 已经认了三种——**于是同一个门禁的同一个编号，
+      // 在「数判据」时被认到、在「校验 covers」时被判成不存在**。
+      //
+      // > **「一个事实两处实现」的最隐蔽形状**：
+      // > 两处都不是错，**而它们不一致**——症状是「明明有那条判据却说没有」。
       const ids = new Set(
-        [...text.matchAll(/──\s*([0-9]+[a-z]?|[①-⑤])\.?\s/g)].map((x) => x[1]),
+        r.ownIds,
       );
       for (const id of r.coveredIds) {
         if (!ids.has(id)) {

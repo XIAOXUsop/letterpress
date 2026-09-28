@@ -624,6 +624,7 @@ const CASES = [
     // 实测的缺口：ambiguous-wikilink（**error** 级）与 ambiguous-title
     // 不在任何面向人的文档里，而 agent 正是照这张表判断什么会让构建失败。
     why: 'check:agents-doc — 规则表里漏掉一条（代码里有、表里没有）',
+    covers: ['①'],
     file: 'AGENTS.md',
     find: '| 错误 | `ambiguous-wikilink` | 引用了一个**有歧义的标题**（两篇同名），无法确定指哪一篇 |\n',
     replace: '',
@@ -631,6 +632,7 @@ const CASES = [
   },
   {
     why: 'check:agents-doc — 规则表里多一条不存在的（表里有、代码里没有）',
+    covers: ['①'],
     file: 'AGENTS.md',
     find: '| 提示 | `summary-too-long` |',
     replace: '| 错误 | `nonexistent-rule` | 表里写了但代码里没有 |\n| 提示 | `summary-too-long` |',
@@ -662,6 +664,7 @@ const CASES = [
     // 于是同步器对着本站自己的清单必然报错，而 453 条测试全绿
     // ——因为固件也写着 1，它测的是一个已不存在的格式。
     why: 'check:single-source — 同步器把版本号写死（真故障的前一半）',
+    covers: ['3'],
     file: 'scripts/lib/content-sync.mjs',
     find: 'const MANIFEST_VERSION = readManifestVersion()',
     replace: 'const MANIFEST_VERSION = 1',
@@ -669,6 +672,7 @@ const CASES = [
   },
   {
     why: 'check:single-source — 测试固件把 manifest 的 version 写死（真故障的后一半，测试全绿却功能是坏的）',
+    covers: ['3'],
     file: 'scripts/lib/content-sync.test.mjs',
     find: '    version: MANIFEST_VERSION,',
     replace: '    version: 1,',
@@ -679,6 +683,7 @@ const CASES = [
     // 而它每天在 CI 里跑、每天打印一行诚实的提示，没人行动。
     // 2026-09-28 把「扫到 0 处」升级为红，并在文档里补上那句本来就该有的声明。
     why: 'check:single-source — 文档里的版本声明被改（2 → 1）',
+    covers: ['3'],
     file: 'docs/content-manifest.md',
     find: '**当前版本为 2**',
     replace: '**当前版本为 1**',
@@ -686,6 +691,7 @@ const CASES = [
   },
   {
     why: 'check:single-source — 清单里的文档不存在（静默跳过 = 核不到，形状同「按文件豁免通病」）',
+    covers: ['3'],
     file: 'scripts/check-single-source.mjs',
     find: "  'docs/content-export.md',",
     replace: "  'docs/content-export-renamed.md',",
@@ -696,6 +702,7 @@ const CASES = [
     // 指向一个不存在的步骤，而旧判据只认格式、不核数字。
     // 讽刺的是它就出在 `verify:only` 那条豁免当初真的翻车的地方。
     why: 'check:gate-list — 豁免理由里塞一个「第 999 步」（格式合法、指向不存在）',
+    covers: ['4'],
     file: 'scripts/check-gate-list.mjs',
     find: "['wiki:ask', '交互式问答：输入是自然语言问题，没有固定输入就没法当门禁。'",
     replace: "['wiki:ask', '交互式问答：输入是自然语言问题，没有固定输入就没法当门禁，见 verify:all 的第 999 步。'",
@@ -710,6 +717,7 @@ const CASES = [
     //
     // 变异改编排：第 3 步换成别的，理由没跟 → ②½ 若真在跑，必红。
     why: 'check:gate-list — 改编排第 3 步而豁免理由没跟（②½ 的内容判据）',
+    covers: ['②½'],
     file: 'package.json',
     find: '&& npm test',
     replace: '&& npm run check:single-source',
@@ -750,6 +758,7 @@ const CASES = [
     // 所以注入必须是**删掉整个条目**。`mutate()` 只支持替换，
     // 而「替换成空」会留下一个**空行**——那恰好是合法的 JS，条目也就没了。
     why: 'check:gate-list — 豁免理由既没有步号引用、也没登记（②½ 会零次执行）',
+    covers: ['②½'],
     file: 'scripts/check-gate-list.mjs',
     find: SINGLE_LINE('wiki:ask', '输入是自然语言问题，**没有固定输入**；编排里的每一步都要能无人值守地跑。') + '\n',
     replace: '',
@@ -757,6 +766,7 @@ const CASES = [
   },
   {
     why: 'check:gate-list — 豁免理由引用的文件不存在（理由本身是空的）',
+    covers: ['②'],
     file: 'scripts/check-gate-list.mjs',
     find: 'scripts/bundle-and-verify.mjs',
     replace: 'scripts/does-not-exist.mjs',
@@ -764,6 +774,7 @@ const CASES = [
   },
   {
     why: 'check:gate-list — 豁免理由变成散文（没有可验证的引用）',
+    covers: ['③'],
     file: 'scripts/check-gate-list.mjs',
     find: "['measure', '量产物给**人**看（`scripts/measure.mjs`），判定由 `npm run verify:formats` 里对应的门禁做'],",
     replace: "['measure', '量产物给人看，判定在别处。'],",
@@ -774,6 +785,7 @@ const CASES = [
     // 少了这一条，「加一个命令名与脚本名不同的脚本」什么都不会报——
     // 而那张册子的全部价值就是「照着它一定找得到脚本」。
     why: 'check:command-scripts — 加一个未登记的分叉命令',
+    covers: ['②'],
     file: 'package.json',
     find: '"check:staged": "node scripts/check-staged.mjs",',
     replace: '"check:staged": "node scripts/check-staged.mjs",\n    "check:brand-new-thing": "node scripts/some-other-name.mjs",',
@@ -781,6 +793,7 @@ const CASES = [
   },
   {
     why: 'check:command-scripts — 册子登记的脚本被改名（两份事实分叉）',
+    covers: ['①'],
     file: 'package.json',
     find: 'node scripts/check-gate-list.mjs',
     replace: 'node scripts/renamed-gate-check.mjs',
@@ -791,6 +804,7 @@ const CASES = [
     // 所以要单独触发它，必须登记一条**本不该登记的**（对得上的名字）。
     // 我一度以为它是死代码——推演之后发现可达，实测确实红了。
     why: 'check:command-scripts — 册子里有一条「本不该登记的」（已不再分叉）',
+    covers: ['③'],
     file: 'scripts/lib/command-scripts.mjs',
     find: "  ['verify:only', 'scripts/bundle-and-verify.mjs',",
     replace: "  ['check:staged', 'scripts/check-staged.mjs', '误登记：这条其实对得上'],\n  ['verify:only', 'scripts/bundle-and-verify.mjs',",
@@ -893,6 +907,7 @@ const CASES = [
      * 于是台账里没记的那 4 道应当立刻冒出来。
      */
     why: 'check:gate-list — 4c 不再认台账里的记录（那些「未验」行就当没写）',
+    covers: ['4c'],
     file: 'scripts/check-gate-list.mjs',
     find: '!covered(f) && !recorded(f) && !NO_MUTATION.has(f)',
     replace: '!covered(f) && !NO_MUTATION.has(f)',
@@ -907,6 +922,7 @@ const CASES = [
      * 所以它**站得住**；要验的是「**理由被删掉之后它就不算例外了**」。
      */
     why: 'check:gate-list — NO_MUTATION 里的登记被删（例外消失，check-staged 应当变回未覆盖）',
+    covers: ['4c'],
     file: 'scripts/check-gate-list.mjs',
     find: "['check-staged.mjs', '它只比",
     replace: "['check-staged-删了.mjs', '它只比",
@@ -926,6 +942,7 @@ const CASES = [
      * 按第一版的判据它**照样绿**（有反引号），按现在的判据必红。
      */
     why: 'check:gate-list — 台账「注入什么」写成一句没有任何具体对象的话（4d 必须红）',
+    covers: ['4d'],
     file: 'knowledge/gate-negatives.md',
     find: '| `verify:questions` | 拆掉 `scripts/check-questions.mjs` 里「金标点名了不存在的页面」那条判据 |',
     replace: '| `verify:questions` | 把它弄坏看看 |',
@@ -947,6 +964,7 @@ const CASES = [
      * 第一版正则抓不到，修正后必须红。
      */
     why: 'check:gate-list — 台账里点名一个中文的不存在路径（4e 必须红，而旧正则看不见它）',
+    covers: ['4e'],
     file: 'knowledge/gate-negatives.md',
     find: '| `src/lib/wiki/read-page.ts` | `main` 用 **YAML 解析器**读 `review`',
     replace: '| `src/lib/wiki/这个文件不存在.ts` | `main` 用 **YAML 解析器**读 `review`',
@@ -1014,6 +1032,7 @@ const CASES = [
      * 若 4f 的口径是对的（先确定扫哪个目录），它必须红。
      */
     why: 'check:gate-list — 有门禁读 scripts/ 源码却不再排除变异脚本（4f 必须红）',
+    covers: ['4f'],
     file: 'scripts/check-field-coverage.mjs',
     find: "      if (name.endsWith('.mutations.mjs')) continue;\n      const src = readFileSync(join(scriptDir, name), 'utf8')",
     replace: "      const src = readFileSync(join(scriptDir, name), 'utf8')",
@@ -1031,6 +1050,7 @@ const CASES = [
      * 变异把台账那个数改回 48：若 4g 真在重跑那道门禁，必红。
      */
     why: 'check:gate-list — 台账里的命令总数漂了（4g 必须重跑门禁抓到它）',
+    covers: ['4g'],
     file: 'knowledge/gate-negatives.md',
     find: '一次性探针扫了 ' + ACTUAL_CMDS + ' 个单文件命令',
     replace: '一次性探针扫了 48 个单文件命令',
@@ -1079,6 +1099,7 @@ const CASES = [
      * **而「漏报只是漏报，噪声会让人忽略真信号」**。
      */
     why: 'check:gate-list — 台账里的变异条数漂了（4g 扩出来的第二类必须核）',
+    covers: ['4g'],
     file: 'knowledge/gate-negatives.md',
     // ⚠️ **锚点不能带那个数，而且要够长到唯一。**
     //   第一版写 `**共 56 条变异**`——而那个数**每次加变异就会变**（56 → 58），
@@ -1103,6 +1124,7 @@ const CASES = [
      * **那行读起来像「核过了」，而它其实什么都没核**（形态四）。
      */
     why: 'check:gate-list — 台账里的编排步数漂了（4g 扩出来的第三类必须核）',
+    covers: ['4g'],
     file: 'knowledge/gate-negatives.md',
     // ⚠️ **锚点不能只写「**有 43 步**」**——我 2026-09-29 写完这一节的表之后，
     // 它在台账里出现了 **2 次**（原文那处 + 我新写的对照表），于是变异失效。
@@ -1124,6 +1146,7 @@ const CASES = [
      * 变异就是往 `files` 里塞一条注释：门禁必须立刻指出它。
      */
     why: 'check:package-files — files 里出现注释行（npm 会静默忽略整个字段）',
+    covers: ['①'],
     file: 'package.json',
     find: '    "LICENSE",',
     replace: '    "// 理由写在这一段的注释里",\n    "LICENSE",',
@@ -1145,6 +1168,7 @@ const CASES = [
      * 所以它是本文件里最慢的一条——**这正是它该有的代价**。
      */
     why: 'check:package-files — 排掉 knowledge/（构建会因 verify 声明而失败）',
+    covers: ['②'],
     file: 'package.json',
     find: '    "knowledge/",',
     replace: '    "knowledge-排掉了/",',
@@ -1166,6 +1190,7 @@ const CASES = [
      * **那正是「同一件事两处写法」的形状**。
      */
     why: 'check:package-files — description 与 README 那句不一致（同义不同字）',
+    covers: ['③'],
     file: 'package.json',
     find: '"description": "A static blog template that gets Chinese typography right',
     replace: '"description": "An Astro blog template for Chinese typography',
@@ -1186,6 +1211,7 @@ const CASES = [
      * 变异：把 `prepack` 占用掉，判据必须立刻报出来。
      */
     why: 'check:package-files — prepack 被占用（会让 npm pack 触发护栏 → 套娃）',
+    covers: ['④'],
     file: 'package.json',
     find: '    "prepublishOnly": "node scripts/prepublish-guard.mjs"',
     replace: '    "prepublishOnly": "node scripts/prepublish-guard.mjs",\n    "prepack": "node scripts/prepublish-guard.mjs"',
@@ -1232,6 +1258,7 @@ const CASES = [
      * 因为 `check:release` 那一行正是带「（新）」的。
      */
     why: 'check:gate-list — 删掉「只有台账在册」的那一行（4c 必须报「三样都没有」）',
+    covers: ['4c'],
     file: 'knowledge/gate-negatives.md',
     // ⚠️ **带末尾换行**——只删行内容会留下一个空行，而那仍是合法 Markdown 表格行。
     find: LEDGER_ONLY_ROW,
@@ -1307,6 +1334,7 @@ const CASES = [
      * **而 4h 核的正是那一句**——**改一处就核到的是另一处**（形态八）。
      */
     why: 'check:gate-list — 4b 的标题回到全称「每一项判据」（而它只遍历一道）',
+    covers: ['4b'],
     file: 'scripts/check-gate-list.mjs',
     find: "  '负向验证是否覆盖了**有 REQUIREMENTS 式清单的**门禁的每一项判据';",
     replace: "  '负向验证是否覆盖了被测门禁的每一项判据';",
@@ -1328,6 +1356,7 @@ const CASES = [
      * 而这正是「登记真的在起作用」的证明。
      */
     why: 'check:gate-list — 把 NOT_VERIFIABLE 里的一条挪走（4i 必须重新报它）',
+    covers: ['4i'],
     file: 'scripts/check-gate-list.mjs',
     find: "    ['check:manifest-schema', '它读的是**产物**",
     replace: "    ['check:manifest-schema-挪走了', '它读的是**产物**",
