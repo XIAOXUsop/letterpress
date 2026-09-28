@@ -23,7 +23,7 @@
  *
  * 用法：`npm run verify:new-gates-mutations`
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -51,7 +51,36 @@ console.log('─'.repeat(64));
  * ⚠️ **这个 `Set` 必须定义在 `red()` 之前**：`const` 有暂时性死区，
  * 反过来写会 ReferenceError——而**那正是「注释里写了、代码没实现」的形状**。
  */
+// ⚠️ **Windows 上是 npm.cmd，不是 npm**——而加 shell:true 会引入 DEP0190 警告，
+// 那正是 docs/cli.md 里记着要消除的一条。**别为了跑通一个门禁引入新警告。**
+const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 const BUNDLED = new Set(['verify']);
+
+/**
+ * 有些门禁打在**构建产物**上，而 `dist` 的状态**由前面跑过什么决定**：
+ * `verify:base` 会清空它、`verify:formats` 会往里塞探针文章。
+ *
+ * ⚠️ **2026-09-28 实测踩到第三种。** 变异脚本跑 `verify-negotiation.mjs` 时
+ * 它报「`markdown-for-agents.md` 存在于产物中」——而那个文件**当下并不存在**
+ * （`ls` 得到的是「不存在」）。也就是说：**上一次门禁留下的 `dist` 与这一次不同**，
+ * 而我起初猜的是「`dist` 被清空」。**三种可能，输出上分不开。**
+ *
+ * 所以：**跑依赖产物的门禁之前，先确保 `dist` 存在。**
+ * ⚠️ 判据是 `content-manifest.json` 在不在，**不是目录在不在**——
+ * 空目录同样「存在」，而那正是 `check:manifest-schema` 当初栽的地方。
+ */
+const NEEDS_DIST = new Set(['verify-negotiation.mjs']);
+
+function ensureDist() {
+  if (existsSync(join(ROOT, 'dist', 'content-manifest.json'))) return;
+  const r = spawnSync(NPM, ['run', 'build'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 600_000,
+  });
+  if (r.status !== 0) {
+    console.log('  ⚠ build 失败，下面依赖产物的门禁结果不可信（那不是变异造成的）');
+  }
+}
 
 /**
  * 跑一个门禁，返回它红没红。
@@ -62,9 +91,10 @@ const BUNDLED = new Set(['verify']);
  * 而 `verify:all` 里的第 4 步跑的是打包那条。
  */
 const red = (script) => {
+  if (NEEDS_DIST.has(script)) ensureDist();
   if (BUNDLED.has(script.replace(/\.mjs$/, ''))) {
-    const r = spawnSync('npm', ['run', 'verify'], {
-      cwd: ROOT, encoding: 'utf8', timeout: 600_000, shell: true,
+    const r = spawnSync(NPM, ['run', 'verify'], {
+      cwd: ROOT, encoding: 'utf8', timeout: 600_000,
     });
     return { red: r.status !== 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
   }
@@ -143,11 +173,39 @@ function mutate({ file, find, replace, alsoEdit, target, why }) {
   const after = red(target);
 
   if (!before.red) {
+    /*
+     * ⚠️ **2026-09-28：这里原来只打一行「仍然绿」。**
+     *
+     * 而「仍然绿」是一个**现象**，不是一个**诊断**。
+     * 那天我因为不看输出，**连着三次改错地方**：以为是 `else` 分支、
+     * 以为是控制流有两个出口、以为是分支解耦不够——三次都错。
+     * 第一次真正去看输出时，门禁明明白白印着
+     * `i 刻意不校验：…——undefined`——**答案就印在脸上**。
+     *
+     * > **现象级信息（它打印了什么）与结论级信息（哪一行错了）之间，
+     * > 隔着一个「去看输出」的动作。** 跳过它就只能推演。
+     * > 而推演错的概率不低——**同一天连错三次就是证据**。
+     *
+     * 所以：报「仍绿」时**必须**把被测门禁的输出尾部打出来。
+     * 「它没报什么」和「它报了什么」必须能在同一屏上看见——
+     * 因为**空输出与无关输出长得一样**，而那正是我判断错的入口。
+     */
+    const tail = before.out
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+      .slice(-6)
+      .map((l) => `      ${l}`)
+      .join('\n');
     problems.push(
       `${target} 在注入「${why}」之后**仍然绿**——这道门禁对该缺陷没有覆盖。\n`
-      + '    → 它要么不该声称覆盖，要么判据比它说的窄。',
+      + '    → 它要么不该声称覆盖，要么判据比它说的窄。\n'
+      + '    ⚠️ **先读它下面这几行再改代码**：「仍然绿」是现象，不是诊断；\n'
+      + '    2026-09-28 我因为不看输出连改三次，三次都改错了地方。\n'
+      + (tail ? `    它实际打印的（末尾）：\n${tail}\n` : '    它实际打印的（末尾）：**（空）**——查不动与「什么都没说」要分开。\n'),
     );
     console.log(`  ✗ ${why}：${target} 仍绿`);
+    if (tail) console.log(tail);
+    else console.log('      （输出为空——「空输出」与「无关输出」长得一样，要分开看）');
     return false;
   }
   if (after.red) {
@@ -166,10 +224,16 @@ function mutate({ file, find, replace, alsoEdit, target, why }) {
      */
     const firstErr = (after.out.split('\n').find((l) => /Error|✗|失败/.test(l)) ?? '').trim();
     problems.push(
-      `恢复之后 ${target} **仍然是红的**——文件没还原干净，**或者环境被前面的步骤改了**。\n`
-      + `    恢复后它报的第一条：${firstErr || '(没抓到)'}\n`
-      + '    **「仍然红」不等于「是我的错」**：先确认是环境还是还原。\n'
-      + '    → 若是环境（例如 `dist` 被 `verify:base` 清空），先重跑 `npm run build`。',
+      `恢复之后 ${target} **仍然是红的**。\n`
+      + `    它报的第一条：${firstErr || '(没抓到)'}\n`
+      + '    **「仍然红」有三种可能，输出上分不开**——\n'
+      + '      ① 文件没还原干净；\n'
+      + '      ② **环境被前面的步骤改了**（`verify:base` 会清空 `dist`，'
+      + '`verify:formats` 会往里塞探针文章）；\n'
+      + '      ③ **上一次跑留下的产物与这一次不一致**——'
+      + '**2026-09-28 实测到的就是这一种**，而我起初猜的是 ②。\n'
+      + '    → **先看它报的第一条**，再决定是重跑 `npm run build`、'
+      + '还是 `git status` 查还原。**别默认是自己弄脏的。**',
     );
     console.log(`  ✗ ${why}：恢复后仍红（先分清是环境还是还原——它报的第一条：${firstErr.slice(0, 90)}）`);
     return false;
