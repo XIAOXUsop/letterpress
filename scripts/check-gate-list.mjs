@@ -24,10 +24,21 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { checkCiWiring } from './ci-wiring.mjs';
 
 const ROOT = process.cwd();
 const problems = [];
+
+/*
+ * 台账全文——**4d / 4e / 4g 三处都要读**，所以定义在**文件级**。
+ *
+ * ⚠️ **第一版把它定义在 4e 那个 `{ }` 块里**，而 4g 在另一个块里
+ * 引用不到 → `ReferenceError: ledgerText is not defined`。
+ * **症状是崩，不是假绿**（`const` 不会「取到旧值」，只会抛）——
+ * 同一个坑 2026-09-28 在 `check-rule-levels` 的自测里踩过一次。
+ */
+const ledgerText = readFileSync(join(ROOT, 'knowledge', 'gate-negatives.md'), 'utf8');
 
 // ── 期望的步骤清单 ────────────────────────────────────────────────────
 //
@@ -73,7 +84,7 @@ const EXPECTED = [
   ['npm run check:adapter-size', '**站点专属接线只剩「站点事实」**（阶段 4 第 4 条的代理指标）——行数只能降不能升，且不能靠「不接核心」变小'],
   ['npm run check:not-a-demo', '**「接入」而不是「演示」**：核心的算法行为在两个消费者上逐字相同，而异构点那一项**必须**分叉——两边都空正是演示的典型形态'],
   ['npm run check:no-duplicate-lists', '**同一份清单不许写两遍**（同族第四道：前两次是「同一逻辑两处实现」，这次是「同一字面量两处拷贝」）'],
-  ['npm run check:command-scripts', '**命令名与脚本名对不上时必须登记在册**（实测 48 个里 8 个分叉）——照着命令名 grep 脚本会落空'],
+  ['npm run check:command-scripts', '**命令名与脚本名对不上时必须登记在册**（实测 59 个里 8 个分叉）——照着命令名 grep 脚本会落空'],
   ['npm run check:rule-levels', '**AGENTS.md 那张规则表的第二、三列与实测一致**——级别逐条真跑（静态分析只捞到 1/11 条）；含义列里**能机械核的 5 条**逐条跑，而**核不了的 5 条显式列出**（不写成「11 条都核了」）'],
   ['npm run check:agents-coverage', '**`AGENTS.md` 里每个含可证伪声明的小节都有门禁在核**（13 个小节、7 个含声明、3 个是散文不算缺口）——「匹配到标记却无门禁认领」也红，那是空白归属'],
   ['npm run check:staged', '**暂存区与工作区一致**（提交前自检：add 过之后又改过的东西不会被提交）'],
@@ -613,7 +624,7 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
    *
    * ⚠️⚠️ **台账记的是命令名，而 `gateScripts` 给出的是脚本文件名——两样东西。**
    * 我第一版直接拿脚本文件名去 join 台账，于是**命中 0 道**，
-   * 而台账里明明有 27 个门禁。**48 个单文件脚本里有 8 个命令名与脚本名不同**
+   * 而台账里明明有 27 个门禁。**59 个单文件脚本里有 8 个命令名与脚本名不同**
    * （`check:anchors` → `check-anchor-links.mjs`），**这就是那 8 个的来源**——
    * 同一个坑，`check-command-scripts.mjs` 当初就是为它建的。
    *
@@ -760,7 +771,6 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
  * 加词容易漏，而**漏报的后果是这条判据渐渐没人信**。
  */
 {
-  const ledgerText = readFileSync(join(ROOT, 'knowledge', 'gate-negatives.md'), 'utf8');
   /*
    * ⚠️⚠️ **豁免词必须在「路径之外」判，不能扫整行。**
    *
@@ -881,6 +891,109 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
     console.log(`  ✗ ${offenders.length} 道没排除：${offenders.join('、')}`);
   } else {
     console.log(`  ✓ ${readers} 道读 scripts/ 源码的门禁都排除了变异脚本`);
+  }
+}
+
+/*
+ * ── 4g. 台账里**门禁自己报出来的实测值**，必须与现在跑出来的一致 ───────
+ *
+ * ⚠️ **这是 4d 之后第一处真正的数字漂移，而它是当场抓到的。**
+ *
+ * 2026-09-29 实测：台账里写着「一次性探针扫了 **48** 个单文件命令」，
+ * 而 `check-command-scripts` 现在报的是「**59** 个命令，8 个与脚本名对不上」。
+ * 分叉数没错（8），**总数从 48 涨到 59 了**——
+ * 因为这几天加了十几道门禁，**而那一句没人核**。
+ *
+ * > 与「文档里的实测数字也是断言」同族，**但更隐蔽**：
+ * > 那句话在**台账**里，而台账的规矩是「记事实」，**不是「记当前状态」**。
+ *
+ * ⚠️⚠️ **而判据的方向必须反过来。**
+ *
+ * 我先试的是**扫「现在/当前/当下 + 数字」的句子**——**3 句，全是误报**：
+ * 一句是转述的过时理由、一句是耗时描述、一句是结论编号。
+ *
+ * > **判据太宽就变成噪声，而噪声会让人忽略真信号**——
+ * > 而这里连一处真信号都没有（逐条看过：台账里没有「现在有 N 条」的门禁级声明）。
+ *
+ * 所以改成从**可重跑的那一侧**下手：**只核「门禁自己会报出来的那个数」**。
+ * 这类句子有固定形状（「扫了 N 个」「检查了 N 个」），
+ * **而它们的来源是门禁输出——重跑一遍就能对**。
+ *
+ * ⚠️ **只覆盖两张有登记的表**（命令数 / 锚点数）：
+ * 那些数字的来源是**门禁输出**，而不是散文。
+ * 新的登记要连「哪个命令能重算它」一起写，否则这条判据自己也变成手写清单。
+ *
+ * ⚠️⚠️⚠️ **而它只核台账那一份——同一个数字在仓库里被抄了 7 遍。**
+ *
+ * 2026-09-29 实测：「48 个单文件命令 / 8 个分叉」这个事实，
+ * 当时出现在 **8 个地方**（台账 ×2、`check-gate-list` 的 `EXPECTED` ×1 与注释 ×1、
+ * `check-command-scripts` 的文件头、`lib/command-scripts.mjs` 的文件头、
+ * `check-single-literal` 的注释、`docs/cli.md` 的表格）。
+ * 4g 抓到台账那 2 处，**其余 6 处要人自己记得改**——而我改完台账就差点忘了。
+ *
+ * * ⚠️ **「8」这个数我是数出来的，不是记的**（`grep -rl` 后按文件计数：
+ * 台账 2、`check-gate-list` 2、其余 4 个文件各 1）。
+ *
+ * > **一个数字在八个地方写着，就要有八处都能被核对。**
+ * > 否则修了一处，另七处继续骗人——**而读者读到的是任意一处**。
+ * >
+ * > 本条判据**明确不管那五处**。要管，就得让每个转述点都带上
+ * > 「哪个命令能重算它」——**那是把转述变成结构化字段**，代价大得多。
+ * > **选一个错的代价更小的，然后写明代价**（与判据 ④ 的处置同形）。
+ */
+{
+  /** 台账里出现的「N 个命令 / N 处分叉」——**数字的来源是 `check:command-scripts`**。 */
+  const CMDS = [...ledgerText.matchAll(/(\d+)\s*个(?:单文件)?命令/g)]
+    .filter((m) => Number(m[1]) > 10)   // 排除「4 个命令」这类举例
+    .map((m) => Number(m[1]));
+  const DIVERGENT = [...ledgerText.matchAll(/(\d+)\s*个(?:的)?(?:命令名与脚本名|与脚本名)对不上/g)]
+    .map((m) => Number(m[1]));
+
+  console.log('');
+  console.log('台账里门禁自报实测值的对账（4g）');
+  console.log('─'.repeat(64));
+
+  if (CMDS.length === 0) {
+    console.log('  – 台账里没有「N 个命令」这类可重算的数字（跳过）');
+  } else {
+    // 重跑那道门禁，取它自己报的那个数
+    const out = execFileSync('node', [join(ROOT, 'scripts', 'check-command-scripts.mjs')], {
+      encoding: 'utf8',
+    });
+    const m = /(\d+)\s*个命令，(\d+)\s*个与脚本名对不上/.exec(out);
+    if (!m) {
+      problems.push(
+        '**`check-command-scripts` 的输出里找不到「N 个命令，N 个与脚本名对不上」**——\n'
+        + '    那道门禁改了输出格式，而本判据靠解析它。\n'
+        + '    **「4g 曾经核过」这句话此刻不成立**（形态四：查不动 ≠ 通过）。',
+      );
+      console.log('  ✗ 重跑时找不到那段输出——4g 此刻核不到任何东西');
+    } else {
+      const actual = { total: Number(m[1]), divergent: Number(m[2]) };
+      for (const claimed of [...new Set(CMDS)]) {
+        if (claimed === actual.total) {
+          console.log(`  ✓ 台账写「${claimed} 个命令」，实测 ${actual.total}`);
+        } else {
+          problems.push(
+            `台账里写着「**${claimed} 个命令**」，而现在跑出来是 **${actual.total}**。\n`
+            + '    → 那是**门禁自己报出来的数**，重跑一遍就能对，**而它漂了没人发现**。\n'
+            + '    改台账（若那几句记的是历史事实，就写清是哪一天）。',
+          );
+          console.log(`  ✗ 台账写 ${claimed} 个命令，实测 ${actual.total}`);
+        }
+      }
+      for (const claimed of [...new Set(DIVERGENT)]) {
+        if (claimed === actual.divergent) {
+          console.log(`  ✓ 台账写「${claimed} 个对不上」，实测 ${actual.divergent}`);
+        } else {
+          problems.push(
+            `台账里写着「**${claimed} 个命令名与脚本名对不上**」，`
+            + `而现在跑出来是 **${actual.divergent}**。`,
+          );
+          console.log(`  ✗ 台账写 ${claimed} 个分叉，实测 ${actual.divergent}`);
+        }
+      }
+    }
   }
 }
 
