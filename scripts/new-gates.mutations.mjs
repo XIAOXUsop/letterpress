@@ -811,6 +811,46 @@ const CASES = [
     target: 'check-gate-list.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着 4d——而它的第一版判据把「格式」当成了「内容」。**
+     *
+     * 4d 要核的是「台账里『注入什么』那一列写不写得出别人能照着做的动作」。
+     * 第一版判据是「有没有反引号」，报出 25 行——**而它错了**：
+     * 「把 README 里的测试条数改成 999」完全可复现，只是没打反引号。
+     *
+     * > **「没加标记」≠「不可复现」**。
+     *
+     * 变异把「注入什么」整列换成没有任何具体对象的话（全是虚词），
+     * 按第一版的判据它**照样绿**（有反引号），按现在的判据必红。
+     */
+    why: 'check:gate-list — 台账「注入什么」写成一句没有任何具体对象的话（4d 必须红）',
+    file: 'knowledge/gate-negatives.md',
+    find: '| `verify:questions` | 拆掉 `scripts/check-questions.mjs` 里「金标点名了不存在的页面」那条判据 |',
+    replace: '| `verify:questions` | 把它弄坏看看 |',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️⚠️ **这一条守着 4e，而它的第一版正则**看不见中文路径**。**
+     *
+     * 4e 要核「台账里点名的文件还在不在」。
+     * 第一版路径段写的是 `[\w./-]` —— 而 **JS 的 `\w` 是 ASCII**，
+     * 于是我拿一个中文路径注入，门禁**照样绿**，
+     * 而 `existsSync` 明确是 false：**判据压根没看见那个路径。**
+     *
+     * > 台账里本来就有中文文件名（`knowledge/fixtures/second-site/导出-总览.md`），
+     * > 而**恰恰是这些路径最需要核**——它们最容易被改名。
+     *
+     * 所以这条变异注入的正是**一个中文的不存在路径**：
+     * 第一版正则抓不到，修正后必须红。
+     */
+    why: 'check:gate-list — 台账里点名一个中文的不存在路径（4e 必须红，而旧正则看不见它）',
+    file: 'knowledge/gate-negatives.md',
+    find: '| `src/lib/wiki/read-page.ts` | `main` 用 **YAML 解析器**读 `review`',
+    replace: '| `src/lib/wiki/这个文件不存在.ts` | `main` 用 **YAML 解析器**读 `review`',
+    target: 'check-gate-list.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     file: 'src/lib/wiki/page-to-doc.ts',
     find: "declaredRelations: isWiki ? options.relations ?? page.related : [],",

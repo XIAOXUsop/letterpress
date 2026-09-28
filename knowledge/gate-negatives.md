@@ -29,15 +29,15 @@
 | `verify:anchors` | 造一个指向不存在锚点的链接 `[[x#不存在]]` | ✅ 红 | 2026-09-24 |
 | `verify:base` | 在组件里注入绕过 `path()` 的硬编码 `href` | ✅ 红（32 个页面） | 2026-09-24 |
 | `verify:search` | 把全站 `<html lang>` 改成 `xx-YY`（不存在的语言） | ✅ 红 | 2026-09-24 |
-| `verify:impact` | 删掉一条金标用例 | ✅ 红（暴露「全过≠都量过」） | 2026-09-24 |
-| `verify:impact` | 金标里点名一个未登记的来源 | ✅ 红 | 2026-09-24 |
+| `verify:impact` | 删掉 `knowledge/impact-cases.md` 里一条金标用例 | ✅ 红（暴露「全过≠都量过」） | 2026-09-24 |
+| `verify:impact` | 在 `knowledge/impact-cases.md` 里点名一个未登记的来源 | ✅ 红 | 2026-09-24 |
 | `verify:impact` | 把来源登记退回「只覆盖 §2.2.2」 | ✅ 红（`ic` 未覆盖） | 2026-09-24 |
 | `verify:impact` | 删掉某版本的 `evidence` | ✅ 红 | 2026-09-24 |
-| `verify:questions` | 闸二失效 | ✅ 红 | 2026-09-24 |
-| `verify:questions` | 闸一门槛归零 | ✅ 红 | 2026-09-24 |
-| `verify:questions` | 接缝识别失效 | ✅ 红 | 2026-09-24 |
-| `verify:questions` | 单字母权重闸失效 | ✅ 红 | 2026-09-24 |
-| `verify:questions` | 问句壳剔除失效 | ✅ 红 | 2026-09-24 |
+| `verify:questions` | 拆掉 `scripts/check-questions.mjs` 里「金标点名了不存在的页面」那条判据 | ✅ 红 | 2026-09-24 |
+| `verify:questions` | 把 `src/lib/wiki/retrieve.ts` 里 `assess()` 的入组门槛改成 0 | ✅ 红 | 2026-09-24 |
+| `verify:questions` | 让 `src/lib/wiki/retrieve.ts` 认不出问题中的**检索词与期望命中重合**（接缝那一条） | ✅ 红 | 2026-09-24 |
+| `verify:questions` | 把 `src/lib/wiki/retrieve.ts` 里单字母加权那段改成 0 | ✅ 红 | 2026-09-24 |
+| `verify:questions` | 去掉 `scripts/check-questions.mjs` 读 `knowledge/questions.md` 时对示例那节的剔除 | ✅ 红 | 2026-09-24 |
 | `verify:portability` | 把 `graph.ts` 的 import 改回 `.js` 后缀 | ✅ 红 | 2026-09-24 |
 | `verify:portability` | 把 `?.related?.includes` 改回 `?.related.includes` | ✅ 红 | 2026-09-24 |
 | `verify:formats` | 让 `provenance` 不进产物 | ✅ 红 | 2026-09-24 |
@@ -45,7 +45,7 @@
 | `verify:formats` | 把 CSS / 字体 / 站内 JS 体积改成错值 | ✅ 红 | 2026-09-24 |
 | `verify:formats` | 往 `_astro` 里塞第二份 CSS | ✅ 红 | 2026-09-24 |
 | `verify:second-site` | 从异构语料里去掉 `refs` 字段 | ✅ 崩（暴露崩溃 bug） | 2026-09-24 |
-| `verify:reproducible` | 在生产源码里读构建时钟 | ✅ 红 | 2026-09-23（此前记录） |
+| `verify:reproducible` | 在 `src/` 的生产源码里读构建时钟（跨时区两次构建产物不同） | ✅ 红 | 2026-09-23（此前记录） |
 | `verify:only`（契约） | 篡改产物里的 markdown 字节数 / hash | ✅ 红 | 2026-09-23（此前记录） |
 | **`verify:online`** | **未验** | 它对线上 Demo 跑，Pages 上 7 项协商必然红——**那是 README 写明的限制，不是缺陷** | — |
 | `verify:answers` | 把 `read-page` 的字段名改回 `refs` | ✅ 红（4 条主命中没有依据） | 2026-09-24 |
@@ -53,8 +53,8 @@
 | `verify:gates`（编排检查） | 从 `verify:all` 里删掉 `verify:questions` | ✅ 红（13 步 vs 期望 14 步，并指出第 7 步错位） | 2026-09-24 |
 | `verify:portability` | 从 `wiki-review.mjs` 摘掉 `pageToDoc` 的 import 与调用 | ✅ 红（「没有真实调用方」） | 2026-09-28 |
 | `check:onboarding-doc` | 把接线文档表①里的断链数从 3 改成 9 | ✅ 红 | 2026-09-28 |
-| `check:onboarding-doc` | 删掉表①的两行数据行 | ✅ 红（12 条，报「取不到这个值」） | 2026-09-28 |
-| `check:onboarding-doc` | **第一版把期望值硬编码在脚本里、文档读进来却从不使用** | ⚠️ **判据自己错了**——改文档不会红，改代码才会红；而它声称要核的正是文档。重写为「从文档表格里解析数字」，再验上述两条 | 2026-09-28 |
+| `check:onboarding-doc` | 删掉 `docs/onboarding-a-new-site.md` 表①的两行数据行 | ✅ 红（12 条，报「取不到这个值」） | 2026-09-28 |
+| `check:onboarding-doc` | **第一版把期望值硬编码在 `scripts/check-onboarding-doc.mjs` 里、`docs/onboarding-a-new-site.md` 读进来却从不使用** | ⚠️ **判据自己错了**——改文档不会红，改代码才会红；而它声称要核的正是文档。重写为「从文档表格里解析数字」，再验上述两条 | 2026-09-28 |
 | `check:agents-doc` | 让 `buildGraph` 的标题不进 `lookup`（只坏「写标题」那条路） | ✅ 红，且**分别报出**「只写标题 → 没解析到；只写 slug → 解析成功」 | 2026-09-28 |
 | `check:agents-doc` | **第三类断言的 `viaTitle` 与 `viaSlug` 是同一行代码** | ⚠️ **同一个断言写了两遍**——`outbound` 里两个链接落进同一个 `Set`、去重后只剩一个元素，所以单看它区分不出哪条路解析了。拆成两份语料各自只含一个链接，再分别断言 | 2026-09-28 |
 | `verify:questions` | 删掉 `relationList` 里「剥方括号」那两行 | ⚠️ **仍绿——它压根不在量这条路径**。原因：语料里的关系都是 `[a, b]`（含分隔符），不剥括号 `split` 照样切得对，**只有单元素时才会坏**。已补 4 条单测覆盖单元素 / 多分隔符 / 字段缺席 / 字段名是参数，变异后 4 条会红 | 2026-09-28 |
@@ -64,13 +64,13 @@
 | `check:two-paths`（新） | 撤掉 `pageToDoc` 里 `post` 丢 `wikiKind` 的对齐 | ✅ 红 | 2026-09-28 |
 | `check:two-paths`（新） | 撤掉 `post` 丢 `declaredRelations` 的对齐 | ✅ 红 | 2026-09-28 |
 | `check:two-paths`（新） | 撤掉 `post` 丢 `review` 的**外层**守卫 | ✅ 红 | 2026-09-28 |
-| `check:two-paths`（新） | **只撤内层条件展开那一道锁** | ⚠️ **仍然绿——因为外层 `const review = isWiki ? … : undefined` 挡住了**。同一个约束写了两道锁，**它们互为掩护** | 2026-09-28 |
+| `check:two-paths`（新） | **只撤掉 `src/lib/wiki/page-to-doc.ts` 里 `review` 的内层条件展开那一道锁**（外层还在） | ⚠️ **仍然绿——因为外层 `const review = isWiki ? … : undefined` 挡住了**。同一个约束写了两道锁，**它们互为掩护** | 2026-09-28 |
 | `read-page` 的 `original` 解析 | 把「先切出 `original:` 块」换成「全文扫 `reason:`」 | ✅ 红（`不会串到别的块里的 reason:` 与 `空 reason` 两条都红） | 2026-09-28 |
 | `read-page` 的 `original` 解析 | 我第一版那条测试的固件用 `locator:` 而不是 `reason:` | ⚠️ **测不到 ≠ 测过**——那个固件压根触发不了串味，换成「`review:` 块里有一行 `reason:`」才真正验到 | 2026-09-28 |
 | `check:two-paths` | 把构建侧 `related` 那处判定删掉（4 → 3 处） | ✅ 红（**修好之前它绿**——第一版只判 `gates === 0`，「基准还在」被当成了「基准没变过」） | 2026-09-28 |
 | `check:two-paths` | 给构建侧加第 5 处判定 | ✅ 红 | 2026-09-28 |
 | `check:two-paths` | 把 `pageToDoc` 的 `docKind` 缺省从 `wiki` 改成 `post` | ✅ 红 | 2026-09-28 |
-| `check:adapter-size`（新） | 在映射层里加一行手写接线 | ✅ 红（报出多出的那行） | 2026-09-28 |
+| `check:adapter-size`（新） | 在 `scripts/check-second-site-real.mjs` 的映射层里加一行手写接线 | ✅ 红（报出多出的那行） | 2026-09-28 |
 | `check:adapter-size`（新） | 把 `readContentDirs` 换成 `const pages = []`（**不接核心**） | ✅ 红（「定位不到映射层」——**不当成 0 行**，那正是「查不动 ≠ 空集」） | 2026-09-28 |
 | `check:adapter-size`（新） | **切片切到 `const docs =` 为止**（第一版） | ⚠️ **判据自己红了**——`pageToDoc` 那整行落在段外，于是「仍调用核心」报红而实现是对的。改成切到 `buildGraph` 之前 | 2026-09-28 |
 | `read-page` 的 `draft` 读取 | 把 `draft` 恒给 `false`（修好前的行为） | ✅ 红（3 条，含「草稿会被 buildGraph 滤掉」那条**结果级**判据） | 2026-09-28 |
@@ -1831,7 +1831,7 @@ CI 上「知识层门禁（子进程）」连续三次红。定位过程本身�
 
 | | 怎么判定 | 实测 |
 |---|---|---|
-| ① 有变异脚本 | 读 `scripts/*mutations*.mjs` 的 **`target:` 字段** | 17 道 |
+| ① 有变异脚本 | 读 `scripts/` 下每个变异脚本（文件名含 `mutations`）的 **`target:` 字段** | 17 道 |
 | ② 台账里有一行 | 读本文件**表格第一列**的门禁名 | 15 道 |
 | ③ 登记了理由 | `NO_MUTATION` | 1 道（`check:staged`） |
 
@@ -1856,6 +1856,43 @@ CI 上「知识层门禁（子进程）」连续三次红。定位过程本身�
 有多少是真跑出来的、有多少是后来补记的，本检查无从判断。**
 （`verify:review` 那行记的就是「6 个知识页全部一致」——
 而**「全对」与「没看见」在输出上一样**，那正是形态十一。）
+
+---
+
+## 4d / 4e：台账那一列**写不写得出别人能照着做的动作**（2026-09-29）
+
+4c 只核「台账里有没有这一行」，不核「那一行写的是不是真的」——
+**表格里写「✅ 红」还是后来补记的，机器判不了。**
+**能判的是另一件事：那一行的「注入什么」够不够具体。**
+
+实测：表里 59 行声称验过，**12 行的「注入什么」整句没有任何具体对象**：
+
+| 原来写的 | 为什么无从下手 |
+|---|---|
+| `闸二失效` | **「闸二」在代码里没有编号**——那份文件的注释说的是「闸：先证明这把尺子量到了东西」 |
+| `闸一门槛归零` / `接缝识别失效` / `单字母权重闸失效` / `问句壳剔除失效` | 同上，全是 `verify:questions` |
+| `删掉一条金标用例` | 知道金标文件就能做，但没写 |
+| `**只撤内层条件展开那一道锁**` | 「那一道锁」指哪一处，看不出来 |
+
+已全部补成指向**真实文件与具体动作**（如 `src/lib/wiki/retrieve.ts`、`scripts/check-questions.mjs`），
+并**逐个核实那些文件真的存在**（23 个路径，22 个在，1 个是已记录的历史）。
+
+### 判据本身也栽了两次，两次都记在这里
+
+**① 第一版判据是「有没有反引号」，报出 25 行——而它错了。**
+「把 README 里的测试条数改成 999」**完全可复现**，只是没打反引号。
+> **「没加标记」≠「不可复现」**——那是我把**格式**当成了**内容**。
+
+**② 4e 的路径正则用 `w`，而 JS 的 `w` 是 ASCII——中文路径它压根看不见。**
+我注入 `src/lib/wiki/这个文件不存在.ts`，门禁照样绿，而 `existsSync` 明确是 false。
+而**台账里本来就有中文文件名**（`knowledge/fixtures/second-site/导出-总览.md`），
+**恰恰是这些路径最需要核**。改成「非反引号、非空」来界路径段。
+
+**③ 豁免词扫整行 → 豁免词可以藏在被豁免的对象里。**
+注入的文件名里就有「不存在」三个字，于是那一行「明说了它没了」。
+> **一个叫「不存在」的文件，永远不需要解释自己为什么不存���。**
+
+所以豁免改成：**先把所有路径从那一行里摘掉，再看剩下的文字**。
 
 ---
 
