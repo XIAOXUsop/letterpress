@@ -96,6 +96,26 @@ async function snapshot(dir) {
       result.set(relative, {
         bytes: body.byteLength,
         sha256: createHash('sha256').update(body).digest('hex'),
+        /**
+         * **这个产物里有没有本仓库的绝对路径。**
+         *
+         * ⚠️ **为什么把它放进 `snapshot`**：因为「文件名为什么会在换目录后变」
+         * 的答案只有一个——**某个环节把绝对路径算进了哈希或文件名**。
+         * **而那条路径的痕迹会留在产物里**（文件名里，或文件内容里）。
+         *
+         * 对应 withastro/astro#17377：字体等资源的哈希里混进了解析出的
+         * 绝对路径，于是「在 A 目录构建」与「在 B 目录构建」产出的文件名不同，
+         * 部署到 Cloudflare 就 404——**而构建在本地永远是绿的**。
+         *
+         * > **「跨时区两次构建的文件名一致」与「换目录后文件名也一致」
+         * > 在输出上完全一样**——**而这个检查只做了前者**。
+         * > 本项目现在两个时区在**同一目录**构建，**目录这一维压根没被覆盖**。
+         *
+         * ⚠️ **而记录在 `snapshot` 里是有意的**：这样它在两次构建里各算一次，
+         * **若两次都命中，会在下面的对比里自然报出「两次都有」**——
+         * **而那比「只报一次」更能说明「这不是偶发」。**
+         */
+        leaked: body.includes(Buffer.from(root)) || relative.includes(root),
       });
     }
   }
@@ -138,6 +158,32 @@ if (first.size === 0 || second.size === 0) {
   console.error('检查失败：至少一次构建没有产生任何文件。');
   process.exit(1);
 }
+
+/**
+ * 产物里有没有本仓库的绝对路径 —— 那是「换目录构建就 404」的成因。
+ *
+ * ⚠️ **为什么单列一条而不是并进 `differences`**：
+ * **两次构建都在同一目录**，所以**这条泄漏在两次里表现完全一样**，
+ * **并进对比就永远看不见**（「两次一致」正是它成立的条件）。
+ * **「一致」与「一致地错」在输出上完全一样**——这是本项目记过的形态十四。
+ */
+const leaked = [...second.entries()].filter(([, v]) => v.leaked).map(([p]) => p);
+if (leaked.length > 0) {
+  console.error(
+    `检查失败：${leaked.length} 个产物里含本仓库的绝对路径——`
+    + '换一台机器或换一个目录构建，这些文件的哈希会变，部署即 404。',
+  );
+  for (const p of leaked.slice(0, 12)) console.error(`  ✗ ${p}`);
+  if (leaked.length > 12) console.error(`  …另有 ${leaked.length - 12} 个`);
+  console.error(
+    '  → 成因见 withastro/astro#17377：资源哈希里混进了绝对路径。\n'
+    + '  → ⚠️ 注意这条**跨时区对比查不出来**：两次构建在同一目录，'
+    + '而泄漏在两次里表现完全相同。',
+  );
+  process.exit(1);
+}
+console.log('产物里没有本仓库的绝对路径（换目录构建不会改变任何文件名）。');
+
 if (differences.length > 0) {
   console.error(`检查失败：${differences.length} 个产物在 UTC 与 America/Los_Angeles 之间不同。`);
   for (const difference of differences.slice(0, 20)) {
