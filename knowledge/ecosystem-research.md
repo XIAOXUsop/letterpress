@@ -270,3 +270,76 @@ Cloudflare Pages 与 Netlify（Vercel 走 `vercel.json`）。
 
 ⚠️ **而「只比文件名不比内容」是有意的**——
 `content-manifest.json` 之类含时间戳，**比内容会永远红**。
+
+---
+
+## 2026-09-29（第三轮）：包体积与运行时开销（子 agent 实测 tarball）
+
+**方法**：`npm pack` 逐个下载官方 tarball 并称重（`2026-09-29` 实测，单位 KB）：
+
+| 包 | tarball | 说明 |
+|---|---:|---|
+| **`mermaid`** | **25,779.8** | ⚠️ **本项目 1.0.0 新加的那项** |
+| `fontsource-variable-noto-sans-sc` | 4,555.5 | CJK 字体子集（**本项目未装**） |
+| `docsearch-js` | 2,626.4 | Algolia 客户端 |
+| `astro` | 792.6 | 框架本体 |
+| `prismjs` | 527.6 | 语法高亮（对照：Shiki 走 WASM） |
+| `flexsearch` | 464.2 | 搜索库 |
+| `shiki` | 187.8 | 语法高亮 |
+| `minisearch` | 181.3 | 搜索库 |
+| `orama` | 72.3 | 搜索库 |
+| `pagefind` | 10.3 | **本项目用的那个**（+ 平台二进制另计） |
+
+### ⚠️ 由此得到一个必须写下来的结论
+
+> **`mermaid` 的 tarball 是 `pagefind` 的 2,502 倍。**
+> tarball 体积 ≠ 客户端下载量（页面只取 `dist/mermaid.min.js`，实测 959 KB / HTTP 200），
+> **但量级差 3 个数量级这件事本身不能忽略。**
+
+**本项目的处置（写进 `rehype-mermaid.ts` 与 `Mermaid.astro`）**：
+**按需加载**——`document.querySelectorAll('pre.mermaid')` 为空就直接不注入脚本标签，
+**所以「没有图的页面下载量为 0」**。这是与 `pagefind` 同一个取舍。
+
+⚠️ **而这一条是「已经做了」而不是「打算做」**：
+`Mermaid.astro` 里的 `if (blocks.length === 0) return;` 就是那条门禁。
+
+### 搜索方案对比（供决策参考，本项目**没有**换）
+
+本项目用 **Pagefind**（tarball 10.3 KB，本体是 Rust/WASM + 各平台二进制）。
+生态里另两种常见方案：Algolia `docsearch-js`（2.6 MB，需外部服务）、
+`flexsearch`（464 KB，需自己建索引）。
+
+⚠️ **调研的第一轮指出：Pagefind 在特定部署平台失效是 5 条 issue 的头号成因**
+（fuwari#696 #774 #705、Firefly#311、Frosti#79），**而 0/6 竞品做对**。
+**本项目的 `search.astro` 两个坑都处理了**（见上面那一节）。
+**「换掉 Pagefind」没有证据支持**——**而「改掉」的理由若只是「它 tarball 小」，
+那不成立**（10.3 KB 本来就是最小的那个）。
+
+
+### ⭐ 调研表格里的一个「0/6」，查下来是**浏览器自己没做**（2026-09-29）
+
+调研那张表里有 `hanging-punctuation`（标点悬挂）**0/6**，
+读起来像「六个竞品都漏了，本项目补上就是差异化」。
+
+**查 MDN browser-compat-data 之后，这个读法是错的：**
+
+| 浏览器 | `hanging-punctuation` |
+|---|---|
+| Chrome | **`version_added: false`** —— 从不支持 |
+| Firefox | **`version_added: false`** —— 从不支持 |
+| Safari | 10 起（26.5 之前是部分实现，`first`/`last` 只覆盖部分引号） |
+
+**Chromium 系与 Firefox 完全不支持，只有 Safari 支持。**
+
+> **「竞品都没做」与「浏览器根本做不了」在表格里完全一样。**
+> 而这里若照着调研补上，等于**为一个占绝大多数浏览器份额的属性写无效声明**——
+> **它会安静地什么都不做**，而「我加了一个业界领先的特性」这句话是假的。
+
+**所以不加。** 而「不加的理由」必须写下来，
+**否则下一个人会指着那张「0/6」的表格再来提一次**
+（与「孤儿资源检测」那条否决同一个道理：查过并否决 ≠ 没人查）。
+
+**顺带把上一条 `line-break: strict` 的选择做实了**：
+它 Chrome 58 / Firefox 69 / Safari 11 起**全部支持**——
+**同样是排版禁则，同一张表上的一项能加一项不能加，
+差别只在「浏览器到底实现没有」**。**而那必须查，不能从表格的空缺推断。**
