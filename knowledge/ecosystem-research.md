@@ -124,3 +124,94 @@
 4. **本项目 star 数在调研时为 1**（`XIAOXUsop/letterpress`，创建 2026-09-11）。
    生态 star 排第 1 的是 astrowind（6,000），排第 3 的是 fuwari（5,045）。
    **star 反映历史积累而非活跃度**——fuwari 有 102 个 open issue 而 astrowind 只有 2 个。
+
+---
+
+## 2026-09-29（第二轮）：性能、缓存、可访问性与产物契约
+
+### ⚠️ 先记一条方法论：**这一轮里有一条结论经不起核实**
+
+子 agent 报告：「`netlify/` 目录下没有 `_headers` 文件，
+所以同一份产物在 Netlify 上部署，`_astro/*` 拿不到一年缓存」。
+
+**复核结果：不成立。** `public/_headers` 存在（2086 字节），
+最后一段明确是：
+
+```
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+```
+
+而且我清过 `dist` 再构建，**`dist/_headers` 在产物里**——
+所以 Cloudflare Pages 与 Netlify 两边都拿得到，**三平台是对称的**。
+
+> ⚠️ **「我没找到」与「它不存在」在输出上完全一样**——
+> 而这一条是**「它不在那个目录」**，而正确的位置是 `public/`。
+> **这与本项目记过的「查不动 ≠ 没有」是同一族。**
+
+**所以：这一轮的其他结论也不能直接采信。** 下面每条都标了我复核到哪一步。
+
+### 复核过、成立的部分
+
+**① gzip 会把强 ETag 降级为弱 ETag**（在本项目线上地址实测）
+
+```
+无 Accept-Encoding：   ETag: "6ab6ba2d-d2f"      ← 强
+Accept-Encoding: gzip: ETag: W/"6ab6ba2d-d2f"    ← 弱，opaque-tag 完全相同
+```
+
+对应 RFC 9110 §8.8.3.3：内容编码后的表示应与未编码的用**不同的强 ETag**。
+
+> **对本项目的含义**：「ETag 存在且稳定」这类断言**必须显式固定请求头**，
+> 否则**自己跟自己不一致**。
+> ⚠️ 而本项目目前**没有 ETag 断言**——这是「先记着，不急做」的那一类。
+
+**② GitHub Pages 那个「10 分钟」是 publish 延迟，不是 CDN TTL**
+
+官方文档原文（`docs.github.com` 的 Creating a GitHub Pages site）：
+
+> "It can take up to 10 minutes for changes to your site to **publish** after
+> you push… If you don't see… after **an hour**, see About Jekyll build errors…"
+
+而实测响应头是 `Cache-Control: max-age=600`——**恰好也是 600 秒，
+但纯属巧合，两件事独立**。措辞是 "to publish"、兜底是 "an hour"（部署语境）、
+全文只出现这一次——三条都指向「部署延迟」。
+
+> **同一句话被两种读法都当成证据**——而这正是本项目记过的那个坑。
+> **分辨它靠的是「兜底那句话是什么语境」，不是靠数字对不对。**
+
+**③ 四个平台的默认缓存头差异**（子 agent 实测，我未逐条复核）
+
+| 平台 | HTML | 带指纹资源 |
+|---|---|---|
+| GitHub Pages | `max-age=600` | 同左（**不区分路径**） |
+| Netlify | `max-age=0, must-revalidate` | 一年 immutable |
+| Vercel | `max-age=0, must-revalidate` | 仅 `/_next/static/immutable/*` 一年 |
+| **Cloudflare Pages** | `max-age=0, must-revalidate` | **同样 `max-age=0`** |
+
+最反直觉的是 Cloudflare Pages：**对自己生成的哈希资源也不给长缓存**，
+必须手写 `_headers`（withastro/astro#16692 佐证）。
+**而本项目的 `public/_headers` 正是为此存在的**——它同时服务
+Cloudflare Pages 与 Netlify（Vercel 走 `vercel.json`）。
+
+### ⚠️ 复核后不成立 / 未能核实的
+
+- **「Netlify 缺 `_headers`」**——不成立，见上。
+- **两个「GitHub Pages 缓存住旧内容」的具名 issue 引用**
+  （`MikeVeerman/dailydoom#16`、`AustinSiu/mtgAssistantBrewer#40`）——
+  子 agent 自己标了「未能核实」，我同样**无法确认它们存在或其内容**。
+  同类现象在 GitHub 上确有大量（cache busting / stale assets），
+  **但不要引用这两个链接**。
+- **Gatsby Cloud（已下线）/ Firebase Hosting 默认头 / 自定义域名的缓存头** ——
+  均无官方文字支撑，**属推断**。
+
+### 由此得出的两条可做判据（都还没做）
+
+| 判据 | 能核什么 | 会漏什么 |
+|---|---|---|
+| **孤儿资源检测**（`dist` 文件集合 ⇄ HTML/CSS 引用集合求双向差集） | 未引用的原图、构建死 chunk、sitemap 里的幽灵 URL。**纯静态、零依赖** | 运行时按需加载的资源（`import()` 的目标）容易误判 |
+| **跨部署文件名一致性**（不同目录 / 不同 TZ 各构建一次，**只比文件路径集合**） | Astro #17377 那类「字体哈希含绝对路径 → 换目录构建产物名不同」 | **只比文件名不比内容**是有意的——内容含时间戳是正常的，比内容会永远红 |
+
+### 本项目**已做对**、而生态里 0/N 做对的（第一轮已记，这里补一条）
+
+- `search.astro` 的两个 pagefind 坑（base 前缀 + 不用裸 `import()`）

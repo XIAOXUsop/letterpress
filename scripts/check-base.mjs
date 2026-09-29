@@ -371,6 +371,105 @@ if (scriptProblems.size === 0) {
   }
 }
 
+// ── canonical：它是 SEO 里最不该错的一个 URL，而此前**没有任何东西核它** ──
+/*
+ * ⚠️ **2026-09-29 实测到的一处真缺陷**（子 agent 调研指出，本处已独立复核）。
+ *
+ * 带 `SITE_BASE=/letterpress` 构建，产物里是：
+ *
+ *     <link rel="canonical" href="https://xiaoxusop.github.io/cjk-web-typography/">
+ *
+ * **没有 base 前缀**——而线上 Demo 就在 `https://xiaoxusop.github.io/letterpress/`，
+ * 所以这条 canonical **指向一个不存在的地址**。
+ *
+ * > 而上面那九条断言里**有六条都在核「链接带不带 base」**，
+ * > **偏偏 canonical 不在其中**——
+ * > **「核了六类链接」与「核了全部链接」在输出上完全一样。**
+ *
+ * ⚠️ **而它为什么一直没人发现**：`src/config.ts` 的 `url` 里写的就是
+ * `https://xiaoxusop.github.io`（**不带 base**），
+ * **本地构建（base = `/`）时 canonical 恰好是对的**——
+ * **只有子路径构建才暴露**，而本地开发永远走 base = `/`。
+ * **与本文件开头那个「本地看不出来、只有部署到子路径才失效」是同一族。**
+ *
+ * 判据：**每页的 canonical 必须恰好含一个 base 前缀**。
+ *
+ * ⚠️ **而 404 页的 canonical 按设计指向站点首页**（BaseLayout 里写明），
+ * 所以判据要**先剥掉 404 页**——**否则这条判据第一版就会误报**。
+ */
+{
+  const canonProblems = [];
+  const canonWalk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) { canonWalk(p); continue; }
+      if (!name.endsWith('.html')) continue;
+      const rel = p.slice(dist.length + 1).replace(/\\/g, '/');
+      // ⚠️ **404 页的 canonical 指向首页是设计**（见 BaseLayout 里的注释）
+      if (rel.startsWith('404')) continue;
+      const html = readFileSync(p, 'utf8');
+      const m = /<link[^>]*rel="canonical"[^>]*href="([^"]+)"/.exec(html);
+      if (!m) { canonProblems.push(`${rel}：没有 canonical`); continue; }
+      const url = m[1];
+      /*
+       * ⚠️⚠️ **第一版数「base 在 URL 里出现几次」，而它第一版就误报了。**
+       *
+       * 抓出来的第一个是 `wiki/letterpress/index.html`：
+       * `https://xiaoxusop.github.io/letterpress/wiki/letterpress/`
+       * ——base 出现 **2 次**，判据说「翻倍」。
+       *
+       * 而**它是对的**：这个知识页的 **slug 恰好也叫 `letterpress`**，
+       * 所以正确地址里 base 本来就该出现两次。
+       *
+       * > **「数出现次数」与「地址对不对」在输出上完全一样。**
+       * > 而这是本项目记过的老教训（4g 那些可重算值），
+       * > **我用它当代理时就忘了它的软肋：slug 可以与 base 同名。**
+       *
+       * 改成**直接算期望的完整 URL 再比**——那不需要任何代理：
+       * `site.url` + `FAKE_BASE` + 页面自己的路径（产物里的相对路径）。
+       * ⚠️ **而「页面自己的路径」恰好就是 slug**，所以它天然带得出
+       * 那个同名 slug，**不需要特例**。
+       */
+      /*
+       * ⚠️⚠️ **第二版又把「百分号编码」误报成缺陷。**
+       *
+       * 报出来的是 `tags/中文/` 这类页面：canonical 里是
+       * `%E4%B8%AD%E6%96%87`（编码过的），而我的期望值写了原始中文。
+       *
+       * **而 canonical 那样写是对的**——`new URL().href` 本来就会编码路径。
+       *
+       * > **「我期望的字面量」与「URL 规范化之后的样子」在输出上完全一样。**
+       * > 而这已经是这条判据的**第二版**了，两版都是**代理不等于事实**：
+       * > 第一版数出现次数（slug 与 base 同名就误判）、
+       * > 第二版拼字面量（编码差异就误判）。
+       *
+       * 修法：**期望值也走 `new URL`**——
+       * **和 `BaseLayout.astro` 用的是同一个函数**，
+       * **于是编码、规范化、斜杠补全都由它负责，我这边不再手拼**。
+       */
+      const ownPath = '/' + rel.replace(/index\.html$/, '');
+      const expected = new URL(`${FAKE_BASE}${ownPath}`, 'https://xiaoxusop.github.io').href;
+      if (url !== expected) {
+        canonProblems.push(`${rel}：${url}（期望 ${expected}）`);
+      }
+    }
+  };
+  try { canonWalk(dist); } catch { /* dist 不存在，上面已报 */ }
+
+  console.log('\n检查 canonical 是否带 base 前缀');
+  if (canonProblems.length === 0) {
+    console.log('  ✓ 每页的 canonical 都带且只带一次 base 前缀');
+  } else {
+    for (const p of canonProblems.slice(0, 8)) {
+      problems.set(`canonical: ${p}`, ['canonical']);
+      console.log(`  ✗ ${p}`);
+    }
+    if (canonProblems.length > 8) {
+      console.log(`      …… 还有 ${canonProblems.length - 8} 页`);
+    }
+  }
+}
+
 console.log('\n检查绝对路径是否都带 base 前缀');
 if (problems.size === 0) {
   console.log('  ✓ 全部链接都带 base 前缀');
