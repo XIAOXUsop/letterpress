@@ -156,10 +156,58 @@ const GATE_COUNT = String((() => {
  *
  * ⚠️ **从台账里切出来，不手写**：我手写了一次，
  * 而那个换行转义（反斜杠加 n）经过几层转义变成了**真实换行**，
- * 文件直接语法错。而**锚点里出现「会变的内容」迟早会失效**
- * （同 `ACTUAL_CMDS` 那条教训）。
+ * 文件直接语法错。
+ *
+ * ⚠️⚠️ **而这处的注释原先写着「从台账里切出来，不手写」，它却正是手写的**——
+ * 注释与代码说的不是一回事（形态十七）。**2026-09-29 改成真的切。**
+ *
+ * 切法：**按第一列的门禁名找那一整行**（含末尾换行）——
+ * **不写死第三列那个「32 个页面」**，那是某次注入的实测结果，
+ * **它会随门禁变化而漂**（同 `README_STEPS_LINE` 那条教训，
+ * 而那一条在同一天已经失效过一次）。
+ *
+ * ⚠️ **而 4c 只读第一列**——所以**多切几列是安全的**
+ * （多出来的列一样匹配），**而少一列会不匹配**。
  */
-const LEDGER_ONLY_ROW = "| `verify:base` | 在组件里注入绕过 `path()` 的硬编码 `href` | ✅ 红（32 个页面） | 2026-09-24 |\n"
+const LEDGER_ONLY_ROW = (() => {
+  const ledger = readFileSync(join(ROOT, 'knowledge', 'gate-negatives.md'), 'utf8');
+  const line = ledger
+    .split('\n')
+    .find((l) => l.startsWith('| `verify:base` |'));
+  if (!line) return '| `verify:base` | （锚点：台账里没有这一行，变异必然无效） |\n';
+  return line + '\n';
+})();
+
+/**
+ * `docs/content-negotiation.md` 里那张协商对比表的**两行数据行**——**切出来，不手写**。
+ *
+ * ⚠️⚠️ **这两行原先把实测值整行硬写着**（`2,852 / 2,965（−3.8%）`、
+ * `9,013 / 10,380（−13.2%）…`），而那张表的文件头自己写着
+ * **「这张表量的是当次构建的产物，内容一改就过期」**——
+ * **也就是说那串数注定会变，而锚点跟着它一起变就等于没有锚点。**
+ *
+ * > **失效的样子极像「门禁有盲区」**：`mutate()` 只说「锚点出现 0 次」，
+ * > **而那句话在「锚点不对」与「门禁没盲区」之间是同义的**（形态十二）。
+ *
+ * 切法：**按页面路径找那一整行**——路径是**稳定的**（不是实测值），
+ * 而实测值在行内，被整行一起带出来。
+ *
+ * ⚠️ **两条变异必须锚到不同的行**（一条改 MD 列、一条删整行）——
+ * 而「取第几行」这个下标也是会变的，**所以按路径取，不按下标取**。
+ *
+ * ⚠️ **而这个数组是 `const` 求值的**——它在 `CASES` 之前跑，
+ * **所以它拿到的就是「跑这一轮时的 docs」**，而这正是要的。
+ */
+const NEGOTIATION_ROWS = (() => {
+  const doc = readFileSync(join(ROOT, 'docs', 'content-negotiation.md'), 'utf8');
+  /** 按页面路径切出那一整行（**含首尾空格原样**，因为它就是文档里的字节）。 */
+  const row = (path) =>
+    doc.split('\n').find((l) => l.includes(`| ${path} |`)) ?? `| ${path} | （锚点：docs 里没有这一行，变异必然无效）`;
+  return {
+    agents: row('/markdown-for-agents/'),
+    typography: row('/cjk-web-typography/'),
+  };
+})();
 
 /**
  * `EXPECTED` 里 `check:staged` 那一行——**从目标文件切出来，不手写**。
@@ -721,8 +769,37 @@ const CASES = [
     // 注释说「X 负责」而 X 那边没有检查，等于没有人负责。
     why: 'verify:negotiation — docs 表格的 MD token 列被改',
     file: 'docs/content-negotiation.md',
-    find: '2,852 / 2,965（−3.8%）',
-    replace: '2,999 / 2,965（−3.8%）',
+    /*
+     * ⚠️ **改的是「第二个」`a / b` 形状——那才是 MD 列。**
+     *
+     * 第一版用 `replace(/(\d[\d,]*)( \/ [\d,]+（)/, …)`，
+     * **而它替换的是第一个匹配**——那是 **HTML 列**，
+     * **而 `why` 写的是「MD token 列」**。
+     *
+     * > **「我改的是 MD 列」与「我以为我改的是 MD 列」在输出上完全一样**——
+     * > 门禁照样红（`check` 核的正是 MD 列的估算值），
+     * > **而 `why` 与实际改的地方不符这件事，没有任何东西会发现**。
+     *
+     * 修法：**用 `matchAll` 取第二个匹配的位置**，而不是「替换第一个」。
+     * ⚠️ **而这要求那一行里确实有两个 `a / b（` 形状**——下面会断言它。
+     */
+    find: (() => {
+      const row = NEGOTIATION_ROWS.agents;
+      const m = [...row.matchAll(/(\d[\d,]*)( \/ [\d,]+（)/g)];
+      if (m.length < 2) {
+        throw new Error(
+          `锚点行里只有 ${m.length} 个「a / b（」形状——`
+          + '**改第二个才是 MD 列**，而这里不够。改用别的切法。',
+        );
+      }
+      return row;
+    })(),
+    replace: (() => {
+      const row = NEGOTIATION_ROWS.agents;
+      const m = [...row.matchAll(/(\d[\d,]*)( \/ [\d,]+（)/g)];
+      const at = m[1].index;   // ⚠️ **第二个**匹配的起点
+      return row.slice(0, at) + '9,999' + row.slice(at + m[1][1].length);
+    })(),
     target: 'verify-negotiation.mjs',
   },
   {
@@ -730,7 +807,7 @@ const CASES = [
     // 而**不能**默认通过（形态四）。
     why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',
     file: 'docs/content-negotiation.md',
-    find: '> | /cjk-web-typography/ | 9,013 / 10,380（−13.2%） | 3,919 / 4,246（−7.7%） | 56.5% / **59.1%** |',
+    find: NEGOTIATION_ROWS.typography,
     replace: '',
     target: 'verify-negotiation.mjs',
   },
@@ -1207,6 +1284,31 @@ const CASES = [
     // 锚点必须带上**只有原文才有的上下文**。
     find: '**有 ' + ACTUAL_STEPS + ' 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
     replace: '**有 33 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4m（`find` 锚点里不许硬写会变的数）。**
+     *
+     * 2026-09-29 一天内那处失效了两次：`README_STEPS_LINE`（45→46）、
+     * `LEDGER_ONLY_ROW` 里那个「32 个页面」。
+     * 而那两条都报的是**同一个形状**：「锚点出现 0 次」——
+     * **而那句话与「门禁有盲区」同义**（形态十二）。
+     *
+     * 所以把协商表那两行改回硬写，4m 必须点名报出行号与那个数。
+     *
+     * ⚠️ **而这条变异同时是「改产品」也是「改工具」**——
+     * 它把「切出来」的写法退回「手写」，**而 4m 核的正是这个差别**。
+     */
+    why: 'check:gate-list — 变异的 find 锚点里硬写了实测值（4m 必须点名报）',
+    covers: ['4m'],
+    file: 'scripts/new-gates.mutations.mjs',
+    // ⚠️ **锚点要够长到唯一**——只写 `find: NEGOTIATION_ROWS.typography,`
+    // 会出现 **2 次**（下面那条变异自己的 `replace` 里也有这一行），
+    // 而 `mutate()` 断言锚点**恰好 1 次**，「2 次」与「0 次」一样是注入无效。
+    // 所以带上 `why` 那一行——**而 `why` 是全文件唯一的**。
+    find: "    why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',\n    file: 'docs/content-negotiation.md',\n    find: NEGOTIATION_ROWS.typography,",
+    replace: "    why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',\n    file: 'docs/content-negotiation.md',\n    find: '> | /cjk-web-typography/ | 9,013 / 10,380（−13.2%） |',",
     target: 'check-gate-list.mjs',
   },
   {
