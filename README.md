@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-522%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-525%20项-2C5E2E)
 
 </div>
 
@@ -42,7 +42,7 @@
   pages are no longer trustworthy — and pages that are *this project's own
   choices* say so explicitly instead of pretending to cite something.
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 522 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 525 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -222,7 +222,7 @@ review:
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **522 项**，全部离线，无网络依赖 |
+| 单元测试 | **525 项**，全部离线，无网络依赖 |
 | 内容清单 schema | `/content-manifest.schema.json`（JSON Schema 2020-12，与产物同源发布），`additionalProperties: false` 让「悄悄加字段」变成一次显式决定。门禁核**三处 version 一致**（源码常量 / 产物 / schema）——它们各自都能独立改，而只有两处改了就没人发现 |
 | 端到端契约 | **202 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 门禁编排 | **46 步**，`check-gates` 逐条核对「声明了什么、顺序对不对、脚本存不存在、有没有定义了却不在编排里的」。其中六道是**会先弄坏自己再证明能报红**的负向验证 |
@@ -235,7 +235,7 @@ review:
 | 构建 | 32 页；`astro build` 自报 **1.21 / 1.21 / 1.23 秒**（三次），整条 `npm run build` **2.94 / 2.98 / 2.96 秒**；Pagefind 自己报 0.136 秒、单独跑 `npx pagefind` 共 0.66 秒。**差值约 1.5 秒是 npm 起 node、连跑两条 npm script 的开销**（本机 Windows 实测；原表写的 1.1 / 2.6 秒偏低，且把差值的成因写成"npm 启动开销 + Pagefind 0.14 秒"，量级对、口径没有出处） |
 | 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
 | 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind 1.5.2，实测运行时资源 **6 个 js**、未压缩共 **431 KB**（441271 bytes；`npm run measure` 的口径，全部 6 个 gzip 合计 **105 KB**）；**访问者真正会加载的是 5 个 js**：`pagefind.js` + `pagefind-worker.js` + 三个 UI 包，未压缩 387 KB、**gzip 93 KB**；其中三个 UI 包单独算是 302 KB / gzip 69 KB。复测日期 2026-09-24；此前写的「17 个文件、146 KB gzip」在当前环境**已无法复现**（pagefind 版本未变而产物结构对不上），故改为可复现的口径 |
-| CSS | 单文件 **24.4 KB / gzip 5.2 KB** |
+| CSS | 单文件 **24.5 KB / gzip 5.2 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
 

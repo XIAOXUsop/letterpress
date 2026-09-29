@@ -104,3 +104,66 @@ describe('设计令牌契约', () => {
     expect(defined.has('--color-definitely-not-defined-xyz')).toBe(false);
   });
 });
+
+/*
+ * ── 中文排版的三个原生开关 ──────────────────────────────────────────
+ *
+ * **为什么单独一个 describe**：上面那个 describe 核「令牌有没有定义」，
+ * **而这三条根本不是令牌**——它们是原生 CSS 属性，
+ * **所以「删掉它」不会有任何东西报错**（浏览器静默忽略未知属性）。
+ *
+ * ⚠️ **2026-09-29 实测到的正是这个**：`base.css` 里那段注释
+ * 一直写着「中文排版的三个原生开关」，**而代码里只有两个**
+ * （`line-break: strict` 缺失）。**「注释说三个」与「代码有两个」
+ * 在测试输出上完全一样**——因为令牌那条检查压根看不到它。
+ *
+ * **而它对中文是刚需**：`line-break: strict` 管标点禁则
+ * （`。」`、`」）` 不落在行首），而 `auto` 对 CJK 的禁则处理很弱。
+ * **2026-09-29 查 MDN browser-compat-data**：Chrome 58 / Firefox 69 /
+ * Safari 11 起全部支持——**不是渐进增强，是直接生效**。
+ *
+ * ⚠️ **而这一条必须同时核 `<html lang>`**：这三条都依赖语言标签正确，
+ * **而 lang 错了它们会静默不生效**（那正是本项目文件头里写过的那句）。
+ */
+describe('中文排版的原生开关', () => {
+  const css = readFileSync(join(ROOT, 'src', 'styles', 'base.css'), 'utf8');
+  const html = readFileSync(
+    join(ROOT, 'src', 'layouts', 'BaseLayout.astro'), 'utf8');
+
+  const REQUIRED: Array<[string, string, string]> = [
+    ['text-autospace', 'normal', '中西文之间自动插入约 1/4 空格（盘古之白）'],
+    ['text-spacing-trim', 'trim-start', '行首的逗号句号不再占满一格'],
+    ['line-break', 'strict', '标点禁则：`。」` 与 `」）` 不落在行首'],
+  ];
+
+  it('三条都在 base.css 里，且取的是该取的值', () => {
+    const missing: string[] = [];
+    for (const [prop, value, why] of REQUIRED) {
+      // ⚠️ **要认 `prop: value` 这一形状**——只 grep 属性名会漏掉
+      // 「属性在、但值是 auto（等于没设）」这种**看起来在、实际无效**的写法。
+      const re = new RegExp(`${prop}\\s*:\\s*${value}\\s*;`);
+      if (!re.test(css)) {
+        const any = new RegExp(`${prop}\\s*:\\s*([a-z-]+)`).exec(css);
+        missing.push(
+          `${prop}：期望 ${value}（${why}）`
+          + (any ? `，实际是 ${any[1]}` : '，而它根本没出现'),
+        );
+      }
+    }
+    expect(missing, `中文排版开关缺失或取值不对：\n  ${missing.join('\n  ')}`).toEqual([]);
+  });
+
+  it('**三条都依赖 `<html lang>`，而它必须被设上**', () => {
+    // ⚠️ **这条不是形式主义**：lang 错了这三条**静默不生效**，
+    // 而上面那条判据照样绿（CSS 里确实有那三个属性）。
+    const hasLang = /<html[^>]*\blang=/.test(html);
+    expect(hasLang, '`BaseLayout.astro` 的 `<html>` 上没有 lang —— 这三条排版开关会静默失效').toBe(true);
+  });
+
+  it('**检查本身会失败**：少一条时它必须报出来', () => {
+    // 负向验证。照上面那条同样的理由：只会在真出问题时才跑的检查等于没验过。
+    const withoutOne = css.replace(/line-break\s*:\s*strict\s*;/, '');
+    const found = new RegExp('line-break\\s*:\\s*strict\\s*;').test(withoutOne);
+    expect(found, '删掉 `line-break: strict` 之后这条判据仍说「在」—— 它核错了东西').toBe(false);
+  });
+});
