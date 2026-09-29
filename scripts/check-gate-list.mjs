@@ -1944,16 +1944,45 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
      * 所以判据问的是**「有没有调那个共用函数」**。
      *
      * ⚠️ **而「调用了」不等于「结果被采用了」**——
-     * `if (!ok) …` 少写一个分支，那道脚本照样报「干净」。
-     * 所以一并核**返回值有没有进失败分支**（`if (!ok)` 那一形）。
+     * 少写一个失败分支，那道脚本照样报「干净」。
+     *
+     * ⚠️⚠️⚠️ **第一版的判据写错了，而它是绿的——**被自测当场抓住**。**
+     *
+     * 我写的是「核 `if (!ok)` 那一形」，而**七道脚本全都写的是**
+     * `{ const { ok, report } = diffWorktree(WORKTREE); if (!ok) … }`
+     * ——**解构之后变量就叫 `ok`**。所以那条正则**一条都没匹配上**，
+     * 于是 `noWorktree` **永远是空的**，4k **报「✓ 7 道都有」**。
+     *
+     * > **「判据压根没在看」与「它核过且都合格」在输出上完全一样。**
+     * > 而这是我 2026-09-28 记过的那一条（4b 曾经从来没真核过任何东西），
+     * > **换成 `mustMatch` 那一版的形状，栽的是同一个坑。**
+     *
+     * 所以判据改成**「解构出那个变量名，然后核那个名字进了否定分支」**——
+     * **从被测文件里推出变量名，而不是假设它是 `ok`。**
+     * 这也顺带覆盖了 `if (!r.ok)`（不解构）那一种写法。
+     *
      * **这仍是代理指标**（真要确定，得把断言弄坏一次看它红不红），
      * **而漏比误报便宜**——判据太宽会逼人改本来正确的脚本。
      */
     const noWorktree = [];
     for (const f of onDisk) {
       const src = readFileSync(join(ROOT, 'scripts', f), 'utf8');
-      if (!/diffWorktree\s*\(/.test(src)) { noWorktree.push(f); continue; }
-      if (!/if\s*\(\s*!\s*ok\s*\)/.test(src)) {
+      const call = /diffWorktree\s*\(\s*([A-Z_][\w.]*)\s*\)/.exec(src);
+      if (!call) { noWorktree.push(f); continue; }
+      /*
+       * ⚠️ **解构出来的名字**才是失败分支里该用的那个——
+       * 而 `if (!ok)` 这种**字面量**只认一种写法（2026-09-29 栽的就是它）。
+       */
+      const destr = new RegExp(
+        `const\\s*\\{([^}]*)\\}\\s*=\\s*diffWorktree\\s*\\(\\s*${call[1]}\\s*\\)`,
+      ).exec(src);
+      const names = destr
+        ? destr[1].split(',').map((s) => s.split(':').pop().trim()).filter(Boolean)
+        : [];
+      const hasFailBranch =
+        names.some((n) => new RegExp(`!\\s*${n}\\b`).test(src))
+        || /!\s*\w+\s*\.\s*ok\b/.test(src);
+      if (!hasFailBranch) {
         noWorktree.push(`${f}（调了但没进失败分支）`);
       }
     }
@@ -1974,6 +2003,68 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     } else {
       console.log(`  ✓ ${onDisk.length} 道都有，且都接进了失败分支`);
     }
+
+    /*
+     * ── 4k 自测：**判据自己也要先被验一遍** ──────────────────────────────
+     *
+     * ⚠️ 形态十一：「绿」既可能是「它没看见」，也可能是「压根没被喂进去」。
+     * 而本项目栽过两次假绿（2026-09-28：锚点根本不存在，注入压根没发生；
+     * 2026-09-29：探针在跑之前就建好，于是它进了前后两份快照）。
+     *
+     * > **而 4k 的判据是两条正则**——它**极可能**在某天因为
+     * > 某道脚本换了个写法而**一条都匹配不上**，**而那时的输出是
+     * > 「✓ N 道都有」**，与「每道都真的接上了」逐字相同。
+     *
+     * 所以造三份**临时语料**（在内存里，不碰磁盘上的脚本）跑同一段判据：
+     * 完全没接 / 调了但没进失败分支 / 真的接了。**三个数必须分别是 2 / 1 / 0。**
+     *
+     * ⚠️ **而第三份语料是最要紧的**——它对应「判据在正常状态下长什么样」。
+     * **若第三份也报缺，那这条判据在正常状态下就会误报**，
+     * 而误报会逼人去拆掉本来正确的接线（判据收紧时必须先证不误报）。
+     */
+    const judge = (src) => {
+      const call = /diffWorktree\s*\(\s*([A-Z_][\w.]*)\s*\)/.exec(src);
+      if (!call) return false;
+      const destr = new RegExp(
+        `const\\s*\\{([^}]*)\\}\\s*=\\s*diffWorktree\\s*\\(\\s*${call[1]}\\s*\\)`,
+      ).exec(src);
+      const names = destr
+        ? destr[1].split(',').map((s) => s.split(':').pop().trim()).filter(Boolean)
+        : [];
+      return names.some((n) => new RegExp(`!\\s*${n}\\b`).test(src))
+        || /!\s*\w+\s*\.\s*ok\b/.test(src);
+    };
+    const SAMPLES = [
+      ['完全没接', 'const a = 1;\n', false, '一份没写任何接线的脚本'],
+      ['调了但没进失败分支',
+        'const r = diffWorktree(W);\nconsole.log(r);\n', false, '调了但结果被丢掉'],
+      ['**七道脚本现在那种写法**（解构 + `if (!ok)`）',
+        'const { ok, report } = diffWorktree(W);\nif (!ok) fail();\n', true,
+        '**解构出来的名字进了否定分支**——这是判据必须认的那一种'],
+      ['不解构、直接取属性',
+        'const r = diffWorktree(W);\nif (!r.ok) fail();\n', true, '另一种合法写法'],
+      ['只调不判（又一次）',
+        'diffWorktree(W);\n', false, '**调用被当成断言**——返回值没人看'],
+    ];
+    let selfOk = true;
+    for (const [name, src, want, why] of SAMPLES) {
+      const got = judge(src);
+      if (got === want) console.log(`    ✓ ${name}：${why}`);
+      else {
+        selfOk = false;
+        problems.push(
+          `**4k 的自测不通过**（${name}——${why}）：期望 ${want}，实际 ${got}。\n`
+          + '    → 而「自测不通过」与「判据坏了」在输出上完全一样，'
+          + '**所以这条自测自己也要能被怀疑**。',
+        );
+        console.log(`    ✗ ${name}：期望 ${want}，实际 ${got}`);
+      }
+    }
+    console.log(
+      selfOk
+        ? '    ✓ 4k 的判据在五份语料上给出的答案都对（**包括正常状态那两种**）'
+        : '',
+    );
   }
 }
 
