@@ -643,6 +643,32 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
       return declared || k.length >= 6;
     });
   const requirementFiles = requirementKeys;
+  /*
+   * ⚠️⚠️⚠️ **判据自己的中间量必须能被看见——2026-09-29 为此折腾了一整轮。**
+   *
+   * 那一刻发生的事：我按这段代码**在旁边复现**了一遍「它算出哪几个关键词」，
+   * **得到 6 个**；而**门禁自己打印 9 个**。
+   * **两个数不一致，而我完全不知道该信哪个**——
+   * 于是我改了五处、猜了十几次、最后连「它到底跑的是哪段代码」都没定位到。
+   *
+   * 查清只花了一行：在 `requirementFiles` 后面打一个 `console.log`，
+   * **然后跑一次门禁**。
+   *
+   * > **复现的是「我以为的代码」，而问题恰恰是它不是真的。**
+   * > 而「打出来」核的是**它现在真的在跑的那份**——
+   * > **这两件事只有后者能回答「它到底在算什么」。**
+   *
+   * 所以这一段是**判据的门禁自己的诊断**：
+   * 设 `LP_DIAG_4B=1` 就会把它算出的那个集合打出来。
+   * ⚠️ **默认不打**（那会污染 CI 的输出），
+   * 而**「需要看时打一下」比「猜十几次」便宜得多**。
+   */
+  if (process.env.LP_DIAG_4B) {
+    console.log(
+      `  [诊断] 4b 算出的关键词（${requirementFiles.length} 个）：`
+      + requirementFiles.join('、'),
+    );
+  }
   const uncovered = requirementFiles.filter(
     (f) => !mutText.includes(f),
   );
