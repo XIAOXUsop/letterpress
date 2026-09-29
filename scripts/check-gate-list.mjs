@@ -582,7 +582,67 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
    * 所以改成**按 `file` 逐项对应**：每条 `REQUIREMENTS` 的 `file`
    * 要在变异脚本里被至少一个变异点到。
    */
-  const requirementFiles = [...gateText.matchAll(/file: '([^']+)'/g)].map((m) => m[1]);
+  /*
+   * ⚠️⚠️⚠️ **第一版拿 `file: '…'` 当判据清单——而那不是清单。**
+   *
+   * 2026-09-29 实测：`check-site-agnostic.mjs` 里有 **3 个 `mustMatch: [`**
+   *（真判据，每处一个 `{ pattern: /…/ … }` 对象）与 **3 个 `file: '…'`**
+   *（**注释里举的例子**，讲「变异要改哪个文件」用的）。
+   *
+   * 两者**数目相同、内容无关**，而变异脚本碰巧都提到了那 3 个路径——
+   * **于是「3 项判据都有对应变异」是巧合，不是「核过了」**。
+   *
+   * > **「数目对上了」与「逐项对应上了」在输出上完全一样**——
+   * > 而这一条原本**从来没有真的核过任何东西**。
+   *
+   * 所以：**逐项对应按 `mustMatch` 的 `pattern` 走**——
+   * **那才是判据本身**。而「变异脚本提到了它」用一个**可判的代理**：
+   * **pattern 里的关键标识词**（取前若干个标识符）在变异脚本里出现过。
+   *
+   * ⚠️ **而这个代理不完美**：pattern 里的词若在变异脚本里以别的写法出现，就查不到。
+   * **那必然漏**——而**漏比误报便宜**（误报会逼人改本来正确的门禁）。
+   */
+  const mustMatchPatterns = [...gateText.matchAll(/mustMatch: \[\s*\{[\s\S]*?pattern:\s*\/(.+?)\/[a-z]*/g)]
+    .map((m) => m[1]);
+  /** pattern 里的「标识符」——去掉正则语法，只留能当词用的部分。 */
+  /**
+   * pattern 里的「**标识符**」——而**不是所有英文单词**。
+   *
+   * ⚠️⚠️ **第一版不过滤，于是 `export` / `function` / `string` / `readonly`
+   * 全被当关键词**——而它们**在任何 JS 文件里都存在**。
+   * 于是「15 个关键词都找到了」**也是巧合**，只是换了一种巧合。
+   *
+   * > **「匹配到了」与「匹配到了有意义的东西」在输出上完全一样。**
+   *
+   * 所以：**先剔掉 JS 关键字与内置类型名**。
+   *
+   * ⚠️ **而这仍是代理指标**：剩下的词若在变异脚本里以别的写法出现，就查不到。
+   * **那必然漏**——而**漏比误报便宜**（误报会逼人改本来正确的门禁）。
+   */
+  const JS_NOISE = new Set([
+    'export', 'function', 'return', 'string', 'number', 'boolean', 'readonly',
+    'const', 'let', 'var', 'type', 'interface', 'class', 'new', 'this',
+  ]);
+  const keywordsOf = (pattern) =>
+    [...new Set((pattern.match(/[A-Za-z_$][\w$]{3,}/g) ?? [])
+      .map((k) => k)
+      .filter((k) => !JS_NOISE.has(k)))];
+  const requirementKeys = mustMatchPatterns
+    .flatMap((p) => keywordsOf(p))
+    /* ⚠️ **还要剔掉「只在 pattern 里、源码里并没有」的词**——
+     * 比如 `ReadonlyMap` 出现在 `reservedPostRoutes?: ReadonlyMap<…>` 那个
+     * pattern 里，而**它是**源码里的类型标注……
+     * 而 `kind` / `site` 这类**到处都是**的词命中的概率接近 1。
+     *
+     * > **「匹配到了」与「匹配到了有意义的东西」在输出上完全一样**——
+     * > 而这里唯一的分法是**要求这个词在该门禁源码里也真是一个标识符**。
+     */
+    .filter((k) => {
+      const declared = new RegExp(`\\b(function|const|let|class|interface|type|readonly|export)\\s+[^\\n]{0,40}\\b${k}\\b`)
+        .test(gateText);
+      return declared || k.length >= 6;
+    });
+  const requirementFiles = requirementKeys;
   const uncovered = requirementFiles.filter(
     (f) => !mutText.includes(f),
   );
@@ -592,9 +652,9 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
         uncovered.map((f) => `        ${f}`).join('\n') + '\n' +
         `    **「新增要手写」这句话原本没有任何东西守着**。`,
     );
-    console.log(`  ✗ ${gate}：${uncovered.length} 项判据没有对应的变异（${uncovered.join('、')}）`);
+    console.log(`  ✗ ${gate}：${uncovered.length} 个 pattern 关键词在变异脚本里没出现（${uncovered.join('、')}）`);
   } else {
-    console.log(`  ✓ ${gate}：${requirementFiles.length} 项判据都有对应变异`);
+    console.log(`  ✓ ${gate}：${criteria} 项判据，${requirementFiles.length} 个 pattern 关键词都能在变异脚本里找到`);
   }
 }
 
