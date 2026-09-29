@@ -14,14 +14,13 @@
  * `urlFor` 与 remark 插件各写一份前缀、`related` 方括号处理不一致），
  * 所以这次直接抽出来共用。
  *
- * 与 `frontmatter.ts` 的分工：那边限制建链接用的标量字段（title / slug），
- * 这里按 YAML 语义解析结构字段。
+ * 本文件从同一份 YAML 解析结果读取标量与结构字段，避免合法的行内注释
+ * 在构建路径被接受、在 CLI 读取路径却被拒绝。
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseDocument } from 'yaml';
-import { frontmatterField } from './frontmatter.ts';
 import { resolveSlug } from './slug.ts';
 
 /** 页面上一处来源引用。与 `Doc.sources` 同形。 */
@@ -60,6 +59,8 @@ export function readContentPage(dir: string, file: string): {
   readonly slug: string;
   readonly explicitSlug: boolean;
   readonly title: string;
+  readonly summary: string;
+  readonly draft: boolean;
   readonly kind: string;
   readonly updated: string;
   /**
@@ -112,6 +113,15 @@ export function readContentPage(dir: string, file: string): {
     throw new Error(`${file} 的 frontmatter 无法解析：${parsed.errors[0].message}`);
   }
   const data = parsed.toJS() as Record<string, unknown> | null;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`${file} 的 frontmatter 必须是对象。`);
+  }
+  const scalar = (key: string): string | undefined => {
+    const value = data[key];
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? String(value)
+      : undefined;
+  };
   const sources = data?.sources;
   if (sources != null && !Array.isArray(sources)) {
     throw new Error(`${file} 的 sources 必须是数组。`);
@@ -137,7 +147,7 @@ export function readContentPage(dir: string, file: string): {
   }
 
   return {
-    explicitSlug: Boolean(frontmatterField(source, 'slug')?.trim()),
+    explicitSlug: Boolean(scalar('slug')?.trim()),
     /*
      * ⚠️ **2026-09-24 改：这里原先是 `file.replace(/\.mdx?$/, '')`——直接用文件名。**
      *
@@ -164,14 +174,16 @@ export function readContentPage(dir: string, file: string): {
      * > 它是在异构 fixture 上第一次暴露的（迭代 AR）。
      */
     slug: resolveSlug(
-      frontmatterField(source, 'title') ?? file.replace(/\.mdx?$/, ''),
-      frontmatterField(source, 'slug'),
+      scalar('title') ?? file.replace(/\.mdx?$/, ''),
+      scalar('slug'),
       file.replace(/\.mdx?$/, ''),
     ),
-    title: frontmatterField(source, 'title') ?? file,
+    title: scalar('title') ?? file,
+    summary: scalar('summary') ?? '',
+    draft: data.draft === true || scalar('draft') === 'true',
     // post 没有 kind 字段，wiki 才有——**别与 Doc.kind 搞混**（那个是 post/wiki）
-    kind: frontmatterField(source, 'kind') ?? '',
-    updated: frontmatterField(source, 'updated') ?? '',
+    kind: scalar('kind') ?? '',
+    updated: scalar('updated') ?? '',
     sources: refs,
     ...(review?.status ? { review: {
       status: String(review.status),

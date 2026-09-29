@@ -30,6 +30,16 @@ describe('readContentPage', () => {
   const write = (name: string, content: string) =>
     writeFileSync(join(dir, name), content, 'utf8');
 
+  it('按 YAML 语义读取带行内注释的摘要', () => {
+    write('a.md', '---\ntitle: 甲\nsummary: 合法摘要 # 作者注释\n---\n\n正文。\n');
+    expect(readContentPage(dir, 'a.md').summary).toBe('合法摘要');
+  });
+
+  it('识别草稿标记，供 CLI 排除未发布内容', () => {
+    write('a.md', '---\ntitle: 草稿\ndraft: true\n---\n\n未发布正文。\n');
+    expect(readContentPage(dir, 'a.md').draft).toBe(true);
+  });
+
   describe('review: 块', () => {
     it('拿到块里的全部字段，而不是只有第一行', () => {
       // ⚠️ **这条正对着第二次那个 bug**：`\r?\n?$` 里的 `\n?` 可选，

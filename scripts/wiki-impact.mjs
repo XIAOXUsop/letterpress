@@ -115,7 +115,8 @@ if (revision && !source.revisions.some((r) => r.id === revision)) {
  * ——它们的引用方是 post。这四份来源正是文章里那些日期化规范 URL 的登记对象，
  * 而日期化 URL 写出来就是为了不被移动版本顶掉，**不登记等于白写**。
  */
-const { pages } = readContentDirs([WIKI_DIR, POSTS_DIR]);
+const { pages: allPages } = readContentDirs([WIKI_DIR, POSTS_DIR]);
+const pages = allPages.filter((page) => !page.draft);
 
 // 计算交给 `src/lib/wiki/impact.ts`——那里有 14 条测试覆盖它，
 // 包括阶段 3 的「预埋来源变更召回率 100%」。**这份逻辑原先写在本文件顶层，
@@ -132,6 +133,9 @@ function scanRepo(dir, depth = 0) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
+      // Content pages are already handled by readContentDirs; scanning them again
+      // would also expose drafts in the auxiliary repository mentions.
+      if (full === join(process.cwd(), 'src', 'content')) continue;
       scanRepo(full, depth + 1);
     } else if (/\.(?:md|css|ts|mjs|astro)$/.test(entry.name)) {
       if (full.includes(join('knowledge', 'sources'))) continue; // 登记表自己不算

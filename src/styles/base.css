@@ -73,11 +73,14 @@
      *   中文标点的字距调整：行首的逗号句号之类不再占满一格。
      *   Chrome / Edge 123+ 默认开启，这里显式写出是为了语义清晰。
      *
-     * 这两条都**依赖 `<html lang>` 被正确设置**——语言标签不对，浏览器不会
+     * `line-break: strict` 控制中文标点禁则，减少标点落在行首的情况。
+     *
+     * 这三条都**依赖 `<html lang>` 被正确设置**——语言标签不对，浏览器不会
      * 应用对应的行首行尾规则。所以在 Layout 里必须传 lang，不能省。
      */
     text-autospace: normal;
     text-spacing-trim: trim-start;
+    line-break: strict;
 
     font-family: var(--font-body);
     /*

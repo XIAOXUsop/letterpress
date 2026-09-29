@@ -27,7 +27,8 @@
  *
  * 用法：`npm run check:agents-doc`
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -142,6 +143,31 @@ if (claims('指的是同一个页面', '「写标题与写 slug 指向同一页�
       `AGENTS.md 说「一个写标题、一个写 slug 指的是同一个页面」，而**实测不成立**：\n` +
         `    写标题 → ${viaTitle ? '解析成功' : '没解析到'}；写 slug → ${viaSlug ? '解析成功' : '没解析到'}`,
     );
+  }
+}
+
+// Check the actual commands: graph filtering alone does not protect CLI output.
+if (claims('更不会被 `wiki:ask` / `wiki:impact` 检索到', '草稿不进入 CLI')) {
+  const probeName = `audit-draft-cli-${process.pid}`;
+  const probe = join(ROOT, 'src', 'content', 'wiki', `${probeName}.md`);
+  if (existsSync(probe)) throw new Error(`草稿探针路径已存在：${probe}`);
+  try {
+    writeFileSync(probe,
+      `---\ntitle: 草稿 CLI 探针\nsummary: 仅供隔离检查。\nkind: concept\nid: ${probeName}\ndraft: true\nsources:\n  - sourceId: css-values-4\n    revision: WD-20240312\n    locator: §5.1.1\n---\n\norbital jellyfish notation.\n`,
+      'utf8');
+    const ask = spawnSync('node', ['scripts/wiki-ask.mjs', '--json', 'orbital jellyfish notation'],
+      { cwd: ROOT, encoding: 'utf8' });
+    const impact = spawnSync('node', ['scripts/wiki-impact.mjs', '--source', 'css-values-4', '--json'],
+      { cwd: ROOT, encoding: 'utf8' });
+    const leaked = ask.stdout.includes(probeName) || impact.stdout.includes(probeName);
+    if (ask.status !== 0 || impact.status !== 0 || leaked) {
+      problems.push(`草稿 CLI 隔离失败：ask exit=${ask.status}，impact exit=${impact.status}，泄漏=${leaked}。`
+        + `\nask stderr: ${ask.stderr.slice(0, 300)}\nimpact stderr: ${impact.stderr.slice(0, 300)}`);
+    } else {
+      ok('草稿不进 wiki:ask / wiki:impact 的真实输出');
+    }
+  } finally {
+    unlinkSync(probe);
   }
 }
 

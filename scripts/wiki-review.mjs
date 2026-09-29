@@ -24,7 +24,7 @@
  *   node scripts/wiki-review.mjs --list          # 列出所有知识页与状态
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 /*
  * ⚠️ **这里原来写着「直接 import TS 源，不在这里重写一份算法」——
@@ -46,7 +46,7 @@ import { join } from 'node:path';
  */
 import { contentDigest } from '../src/lib/wiki/digest.ts';
 import { readContentPage } from '../src/lib/wiki/read-page.ts';
-import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
+import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_NOT_FOUND } from '../src/lib/cli/exit-codes.mjs';
 import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';
 
@@ -58,60 +58,33 @@ const asJson = args.includes('--json');
 
 const WIKI = join(process.cwd(), 'src', 'content', 'wiki');
 
-/**
- * 摘要用的 `Doc`。**只填参与摘要的字段**——
- * `slug` / `draft` / `explicitSlug` 不参与计算（见 `digestInput`）。
- */
-function digestDoc(page, summary) {
-  return {
-    kind: 'wiki',
-    wikiKind: page.kind,
-    slug: page.slug,
-    title: page.title,
-    summary,
-    // ⚠️ `readContentPage` 的 `body` **已经 trim 过**，
-    // 与 Astro 的 `entry.body` 口径一致（差一个 trim 摘要就永远对不上）。
-    body: page.body,
-    // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
-    // 传错键的话 `?? []` 会静静兜成空数组——摘要照样算得出，
-    // 只是永远对不上，而症状是「所有已复核页面都报 stale」，
-    // 看起来像机制坏了。这个坑我踩过一次，写在这里。
-    declaredRelations: page.related,
-    explicitSlug: false,
-    draft: false,
-  };
-}
-
-/*
- * ── 为什么是**两个**模块，不是一个 ──────────────────────────────────
- *
- * 第一版只用了 `readContentPage`，崩在 `toLf(undefined)`：
- * 它**不返回 `summary`**——它是给检索用的，检索不需要摘要。
- * 于是改用 `frontmatterField` 补上，而那份只认**顶层**字段
- * （它的注释明说「忽略缩进，避免取到 tags 之类的子项」），
- * 读 `status` 依然读不到。
- *
- * > 所以分工是：`frontmatter.ts` 取顶层标量（title / summary），
- * > `read-page.ts` 取嵌套块（`review:` / `sources:` / `related:`）。
- * > **两个都要，一个都不够。** 而这正是原先那份手写实现想糊过去的复杂度。
- */
+// The page reader owns YAML parsing. Use the shared Doc adapter for the digest
+// so this CLI follows the same field mapping as other source-reading tools.
 function parse(file) {
   const page = readContentPage(WIKI, file);
-  const source = readFileSync(join(WIKI, file), 'utf8');
-  const summary = frontmatterField(source, 'summary') ?? '';
   return {
     file,
     slug: page.slug,
     title: page.title,
     // ✅ 从 `review` 块里读（read-page 解析嵌套块），不是从行首的 `status:`。
     status: page.review?.status ?? null,
-    digest: contentDigest(digestDoc(page, summary)),
+    digest: contentDigest(pageToDoc(page, { summary: page.summary, draft: page.draft })),
   };
+}
+
+function listWikiFiles(dir = WIKI, prefix = '') {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) files.push(...listWikiFiles(join(dir, entry.name), relative));
+    else if (entry.isFile() && /\.mdx?$/.test(entry.name)) files.push(relative);
+  }
+  return files.sort();
 }
 
 let files;
 try {
-  files = readdirSync(WIKI).filter((f) => /\.mdx?$/.test(f));
+  files = listWikiFiles();
 } catch {
   console.error(`读不到 ${WIKI}——请在仓库根目录运行。`);
   process.exit(EXIT_ENVIRONMENT);
