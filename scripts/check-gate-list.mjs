@@ -98,7 +98,8 @@ const EXPECTED = [
   ['npm run verify:testcount', '测试条数对账'],
   ['npm run verify:search', '搜索可用性前提'],
   ['npm run verify:questions', '检索金标（23 条，其中 3 条登记为已知局限）'],
-  ['npm run verify:retrieval-gates', '**五道检索闸逐一失效，每次金标都变红**（它们曾经被「这道闸有人在量」想当然）'],
+  ['npm run verify:retrieval-gates', '**五道检索闸逐一失效，每次金标都变红**（它们曾经被「这道闸有人在量」想当然）'
+    + '。⚠️ **它其实是一个负向验证脚本**（`retrieval-gates.mutations.mjs`）——**而命令名看不出来**'],
   ['npm run verify:impact', '影响分析金标（9 条）'],
   ['npm run verify:answers', '**答案能定位到证据**（阶段 3 退出条件 ③）'],
   ['npm run verify:review', '**wiki:review 说的复核状态与 frontmatter 一致**（它原先全报「未复核」）'],
@@ -106,10 +107,12 @@ const EXPECTED = [
   ['npm run check:site-agnostic', '**站点事实可由调用方覆盖**（阶段 4 第 6 项）'],
   ['npm run verify:site-mutations', '上一道门禁的负向验证（把它依次弄坏四次，每次都必须真红）'],
   ['npm run check:exit-codes', '**CLI 错误码都已归类**（阶段 4 第 3 项）'],
-  ['npm run verify:exit-codes', '上一道门禁的负向验证（三种漏法：字面 1、拼错常量名、未登记的数字）'],
+  ['npm run verify:exit-codes', '上一道门禁的负向验证（三种漏法：字面 1、拼错常量名、未登记的数字）'
+    + '。⚠️ **命令名里没有 `-mutations`**，而它指向的是 `exit-codes.mutations.mjs`'],
   ['npm run verify:json-output', '**`--json` 模式下失败也有结构化输出**（阶段 4 第 3 项剩的一半）'],
   ['npm run verify:json-mutations', '上一道的负向验证（三类违约：stdout 空 / ok 不是 false / code 与退出码打架）'],
-  ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'],
+  ['npm run verify:migrate', '**v1 → v2 迁移的诊断够不够精确**（5 种坏法，阶段 4 退出条件第二半）'
+    + '。⚠️ **命令名里没有 `-mutations`**，而它指向的是 `migrate-manifest.mutations.mjs`'],
   ['npm run verify:new-gates-mutations', '**2026-09-28 新增的那些门禁的负向验证**（56 条变异：每条必须让被测的那道红，恢复后回绿）'],
   ['npm run check:single-source', '**版本号只有一处真值**（同一事实写两遍已经造成过一次真故障）'],
   ['npm run verify:second-site', '第二份异构内容集（合成 docs 数组）'],

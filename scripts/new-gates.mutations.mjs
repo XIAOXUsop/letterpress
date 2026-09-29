@@ -1471,6 +1471,24 @@ const CASES = [
     target: 'check-gate-list.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着 `check:command-scripts` 的判据④：变异脚本的命令名要带 `mutations`。**
+     *
+     * 2026-09-29 实测：三道变异脚本（`verify:retrieval-gates` / `verify:exit-codes` /
+     * `verify:migrate`）的命令名里**没有** `mutations`，
+     * **而照着命令名去找「这是什么门禁」，会以为它是门禁本身**——
+     * 它其实是「先把门禁弄坏、再证明能报红」的东西，**两者需要的判断完全不同**。
+     *
+     * 变异：把 `MUT_EXEMPT` 里的一条改掉名字——
+     * **而那正是「历史命名被登记豁免」的那个失效状态**。
+     */
+    why: 'check:command-scripts — 历史命名不再登记（变异脚本的命令名看不出来必须报）',
+    file: 'scripts/check-command-scripts.mjs',
+    find: "    ['verify:retrieval-gates',",
+    replace: "    ['verify:retrieval-gates-挪走了',",
+    target: 'check-command-scripts.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     covers: ['②'],
     file: 'src/lib/wiki/page-to-doc.ts',

@@ -111,6 +111,74 @@ for (const [name, , why] of NAME_DIVERGENCE) {
   }
 }
 
+// ── ④ 指向变异脚本的命令，名字里应当带 `mutations` ─────────────────────
+/*
+ * ⚠️ **2026-09-29 实测：三道变异脚本的命令名看不出来。**
+ *
+ * `verify:retrieval-gates` / `verify:exit-codes` / `verify:migrate`
+ * 都指向 `*.mutations.mjs`，而**命令名里没有 `mutations`**
+ * （另外四道是 `verify:site-mutations` / `verify:new-gates-mutations` /
+ * `verify:json-mutations` / `verify:second-site-real-mutations`）。
+ *
+ * > **照着命令名去找「这是什么门禁」，会以为它是门禁本身**——
+ * > 而它其实是一套**先把门禁弄坏、再证明能报红**的东西。
+ * > **两者需要的判断完全不同**（前者「跑一下」，后者「看它抓到了什么」）。
+ *
+ * ⚠️ **而这个混淆在 `EXPECTED` 里也发生过**：那三步的描述写着
+ * 「五道检索闸逐一失效」「上一道门禁的负向验证」——**描述是对的，
+ * 而命令名让人以为它是门禁**。
+ *
+ * 判据：指向 `*.mutations.mjs` 的命令，名字里必须含 `mutations`；
+ * 不含就**要么改名、要么登记为什么**。
+ *
+ * ⚠️ **为什么是「登记」而不是「一律要求改名」**：改名要同时动
+ * CI、文档与别人的记忆，**而收益仅仅是让一种查法好走**
+ * （与本文件头里那三条处置同形）。所以给一个出口——
+ * **但那个出口必须写出理由**，否则它就成了绕过。
+ */
+{
+  const MUT_EXEMPT = new Map([
+    ['verify:retrieval-gates',
+      '**它跑的是「五道检索闸逐一失效」那套**——名字里的 `gates` 指的是**被弄坏的那五道闸**，'
+      + '而这套东西本身就是负向验证。改名的收益仅仅是「让查法好走」，'
+      + '而它已在 `EXPECTED` 的描述里与 `check:retrieval-gates`（金标）区分开'],
+    ['verify:exit-codes',
+      '历史命名：`verify:exit-codes` 一直指负向验证，而 `check:exit-codes` 才是被验的那道门禁。'
+      + '**两者只差一个前缀**——这正是该改名的理由，'
+      + '而改名要同时动 CI 与文档（2026-09-29 决定：写进 `EXPECTED` 的描述里点明）'],
+    ['verify:migrate',
+      '历史命名：`verify:migrate` 跑的是迁移诊断的负向验证，'
+      + '而 `check:manifest-schema` 才是产物侧那道门禁。同上'],
+  ]);
+
+  const offenders = [];
+  for (const [name, def] of Object.entries(pkg.scripts)) {
+    if (name === 'verify:all') continue;
+    const m = /node (scripts\/[\w.-]*mutations\.mjs)/.exec(def ?? '');
+    if (!m) continue;
+    if (name.includes('mutations')) continue;
+    offenders.push(name);
+  }
+
+  const undeclared = offenders.filter((n) => !MUT_EXEMPT.has(n));
+  if (undeclared.length > 0) {
+    problems.push(
+      `这些命令指向 **变异脚本**，而名字里没有 \`mutations\`：\n`
+      + undeclared.map((n) => `        ${n}`).join('\n') + '\n'
+      + '    → **照着命令名找「这是什么门禁」，会以为它是门禁本身**——\n'
+      + '    而它其实是「先把门禁弄坏、再证明能报红」的东西，'
+      + '**两者需要的判断完全不同**。\n'
+      + '    → 改名（要同时动 CI 与文档），或在 `MUT_EXEMPT` 里登记并写明为什么。',
+    );
+    console.log(`  ✗ ${undeclared.length} 个变异脚本的命令名看不出来`);
+  } else {
+    console.log(
+      `  ✓ 指向变异脚本的命令名都带 mutations`
+      + `（${MUT_EXEMPT.size} 个历史命名已登记理由）`,
+    );
+  }
+}
+
 /*
  * ── 自测：先证明这套判据能看见东西 ──────────────────────────────────
  *
