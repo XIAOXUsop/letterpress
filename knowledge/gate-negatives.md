@@ -3737,3 +3737,51 @@ row.replace(/(\d[\d,]*)( \/ [\d,]+（)/, '9,999$2')   // ← 替换的是**第�
 
 修法：4m 再加一支，**任何 `x.y.z` 形状都拦**，不管几位。
 已变异验证：放回硬写的 `1.0.0` → 点名报出，退出码 1。
+
+### ⭐ 「我以为它坏了」与「我的测量方式错了」在输出上完全一样（2026-09-29）
+
+调研（子 agent，量了 8 个中位数 Astro 模板的 707 条 issue）指出：
+**Pagefind 在特定部署平台下失效是最常见的「坏了」类抱怨**
+（fuwari#696 #774 #705、Firefly#311、Frosti#79，5 条 / 3 仓库 / 4 种环境），
+**而 0/6 的竞品做对了**。
+
+于是我去查本项目的 search 页。查出来的：
+
+```
+$ SITE_BASE=/letterpress npm run build      # ← 走 shell
+$ grep pagefind dist/search/index.html
+  `/D:/App/Git/letterpress` + /pagefind/pagefind.js     ← ⚠️ 像是缺前缀
+```
+
+**而 `search.astro` 的注释明明写着「路径必须带 base」**——
+**「代码说它处理了」与「产物证明它没处理」在输出上完全一样**。
+
+加了两个 `MSYS_*` 环境变量重跑：
+
+```
+  MSYS_NO_PATHCONV=1 SITE_BASE=/letterpress npm run build
+  `/letterpress` + /pagefind/pagefind.js                 ← ✅ 对的
+```
+
+**真相是 Git Bash 把 `/letterpress` 当成本地路径、转换成了 `D:/App/Git/letterpress`。**
+**代码一直是对的，我错的是测量方式。**
+
+> ⚠️ 而 `check-base` 全绿——因为它**用 `process.env.SITE_BASE` 传给子进程**，
+> **不经过 shell**，所以它拿到的是字面量 `/letterpress`。
+> **门禁量对了，而我手敲的那条没量对。**
+
+**两条教训**：
+
+1. **「我以为它坏了」与「我的测量方式错了」在输出上完全一样**——
+   与形态十三同族，**而这次是我自己主动去查一个「已知的高频缺陷」**，
+   **查出来「有缺陷」的恰恰是**：
+   > **要证明「这里坏了」，得先证明「我的尺子量的是那一处」。**
+2. **本项目记过「手敲的命令不是 CI 里的」**（[[local_simulation_missing_semantics]]）——
+   **而这次是它的变体**：不是命令不同，**是传同一个环境变量的方式不同**，
+   **而结果完全相反**。
+
+⚠️ **而这一条也顺带核实了调研的一个结论**：
+> 本项目的 `search.astro` **两个坑都处理了**（base 前缀 + 不用裸 `import()`），
+> **而 0/6 竞品做对**。
+> **「这是差异化」这句话第一次有了实测支撑**——
+> 而不是我自己在 README 里写的。
