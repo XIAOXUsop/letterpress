@@ -262,28 +262,10 @@ font-family: 'Archivo', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-se
 （**竖向与横向的节奏**），而中西文间距与字体栈顺序是同一个问题（**字符怎么落到网格上**）：
 
 ```mermaid
-flowchart TD
-  subgraph 节奏["节奏：读者一次能看多少"]
-    LH["line-height<br/>1.6–1.8"]
-    LW["max-inline-size<br/>34em"]
-  end
-  subgraph 字符["字符：字形怎么落到网格上"]
-    TS["text-autospace<br/>中西文自动间距"]
-    FS["font-family<br/>拉丁字体在前"]
-  end
-  subgraph 强调["强调：中文没有斜体"]
-    SW["font-synthesis-weight: none<br/>+ 用加粗代替"]
-  end
-
-  LH --> R1["纵向密度"]
-  LW --> R2["横向密度"]
-  TS --> C1["西文/汉字的间隙不匀"]
-  FS --> C2["标点与括号对不齐"]
-  SW --> E1["斜体会被伪造"]
-
-  R1 & R2 --> OK["读起来不累"]
-  C1 & C2 --> OK
-  E1 --> OK
+flowchart LR
+  R["行高 + 行宽<br/>line-height / max-inline-size<br/>控制阅读节奏"] --> OK["读起来不累"]
+  C["中西文间距 + 字体栈<br/>text-autospace / font-family<br/>控制字符落位"] --> OK
+  E["强调方式<br/>font-synthesis-weight: none<br/>避免伪造斜体"] --> OK
 ```
 
 ⚠️ **这张图的价值恰恰在「分组」上**：`line-height` 与 `max-inline-size` 看似无关，

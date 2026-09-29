@@ -11,7 +11,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![JS](https://img.shields.io/badge/外部%20JS-0%20个-2C5E2E)
-![tests](https://img.shields.io/badge/测试-525%20项-2C5E2E)
+![tests](https://img.shields.io/badge/测试-526%20项-2C5E2E)
 
 </div>
 
@@ -28,7 +28,7 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Estimated saving: **61.6% / 56.3%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
+  Estimated saving: **62.8% / 58.0%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `35em` measure
   (≈34 Chinese chars ≈ 68 Latin — **approximate**; what's guaranteed is that the
   column tracks font-size, not how many characters fit), native `text-autospace`,
@@ -42,7 +42,7 @@
   pages are no longer trustworthy — and pages that are *this project's own
   choices* say so explicitly instead of pretending to cite something.
 - **No external JS.** Article pages ship 0 JS files (2.5 KB inlined); only the
-  search page on-demand loads same-origin Pagefind. · 525 unit tests · MIT
+  search page on-demand loads same-origin Pagefind. · 526 unit tests · MIT
 
 Everything below is in Chinese. Live demo → <https://xiaoxusop.github.io/letterpress/>
 
@@ -100,7 +100,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **61.6% / 56.3%** 的 token。**这是估算不是真实用量**；用真实词表 `o200k_base` 在同一批文本上复算是 **62.1% / 59.1%**（估算在 HTML 侧稳定偏低约 5%）。两组数不能混着用。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **62.8% / 58.0%** 的 token。**这是估算不是真实用量**；历史构建的真实词表对照见[说明](docs/content-negotiation.md)，不能当作当前页面的计费数据。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -222,7 +222,7 @@ review:
 
 | 项 | 结果 |
 |---|---|
-| 单元测试 | **525 项**，全部离线，无网络依赖 |
+| 单元测试 | **526 项**，全部离线，无网络依赖 |
 | 内容清单 schema | `/content-manifest.schema.json`（JSON Schema 2020-12，与产物同源发布），`additionalProperties: false` 让「悄悄加字段」变成一次显式决定。门禁核**三处 version 一致**（源码常量 / 产物 / schema）——它们各自都能独立改，而只有两处改了就没人发现 |
 | 端到端契约 | **202 项**，打在真实构建产物上（由脚本自己打印；含按内容页数展开的断言，条数随内容浮动） |
 | 门禁编排 | **46 步**，`check-gates` 逐条核对「声明了什么、顺序对不对、脚本存不存在、有没有定义了却不在编排里的」。其中六道是**会先弄坏自己再证明能报红**的负向验证 |

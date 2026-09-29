@@ -104,7 +104,7 @@ function loadCorpus() {
       });
     }
   }
-  return corpus.pages;
+  return corpus.pages.filter((page) => !page.draft);
 }
 
 const docs = loadCorpus();

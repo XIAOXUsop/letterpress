@@ -4,7 +4,7 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **525 项**单元测试，全部离线 |
+| `npm test` | **526 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 202 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
@@ -28,7 +28,7 @@
 | `npm run check:rule-levels` | **`AGENTS.md` 那张规则表的第二、三列与实测一致**。**级别**：11 条规则逐条**真跑**核对（静态分析只捞到 1/11 条，级别是运行期属性）。**含义**：11 条里**只有 5 条能机械核**（`cjk-slug` 的「默认关闭」要真的默认不报、`orphan-page` 的「没有任何页面指向它」要有入链/没入链各跑一次、`summary-too-long` 要 200/201 各跑一次），逐条核；**另外 5 条核不了（描述的是机制），显式列在输出里**——不写成「11 条都核了」。⚠️ 第三列第一版只核行为，把文档的「默认关闭」反过来说它照样绿（**行为对、文档错，判据无感**），现在从文档里**解析出那句话**再与实测比 |
 | `npm run check:agents-coverage` | **`AGENTS.md` 里每个含可证伪声明的小节都有门禁在核**。实测 13 个小节、**7 个含可证伪声明**、3 个是散文（「不要做的事」等，**本来就没有可证伪声明，所以不算缺口**——把散文算成缺口会逼着人给散文配门禁）。⚠️ **「匹配到标记、却找不到任何门禁认领」也红**——第一版漏了 `frontmatter 字段` 那一类，两节被判成 ✓ 而箭头后面是空的，**而「空白归属」比「错的归属」更隐蔽**（后者至少有东西可看） |
 | `npm run check:package-files` | **从 tarball 装上后还能构建**。`npm pack` **只认 `files` 与 `.npmignore`，不看 `.gitignore`**——所以 `.verify/` 明明被 git 忽略却仍会进包（2026-09-28 实测 222 个文件 868 KB，61% 是无用体积）。判据两条：**`files` 里不能有注释行**（npm 会静默忽略整个字段，一个警告都不打）、**白名单必须覆盖构建真正要读的东西**——而 `knowledge/` 与 `scripts/` **不只有台账**，它们被内容页的 `verify:` 声明点名，`astro.config.mjs` 在构建时逐条核文件在不在。⚠️ 干净目录构建那条判据**默认不跑**（要装 426 个包），加 `--full` 才跑，而它**明写「本轮没验」**——「没验」与「验过了」在输出上完全一样 |
-| `npm run check:release` | **版本号、git tag、`CHANGELOG` 三者对得上**。2026-09-29 实测：全项目只有一个 tag（`v0.1.0`，2026-09-18），它指向 220 个提交之前——**读的人会以为 `0.1.0` 就是当前状态**。⚠️ 而「HEAD 比 tag 新」**只报事实、不报缺陷**（那是发过之后又改了的正常状态），**判据只核「已发布的状态」与「仓库写着的状态」对不对得上**。⚠️ `CHANGELOG` **显式关掉**（`SKIP_CHANGELOG = true`）——理由量过：那 220 个提交里 136 个是内部门禁工作，**不是使用者能感知的变更**，而自动生成需要逐条归类，**那是判断题不是机械转换** |
+| `npm run check:release` | 核对 `package.json` 版本与最新 git tag；HEAD 比 tag 新时只提示。`CHANGELOG` 检查当前显式关闭（`SKIP_CHANGELOG = true`），因此不能声称三者均已核对。CI 的 `full-gates` 获取完整 git 历史与 tag 后运行此检查。 |
 | `npm run check:staged` | **暂存区与工作区一致**。它报的是「`git add` 过之后又改了文件」——那种情况下 `git commit` 提交的是**暂存区那份**，而门禁验的是**工作区那份**。2026-09-24 实测丢过一次真实修复（乱码修好并验证了，之后 `git add -A` 又提交成了原样，而门禁当时是绿的）。⚠️ 它**不能**保证「工作区那份被验证过」——那要记录时间戳或内容哈希，而门禁不写状态。所以它是**提交前的自检**，不是能替代 `verify:all` 的门禁 |
 | `npm run check:agents-doc` | **`AGENTS.md` 的可证伪声明还成立**。① 规则名（`redundant-relation` 真的存在且会触发吗）② 例子里的 slug（真的存在吗）③ 行为声明（「写标题与写 slug 指向同一页」真的是真的吗）④ **那张规则表与 `lint.ts` 的规则集集合相等**——两个方向都抓（2026-09-28 实测那张表**漏了 2 条规则**，含一条 **error** 级）。**不检查整份文档的散文**——那既做不到也会误报 |
 | `npm run check:site-agnostic` | **核心模块不硬编码本站结构**：知识库 URL 前缀与根层保留路由表必须能由调用方覆盖。判据是**查签名与调用链**（`urlFor` 收不收前缀参数、`lint()` 真的用没用 `opts.reservedPostRoutes`），不是查字面量——因为**写死与「可覆盖的兜底默认值」在字面上完全一样**。对应路线图阶段 4 第 6 项 |
@@ -41,7 +41,7 @@
 | `npm run migrate:manifest -- <v1.json> [-o out.json] [--check]` | 把 `version: 1` 的内容清单迁到 `version: 2`。**`--check` 只验证能否迁移，不写文件**。迁移器**不补任何 `provenance` 默认值**——v1 的 11 篇一条来源信息都没有，补 `pending` 或 `original` 都是撒谎；正确做法是让该键**保持缺席**并在输出里逐条列出。输出**确定性**：不含时间戳，跨时区跑三次逐字节一致。逐字段列举而非 `{...input, version: 2}`——展开会在 v1 日后新增字段时**静默透传**，产出一个「看着像 v2」的假清单 |
 | `npm run verify:migrate` | 上一条的**负向验证**：往**真实的线上 v1**（`knowledge/fixtures/manifest-v1.json`）里注入 5 种坏法（缺 `id` / `sha256` 不合法 / ID 重复 / `documentCount` 对不上 / 出现不认识的 v1 字段），每次都必须报出**能定位到具体条目**的诊断。对应路线图退出条件的后半句「**失败时有精确诊断**」 |
 | `npm run check:single-source` | **版本号只有一处真值**。`CONTENT_MANIFEST_VERSION` 的真值在 `src/lib/content-manifest.ts`；任何地方再写一遍 `MANIFEST_VERSION = 2` 都会红（注释里的不算）。这条来自一次**真故障**：提交把生产端升到 v2 时同步器与它的测试固件都没跟上，于是**同步器对着本站自己的清单必然报错，而 481 条测试全绿**——因为测试固件也写着旧值，**测的是一个已不存在的格式** |
-| `npm run verify:all`（CI 只跑其中一部分） | **46 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:retrieval-gates` → `verify:impact` → `verify:answers` → `verify:review` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:json-output` → `verify:json-mutations` → `verify:migrate` → `verify:new-gates-mutations` → `check:single-source` → `verify:second-site` → `verify:second-site-real` → `verify:second-site-real-mutations` → `verify:anchors` → `verify:reproducible` → `verify:base` → `check:manifest-schema` → `verify:formats` → `check:anchors` → `check:refs` → `check:agents-doc` → `check:onboarding-doc` → `check:two-paths` → `check:field-coverage` → `check:single-literal` → `check:adapter-size` → `check:not-a-demo` → `check:no-duplicate-lists` → `check:command-scripts` → `check:rule-levels` → `check:agents-coverage` → `check:package-files` → `check:release` → `check:worktree-assert` → `check:staged`），**不含** `verify:online`（需要外部环境）、`migrate:manifest`（需要显式输入）与三个交互式命令 |
+| `npm run verify:all`（CI 的 `full-gates` 全量执行） | **46 步**依次跑一遍（`check` → `verify:gates` → `test` → `verify` → `verify:testcount` → `verify:search` → `verify:questions` → `verify:retrieval-gates` → `verify:impact` → `verify:answers` → `verify:review` → `verify:portability` → `check:site-agnostic` → `verify:site-mutations` → `check:exit-codes` → `verify:exit-codes` → `verify:json-output` → `verify:json-mutations` → `verify:migrate` → `verify:new-gates-mutations` → `check:single-source` → `verify:second-site` → `verify:second-site-real` → `verify:second-site-real-mutations` → `verify:anchors` → `verify:reproducible` → `verify:base` → `check:manifest-schema` → `verify:formats` → `check:anchors` → `check:refs` → `check:agents-doc` → `check:onboarding-doc` → `check:two-paths` → `check:field-coverage` → `check:single-literal` → `check:adapter-size` → `check:not-a-demo` → `check:no-duplicate-lists` → `check:command-scripts` → `check:rule-levels` → `check:agents-coverage` → `check:package-files` → `check:release` → `check:worktree-assert` → `check:staged`），**不含** `verify:online`（需要外部环境）、`migrate:manifest`（需要显式输入）与三个交互式命令 |
 | `npm run check` | 类型检查（Astro + TypeScript） |
 | `npm run clean` | 删掉 `.astro/`、`node_modules/.astro/` 与 `dist/`，包括 Astro 7 的持久内容缓存 |
 | `npm run check:onboarding-doc` | **文档里转述的数字与命令名都与实际一致**。① 接线文档的实测表格**从文档里解析数字**再与实测值比对（第一版把期望值硬编码在脚本里、文档读进来却从不使用，于是**改文档不会红、改代码才会红**，而它声称要核的正是文档）② README 与本文件转述的 fixture 篇数 / 断言条数 ③ **本文档与 README 里每个 `npm run <名字>` 都真实存在**（实测抓到 `check:portability` 这个拼错的名字——照着敲会得到 `Missing script`） |
@@ -88,39 +88,16 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 > 后来它还改成**自己先 build**：不依赖前面步骤的副作用，
 > 挪位置也不会因为前面某步改了 `dist` 而失效。
 
-### CI 跑的是 `verify:all` 的一部分，不是全部
+### CI 如何运行完整门禁
 
-2026-09-29 实测：`verify:all` 有 **45 步**，而 CI 的 `build` job 只显式调用了
-其中 **7 个**（`check` / `test` / `verify` / `verify:testcount` / `verify:search` /
-`verify:reproducible` / `verify:base` / `verify:formats`）。
-**剩下 26 道在 CI 上从来没跑过**——包括检索金标、影响分析、答案可定位性、
-复核状态、核心可移植性、错误码与 JSON 输出契约、异构站点、迁移器、文档一致性。
+`full-gates` 在 Ubuntu 上执行 `npm run verify:all` 的全部 46 步。
+它先安装依赖；`verify` 自己会清理并构建产物，因此不需要额外的预构建步骤。
+`check:release` 需要 git tag，checkout 必须获取完整历史与 tag。
 
-> 此前有人注意到过一次（`verify:testcount` 那段注释写着
-> 「**但 CI 从来没调用过它**」）——**只补了那一条**。
-> **写好的门禁没接线，和没有门禁是同一件事**；
-> 而「本地 45 步全绿、CI 也绿」会让人以为那些门禁在把关。
-
-现在 CI 上有两个把关 job：
-
-| job | 跑什么 | 特点 |
-|---|---|---|
-| `full-gates` | `npm run verify:all`（全部 45 步） | ⚠️ **必须在 `verify:all` 之前 build**——第 4 步 `verify` 打在 `dist` 上，而 CI 是全新 checkout。**这个 job 从被加上那天起就是红的**，只是没人推过那个分支 |
-| `knowledge-gates` | 21 道**不依赖 `dist`** 的门禁 | 失败不提前退出（跑完才知道还剩几道红）；跑完检查 `git diff` 是否干净 |
-
-两者都**必须串行**——`verify:site-mutations` / `verify:exit-codes` /
-`verify:json-mutations` 靠「改坏源码再还原」证明自己不是装饰，**并发会互相踩**。
-
-这两条接线由 `scripts/ci-wiring.mjs` 守着，它自己带**五条**负向验证
-（改坏 CI 接线后门禁必须报：去掉 `test` 分支 / 去掉 job / 换掉命令 /
-删掉 build / 把 build 挪到 `verify:all` 之后）。
-
-> `full-gates` 那个 job 提供了一个反面教材：
-> **「接了线」不等于「线通了」**——它接得 neatly、门禁也认它，
-> **而它跑起来是红的**。要问的从来不是「接线在不在」，是「它跑起来是什么结果」。
-
-不在任何 job 里的：`check:staged` 是提交前自检，CI 上暂存区恒为空；
-`verify:online` 需要外部环境。
+`build`、`knowledge-gates` 和 `knowledge-gates-sub` 分别提供构建结果及更明确的失败定位；
+它们不是完整门禁的替代品。会修改再还原源码的变异验证在同一 job 内串行执行。
+`check:staged` 虽属于 `verify:all`，但 CI 暂存区为空，因此其提交前检查只在本地暂存后有意义。
+`verify:online` 需要外部部署环境，不属于 `verify:all`。
 
 ### 哪几道验证会改写**源码**
 

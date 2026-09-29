@@ -27,7 +27,8 @@
  *
  * 用法：`npm run check:agents-doc`
  */
-import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync, unlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -210,10 +211,36 @@ if (claims('更不会被 `wiki:ask`', '「草稿不进 CLI 检索」')) {
       );
       console.log('  ✗ 草稿进了链接图（CLI 会检索到它）');
     } else {
-      ok('草稿不进链接图（CLI 检索不到它）');
+      ok('草稿不进链接图');
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+
+  // 链接图的过滤不能代替真实 CLI 验收：两条命令可能直接使用未过滤的 pages。
+  const probeName = `audit-draft-cli-${process.pid}`;
+  const probe = join(ROOT, 'src', 'content', 'wiki', `${probeName}.md`);
+  if (existsSync(probe)) throw new Error(`草稿探针路径已存在：${probe}`);
+  try {
+    writeFileSync(probe,
+      `---\ntitle: 草稿 CLI 探针\nsummary: 仅供草稿隔离检查。\nkind: concept\nid: ${probeName}\ndraft: true\nsources:\n  - sourceId: css-values-4\n    revision: WD-20240312\n    locator: §5.1.1\n---\n\norbital jellyfish notation.\n`,
+      'utf8');
+    const ask = spawnSync('node', ['scripts/wiki-ask.mjs', '--json', 'orbital jellyfish notation'],
+      { cwd: ROOT, encoding: 'utf8' });
+    const impact = spawnSync('node', ['scripts/wiki-impact.mjs', '--source', 'css-values-4', '--json'],
+      { cwd: ROOT, encoding: 'utf8' });
+    const leakedToAsk = ask.stdout.includes(probeName);
+    const leakedToImpact = impact.stdout.includes(probeName);
+    if (ask.status !== 0 || impact.status !== 0 || leakedToAsk || leakedToImpact) {
+      problems.push(`草稿 CLI 隔离失败：ask exit=${ask.status}, 命中=${leakedToAsk}; `
+        + `impact exit=${impact.status}, 命中=${leakedToImpact}。`
+        + `\nask stderr: ${ask.stderr.slice(0, 300)}\nimpact stderr: ${impact.stderr.slice(0, 300)}`);
+      console.log('  ✗ 草稿进入真实 CLI 输出');
+    } else {
+      ok('草稿不进 wiki:ask / wiki:impact 的真实 CLI 输出');
+    }
+  } finally {
+    unlinkSync(probe);
   }
 }
 

@@ -207,9 +207,9 @@ if (SKIP_CHANGELOG) {
  * | 要 `peerDependencies` 吗 | 不要 | **要**（否则锁死使用者的 astro） |
  * | 别人拿到的是什么 | 一整个能改的站点 | 一个依赖 |
  *
- * 2026-09-29 实测 clone 会拿到 **227 个文件**（含 `scripts/`、`knowledge/`、
- * `docs/`——**那些对 clone 的人有用**，改内容、跑门禁都要用），
- * 而 `files` 白名单只让 `npm pack` 出 124 个。
+ * clone 会拿到 `scripts/`、`knowledge/`、`docs/` 等仓库文件，
+ * 它们对改内容、跑门禁都有用；
+ * 而 `files` 白名单缩小 npm 包；实际文件数由 `check:package-files` 验证。
  *
  * 所以判据**不主张哪一种**，只要求：**写明是哪一种**，
  * 而那份声明**必须与 `package.json` 的形状自洽**——
@@ -253,10 +253,7 @@ if (SKIP_CHANGELOG) {
       console.log('  ✓ 说「模板」，而护栏在、`peerDependencies` 不在——两者自洽');
     }
   }
-  console.log(
-    '    ℹ clone 会拿到 **227** 个文件（含 `scripts/`、`knowledge/`、`docs/`——',
-  );
-  console.log('    **那些对 clone 的人有用**），而 `files` 只让 `npm pack` 出 124 个。');
+  console.log('    ℹ clone 包含 `scripts/`、`knowledge/`、`docs/`；npm 包清单由 `check:package-files` 实测。');
 }
 
 // ── ⑤ 定位的**措辞**必须在全文唯一 ────────────────────────────────────
@@ -311,4 +308,4 @@ if (problems.length > 0) {
   console.log(`\n${problems.length} 处。\n`);
   process.exit(1);
 }
-console.log('\n版本号、tag、CHANGELOG 对得上。\n');
+console.log(`\n版本号、tag${SKIP_CHANGELOG ? ' 对得上；CHANGELOG 检查已显式关闭' : '、CHANGELOG 对得上'}。\n`);

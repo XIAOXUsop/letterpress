@@ -390,6 +390,11 @@ describe('readContentPage', () => {
     });
   });
 
+  it('summary 的 YAML 行内注释被解析，不会让整份语料失败', () => {
+    write('a.md', '---\ntitle: 甲\nsummary: 合法摘要 # 作者注释\n---\n\n正文。\n');
+    expect(readContentPage(dir, 'a.md').summary).toBe('合法摘要');
+  });
+
   describe('original（原创实践记录）', () => {
     /**
      * ⚠️ **2026-09-28 加。** 读路径原先**完全不认识 `original`**，

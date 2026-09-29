@@ -31,7 +31,7 @@
  * 与 `BaseLayout.astro` 里那个 `is:inline` 主题脚本的做法一致
  * （**常量只有一份，版本在下面改**）。
  *
- * ⚠️ **而版本要钉住**：不钉版本 = 每次构建可能拿到不同的 mermaid，
+ * ⚠️ **而版本要钉住**：不钉版本 = 页面可能拿到不同的 mermaid，
  * 而图忽然不渲染时**报错信息一个字都不提 mermaid**——极难反推。
  *
  * ⚠️ **而版本号只写在下面那个脚本里**（`MERMAID_CDN`），
@@ -46,38 +46,60 @@
    * ⚠️ **版本号钉在下面**——与 astro.config.mjs 里没有第二份真值，
    * 而这个「只有一份」正是为了不再引入第三个问题。
    */
-  const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+  const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js';
 
   (() => {
-    const blocks = document.querySelectorAll('pre.mermaid');
+    const blocks = Array.from(document.querySelectorAll('pre.mermaid'));
     if (blocks.length === 0) return;
+    const sources = new Map(blocks.map((block) => [block, block.textContent ?? '']));
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+    const currentTheme = () => {
+      const selected = document.documentElement.dataset.theme;
+      return selected === 'dark' || (!selected && prefersDark.matches) ? 'dark' : 'default';
+    };
 
     const script = document.createElement('script');
     script.src = MERMAID_CDN;
     script.onload = () => {
       const m = window.mermaid;
-      if (!m) return;
-      m.initialize({
-        startOnLoad: false,
-        theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default',
-      });
-      /*
-       * ⚠️ **`mermaid.run()` 是 async，且失败不抛**——
-       * 一张语法错的图会让**整批**都停在那里。
-       * 所以 `allSettled` 逐张兜底，**不让一张坏图拖垮整页**。
-       * 而渲染成功后 mermaid 会给元素加 `data-processed`，
-       * `site.css` 里靠它区分「图」与「未渲染的源码」。
-       */
-      Promise.allSettled(Array.from(blocks).map((b) => m.run({ nodes: [b] })))
-        .then((rs) => {
-          const bad = rs.filter((r) => r.status === 'rejected').length;
-          if (bad > 0) {
-            console.warn(
-              `[mermaid] ${bad} 张图渲染失败——源码保留在 <pre class="mermaid"> 里，可直接读`,
-            );
-          }
+      if (!m) {
+        console.warn('[mermaid] 运行时没有提供 mermaid，显示图表源码');
+        return;
+      }
+
+      let pending = Promise.resolve();
+      const render = () => {
+        pending = pending.then(async () => {
+          m.initialize({ startOnLoad: false, theme: currentTheme() });
+          const results = await Promise.allSettled(blocks.map(async (block) => {
+            const source = sources.get(block) ?? '';
+            block.textContent = source;
+            block.removeAttribute('data-processed');
+            try {
+              await m.run({ nodes: [block] });
+              if (block.querySelector('svg[aria-roledescription="error"]')) {
+                throw new Error('Mermaid returned an error diagram');
+              }
+            } catch (error) {
+              // Mermaid may replace the source with an error SVG before rejecting.
+              block.textContent = source;
+              block.removeAttribute('data-processed');
+              throw error;
+            }
+          }));
+          const failed = results.filter((result) => result.status === 'rejected').length;
+          if (failed > 0) console.warn(`[mermaid] ${failed} 张图渲染失败，已恢复图表源码`);
         });
+      };
+
+      render();
+      new MutationObserver(render).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme'],
+      });
+      prefersDark.addEventListener('change', render);
     };
+    script.onerror = () => console.warn('[mermaid] 运行时加载失败，显示图表源码');
     document.head.appendChild(script);
   })();
 </script>

@@ -41,7 +41,7 @@
  *
  * 用法：`node scripts/check-worktree-assert.mjs`
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
@@ -113,8 +113,10 @@ console.log('─'.repeat(64));
   } finally {
     // ③ 收尾：把文件从索引里摘掉并删掉，**让工作区回到跑之前的样子**
     spawnSync('git', ['rm', '-f', '--cached', '-q', probeName], { cwd: ROOT, encoding: 'utf8' });
-    spawnSync('cmd.exe', ['/c', 'del', '/f', '/q', probe], { encoding: 'utf8' });
+    unlinkSync(probe);
   }
+  const restored = diffWorktree(snap);
+  if (!restored.ok) problems.push(`语料 ② 没有清理干净：\n${restored.report}`);
   if (!r.ok && /已跟踪 [1-9]/.test(r.report)) {
     console.log('  ✓ ② 改了一个已提交的文件 → ok:false，且**归类为「已跟踪」**');
   } else if (r.ok) {
@@ -157,8 +159,10 @@ console.log('─'.repeat(64));
     spawnSync('node', ['-e', `require('node:fs').writeFileSync(${JSON.stringify(probe)}, 'x', 'utf8')`], { cwd: ROOT });
     r = diffWorktree(snap);
   } finally {
-    spawnSync('cmd.exe', ['/c', 'del', '/f', '/q', probe], { encoding: 'utf8' });
+    unlinkSync(probe);
   }
+  const restored = diffWorktree(snap);
+  if (!restored.ok) problems.push(`语料 ③ 没有清理干净：\n${restored.report}`);
   if (!r.ok && /未跟踪 [1-9]/.test(r.report)) {
     console.log('  ✓ ③ 留了未跟踪文件 → ok:false，且**归类为「未跟踪」**');
   } else if (r.ok) {

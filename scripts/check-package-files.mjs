@@ -39,7 +39,7 @@
  *
  * 用法：`node scripts/check-package-files.mjs [--full]`
  */
-import { readFileSync, existsSync, rmSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -179,10 +179,9 @@ if (!FULL) {
   console.log('  – 干净目录构建：**本轮没验**（要装 426 个包，加 `--full` 才跑）');
   console.log('    ⚠️ 「没验」与「验过了」在输出上完全一样——所以这里明写「没验」。');
 } if (FULL) {
-  const tmp = join(tmpdir(), 'lp-pack-check');
+  const tmp = mkdtempSync(join(tmpdir(), 'lp-pack-check-'));
+  let phase = 'pack';
   try {
-    rmSync(tmp, { recursive: true, force: true });
-    mkdirSync(tmp, { recursive: true });
     // 打一个真的 tarball
     runNpm(['pack', '--pack-destination', tmp], ROOT);
     // ⚠️ **npm 的 notice 走 stdout，会把门禁的输出淹没**——
@@ -215,23 +214,26 @@ if (!FULL) {
      *
      * 所以：**老老实实装一次**。慢几十秒，换来的是「使用者真的能装上」这个结论。
      */
+    phase = 'install';
     runNpm(['install', '--no-audit', '--no-fund'], pkgDir);
 
+    phase = 'build';
     const r = runNpm(['run', 'build'], pkgDir, 'utf8');
     const pages = (r.match(/(\d+)\s*page/gi) ?? []);
     console.log(`  ✓ 干净目录里 \`npm run build\` 成功（${pages[0] ?? '页数未报'}）`);
   } catch (e) {
     const out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+    const cause = phase === 'install'
+      ? '**隔离安装依赖失败，本轮无法判断打包内容能否构建。**\n'
+      : phase === 'pack'
+        ? '**创建或解包 tarball 失败，本轮无法判断打包内容能否构建。**\n'
+        : '**把 tarball 解包到干净目录后，`npm run build` 失败。**\n'
+          + '    → 请检查 `files` 白名单是否排掉了构建输入。\n';
     problems.push(
-      '**把 tarball 解包到干净目录后，`npm run build` 失败。**\n'
-      + '    → 这说明 `files` 白名单**排掉了构建真正要读的东西**。\n'
-      + '    → 2026-09-28 实测过一次：把 `knowledge/` 与 `scripts/` 当「开发资产」排掉，\n'
-      + '    而它们**被内容页的 `verify:` 声明点名**，构建时逐条核文件在不在。\n'
-      + '    → **「看起来是开发资产」与「是构建的输入」在代码里长得一样**，\n'
-      + '    唯一的分法就是**在干净目录里真跑一次构建**。\n'
-      + (out.trim() ? `    ── 构建器的原话 ──\n${out.trim().split('\n').slice(-12).map((l) => '    ' + l).join('\n')}\n` : ''),
+      cause
+      + (out.trim() ? `    ── 失败命令的输出 ──\n${out.trim().split('\n').slice(-12).map((l) => '    ' + l).join('\n')}\n` : ''),
     );
-    console.log('  ✗ 干净目录里 `npm run build` 失败（`files` 排掉了必要文件）');
+    console.log(`  ✗ 干净目录验证停在 ${phase} 阶段`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

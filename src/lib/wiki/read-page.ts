@@ -15,13 +15,13 @@
  * `urlFor` 与 remark 插件各写一份前缀、`related` 方括号处理不一致），
  * 所以这次直接抽出来共用。
  *
- * 与 `frontmatter.ts` 的分工：那边解析**标量**字段（title / summary），
- * 这里解析**嵌套结构**（sources 的块状数组）。
+ * 标量字段使用下方的 YAML 解析结果；`sources` 等块字段仍由本文件读取。
+ * `frontmatter.ts` 的窄解析器只供尚未迁移的块字段辅助路径使用。
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-// ⚠️ **2026-09-28 引入**：标量与块字段一律按 YAML 解析。
+// ⚠️ **2026-09-28 引入**：标量字段按 YAML 解析。
 // 依据见 `dataOf` 的注释——**那是实测出来的，不是「YAML 更规范」**。
 import { parseDocument } from 'yaml';
 import { frontmatterField } from './frontmatter.ts';
@@ -227,11 +227,11 @@ export function readContentPage(dir: string, file: string): {
      * | `cover` / `coverAlt` | **不补** | 纯展示（封面图与它的 alt）。核心流程是「链接图 / 体检 / 检索 / 影响分析」，一个都不看图——**补进来只会让核心知道它用不上的东西** |
      *
      * ⚠️ `date` 在构建侧是 `z.coerce.date()`（真 Date），
-     * 而 `frontmatterField` 给的是**原始字符串**。这里保持字符串——
+     * 这里从 YAML 结果转成字符串——
      * `Doc` 里没有日期字段，而 CLI 侧要的是「能排序、能显示」的那个值。
      * **要真 Date 的消费者（RSS / 归档）都走构建侧。**
      */
-    date: frontmatterField(source, 'date') ?? '',
+    date: scalarOf(data, 'date') ?? '',
     /*
      * ⚠️ **复用 `relationList` 而不是再写一遍剥括号 + 切分隔符。**
      *
@@ -256,7 +256,7 @@ export function readContentPage(dir: string, file: string): {
      * 由 `check:field-coverage.mjs` 抓出来的：它对**单读**断言，
      * 而单读那会儿真的没有这两个。
      */
-    summary: frontmatterField(source, 'summary') ?? '',
+    summary: scalarOf(data, 'summary') ?? '',
     ...(originalReason ? { original: { reason: originalReason } } : {}),
     /*
      * ⚠️ **2026-09-28 补 `draft`。**
@@ -271,9 +271,9 @@ export function readContentPage(dir: string, file: string): {
      * **不验读路径**——那正是它漏掉这一处的原因。
      *
      * ⚠️ 认 `true` / `yes` / `on` 之外还认**带引号的** `"true"`——
-     * YAML 允许，而 `frontmatterField` 返回的是**原始字符串**。
+     * YAML 允许字符串形式；布尔和字符串都统一转成可判断的标量。
      */
-    draft: /^(true|yes|on)$/i.test((frontmatterField(source, 'draft') ?? '').trim().replace(/^["']|["']$/g, '')),
+    draft: /^(true|yes|on)$/i.test(scalarOf(data, 'draft') ?? ''),
     body,
   };
 }

@@ -202,7 +202,8 @@ const NEGOTIATION_ROWS = (() => {
   const doc = readFileSync(join(ROOT, 'docs', 'content-negotiation.md'), 'utf8');
   /** 按页面路径切出那一整行（**含首尾空格原样**，因为它就是文档里的字节）。 */
   const row = (path) =>
-    doc.split('\n').find((l) => l.includes(`| ${path} |`)) ?? `| ${path} | （锚点：docs 里没有这一行，变异必然无效）`;
+    doc.split('\n').find((l) => l.trimStart().startsWith(`${path} `))
+      ?? `${path} （锚点：当前估算表里没有这一行，变异必然无效）`;
   return {
     agents: row('/markdown-for-agents/'),
     typography: row('/cjk-web-typography/'),
@@ -763,49 +764,23 @@ const CASES = [
     target: 'check-agents-doc.mjs',
   },
   {
-    // ⚠️ 守着 2026-09-28 补的那条判据：`docs/content-negotiation.md` 的 MD 列
-    // 与实测一致。原先 `verify-negotiation.mjs` 的注释写着
-    // 「真实词表那组由 docs 里的表负责」——**而 docs 那侧零门禁**：
-    // 注释说「X 负责」而 X 那边没有检查，等于没有人负责。
-    why: 'verify:negotiation — docs 表格的 MD token 列被改',
+    // 当前估算表的 MD 列必须与本次构建一致；历史词表表格保留为注明日期的样本。
+    why: 'verify:negotiation — 当前估算表的 MD token 列被改',
     file: 'docs/content-negotiation.md',
-    /*
-     * ⚠️ **改的是「第二个」`a / b` 形状——那才是 MD 列。**
-     *
-     * 第一版用 `replace(/(\d[\d,]*)( \/ [\d,]+（)/, …)`，
-     * **而它替换的是第一个匹配**——那是 **HTML 列**，
-     * **而 `why` 写的是「MD token 列」**。
-     *
-     * > **「我改的是 MD 列」与「我以为我改的是 MD 列」在输出上完全一样**——
-     * > 门禁照样红（`check` 核的正是 MD 列的估算值），
-     * > **而 `why` 与实际改的地方不符这件事，没有任何东西会发现**。
-     *
-     * 修法：**用 `matchAll` 取第二个匹配的位置**，而不是「替换第一个」。
-     * ⚠️ **而这要求那一行里确实有两个 `a / b（` 形状**——下面会断言它。
-     */
-    find: (() => {
-      const row = NEGOTIATION_ROWS.agents;
-      const m = [...row.matchAll(/(\d[\d,]*)( \/ [\d,]+（)/g)];
-      if (m.length < 2) {
-        throw new Error(
-          `锚点行里只有 ${m.length} 个「a / b（」形状——`
-          + '**改第二个才是 MD 列**，而这里不够。改用别的切法。',
-        );
-      }
-      return row;
-    })(),
+    find: NEGOTIATION_ROWS.agents,
     replace: (() => {
       const row = NEGOTIATION_ROWS.agents;
-      const m = [...row.matchAll(/(\d[\d,]*)( \/ [\d,]+（)/g)];
-      const at = m[1].index;   // ⚠️ **第二个**匹配的起点
-      return row.slice(0, at) + '9,999' + row.slice(at + m[1][1].length);
+      const changed = row.replace(/^(\s*\/\S+\/\s+\d+\s+)\d+(\s+[\d.]+%\s*)$/,
+        (_, prefix, suffix) => `${prefix}9999${suffix}`);
+      if (changed === row) throw new Error('当前估算表的 MD 列格式已变，变异无法注入');
+      return changed;
     })(),
     target: 'verify-negotiation.mjs',
   },
   {
     // ⚠️ 「取不到」与「都对」在结果上无法区分——删掉一行必须报，
     // 而**不能**默认通过（形态四）。
-    why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',
+    why: 'verify:negotiation — 当前估算表里删掉一行（取不到 ≠ 都对）',
     file: 'docs/content-negotiation.md',
     find: NEGOTIATION_ROWS.typography,
     replace: '',
@@ -1585,8 +1560,8 @@ const CASES = [
     // 会出现 **2 次**（下面那条变异自己的 `replace` 里也有这一行），
     // 而 `mutate()` 断言锚点**恰好 1 次**，「2 次」与「0 次」一样是注入无效。
     // 所以带上 `why` 那一行——**而 `why` 是全文件唯一的**。
-    find: "    why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',\n    file: 'docs/content-negotiation.md',\n    find: NEGOTIATION_ROWS.typography,",
-    replace: "    why: 'verify:negotiation — docs 表格里删掉一行（取不到 ≠ 都对）',\n    file: 'docs/content-negotiation.md',\n    find: '> | /cjk-web-typography/ | 9,013 / 10,380（−13.2%） |',",
+    find: "    why: 'verify:negotiation — 当前估算表里删掉一行（取不到 ≠ 都对）',\n    file: 'docs/content-negotiation.md',\n    find: NEGOTIATION_ROWS.typography,",
+    replace: "    why: 'verify:negotiation — 当前估算表里删掉一行（取不到 ≠ 都对）',\n    file: 'docs/content-negotiation.md',\n    find: '/cjk-web-typography/  9013  4286  56.3%',",
     target: 'check-gate-list.mjs',
   },
   {

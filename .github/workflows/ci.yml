@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # check:release needs the version tags in a fresh CI checkout
       - uses: actions/setup-node@v5
         with:
           node-version: '22'

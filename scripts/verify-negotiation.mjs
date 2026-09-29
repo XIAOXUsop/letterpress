@@ -1020,7 +1020,7 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
 }
 
 /**
- * ── `docs/content-negotiation.md` 的 MD token 列必须等于实测 ────────────
+ * ── `docs/content-negotiation.md` 的当前 MD token 列必须等于实测 ────────
  *
  * ⚠️ **2026-09-28 加。** 上一条判据的注释写着：
  *
@@ -1033,11 +1033,9 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
  * > **注释里说「X 负责」而 X 那边没有检查，等于没有人负责。**
  * > 交接的双方都不验证，交接就成了丢弃。
  *
- * 而它是**可以核的**——`measured` 里已经有 MD 侧实测值（`t2`），
- * 文档表格里的 MD 列就是同一批文本的同一次量。
- * ⚠️ **只核 MD 侧，不核真实词表那一列**：那一列来自 `o200k_base`，
- * 本仓库**没有装 tiktoken**（`package.json` 里没有），**无法重算**——
- * 核不了的东西不能声称在核。
+ * 历史真实词表表格已经标明日期，不能再拿它的估算列与当前构建比较。
+ * 当前估算值在下面的代码块里；`measured` 的 `t2` 可直接核它的 MD 列。
+ * 历史真实词表列来自 `o200k_base`，本仓库没有装 tiktoken，无法重算。
  *
  * ⚠️ **文档表格里取不到值时要红**，不能默认通过：
  * 「取不到」与「都对」在结果上无法区分（形态四）。
@@ -1059,26 +1057,23 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
   const mismatches = [];
   let checked = 0;
   for (const row of measured) {
-    // 表格行形如 `> | /markdown-for-agents/ | 6,750 / 7,530（−10.4%） | 2,852 / 2,965（−3.8%） | 57.7% / **60.6%** |`
-    // MD 列是第 3 列（`| 分过 → [0]是空、[1]是页、[2]是 HTML、[3]是 MD`）。
-    const line = docText.split('\n').find((l) => l.startsWith(`> | ${row.page}`));
+    // 当前表的行形如 `/markdown-for-agents/  7676  2852  62.8%`。
+    const line = docText.split('\n').find((l) => l.trimStart().startsWith(`${row.page} `));
     if (!line) {
-      mismatches.push(`${row.page}：文档表格里找不到这一行——判据没跟上文档的改写`);
+      mismatches.push(`${row.page}：当前估算表里找不到这一行——判据没跟上文档的改写`);
       continue;
     }
-    const cols = line.split('|');
-    const mdCol = cols[3] ?? '';
-    const claimed = /([\d,]+)\s*\/\s*([\d,]+)/.exec(mdCol.replace(/\*/g, ''));
+    const claimed = /^\/\S+\/\s+(\d+)\s+(\d+)\s+[\d.]+%\s*$/.exec(line.trim());
     if (!claimed) {
-      mismatches.push(`${row.page}：文档表格的 MD 列取不到「估算 / 真实」这一对数字`);
+      mismatches.push(`${row.page}：当前估算表的 MD 列格式不正确`);
       continue;
     }
     checked++;
-    const docMd = Number(claimed[1].replace(/,/g, ''));
+    const docMd = Number(claimed[2]);
     if (docMd !== row.t2) {
       mismatches.push(
         `${row.page}：文档表格写 MD ${docMd}，实测 ${row.t2}`
-          + '（这一列量的是当次构建的产物，内容一改就会漂——**别手抄**）',
+          + '（这一列量的是当前构建的产物，内容一改就会漂）',
       );
     }
   }
@@ -1087,12 +1082,12 @@ for (const page of ['/markdown-for-agents/', '/cjk-web-typography/', '/wiki/cont
   }
   check(
     mismatches.length === 0,
-    '`docs/content-negotiation.md` 表格的 MD token 列与实测一致',
+    '`docs/content-negotiation.md` 当前估算表的 MD token 列与实测一致',
     mismatches.join('\n    '),
   );
   console.log(
-    `  ${mismatches.length === 0 ? '✓' : '✗'} docs 表格核了 ${checked}/${measured.length} 行的 MD 列`
-      + '（真实词表那列无法重算，刻意不核）',
+    `  ${mismatches.length === 0 ? '✓' : '✗'} docs 当前估算表核了 ${checked}/${measured.length} 行的 MD 列`
+      + '（历史真实词表那列无法重算）',
   );
 }
 
@@ -1138,17 +1133,15 @@ check(
  * 都等于本次实测的**估算**节省率。
  *
  * 而 README 现在合法地有两组数：估算（每次构建都重打，门禁该管）
- * 与**真实词表** `o200k_base` 复算（60.6 / 57.9，那不是估算）。
+ * 与**真实词表** `o200k_base` 的历史复算（那不是当前估算）。
  * 于是加了第二组之后这条判据红了——**而它红得不对**。
  *
  * > **一个判据把两类东西当成一类，就会逼人把真数据删掉。**
  *
- * 现在只取**紧跟在 `**` 之后、且后面不接「真实词表」字样的那组**——
- * 也就是摘要里的估算值。真实词表那组由 `docs/content-negotiation.md`
- * 里的表负责（那张表量的是当次构建的产物，**刻意不进门禁**）。
+ * 现在只取摘要里的估算值。历史真实词表样本在
+ * `docs/content-negotiation.md` 中标明日期，不与当前构建混用。
  */
-const estimatedOnly = readme.replace(/用真实词表[^）]*?（估算在 HTML 侧稳定偏低[^）]*?）[。.]?/g, '');
-const claimedSavings = (estimatedOnly.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
+const claimedSavings = (readme.match(/\*\*[\d.]+%\s*\/\s*[\d.]+%\*\*/g) ?? []).map((s) =>
   [...s.matchAll(/([\d.]+)%/g)].map((m) => m[1]),
 );
 const expectedSavings = measured.slice(0, 2).map((r) => r.saved);
@@ -1157,7 +1150,7 @@ check(
   'README 摘要那行的 token 节省率（估算）与实测一致',
   `README 写 ${claimedSavings.map((p) => p.join('/')).join(' ') || '（没有）'}，实测前两页 ${expectedSavings.join(' / ')}%
 ` +
-    '    **真实词表那组（60.6 / 57.9）刻意不归这条判据管**——它不是估算。',
+    '    历史真实词表样本不归这条当前估算判据管。',
 );
 
 /**
