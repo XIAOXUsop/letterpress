@@ -33,6 +33,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { sliceArrayLiteral } from './lib/array-literal.mjs';
 
 const ROOT = process.cwd();
 const problems = [];
@@ -86,7 +87,7 @@ console.log('─'.repeat(64));
  * ① **Windows 上用 `cmd /c npm`**（实测 status=0）——**不用 `shell: true`**，
  *    所以 DEP0190 不会回来；
  * ② **`error` 存在时不能说「build 失败」**——那是「压根没起来」，
- *    与「跑���了且失败」是两件事（形态十一）。
+ *    与「跑起来了且失败」是两件事（形态十一）。
  */
 const NPM_CMD = process.platform === 'win32'
   ? { cmd: 'cmd.exe', args: ['/c', 'npm'] }
@@ -124,6 +125,23 @@ const ACTUAL_STEPS = String(
 );
 
 /**
+ * **`GATES` 数组里现在有几道门禁**——用于把台账里那个数写进变异锚点。
+ *
+ * ⚠️ **数法必须与 4g 那条判据完全一致**（剔注释 → 数 `'*.mjs'` 字面量）。
+ * 两处若用不同数法，**它们会各自报出不同的数，而谁也不知道谁对**——
+ * 而「都报了一个数」看起来像「都核过了」。
+ *
+ * ⚠️ **而这个数 2026-09-29 变过一次**：把 `verify-negotiation.mjs`
+ * 加进 `GATES` 之后从 15 变成 16，**而三处手写的「15」不会提醒我**。
+ * 这正是本文件存在的理由：锚点里不写会变的数。
+ */
+const GATE_COUNT = String((() => {
+  const s = sliceArrayLiteral('scripts/new-gates.mutations.mjs', 'GATES');
+  if (!s) return NaN;
+  return (s.body.match(/'[\w.-]+\.mjs'/g) ?? []).length;
+})());
+
+/**
  * 台账里 `verify:base` 那一行（**含末尾换行**）——用作变异锚点。
  *
  * ⚠️ **从台账里切出来，不手写**：我手写了一次，
@@ -153,13 +171,11 @@ const FORMATS_CMD_LINE = "\"verify:formats\": \"node scripts/check-formats.mjs\"
 const README_STEPS_LINE = "| 门禁编排 | **45 步**";
 
 const MUT_COUNT = (() => {
-  const src = readFileSync(import.meta.filename, 'utf8');
   // ⚠️ **`lastIndexOf`**：这段自省代码**自己就含** `const CASES = [`，
   // 而 `indexOf` 会先找到它 —— 于是数出 0，而锚点里就带着一个 0。
-  const i = src.lastIndexOf('const CASES = [');
-  const end = src.indexOf('\n];', i);
-  if (i < 0 || end < 0) return '未知';
-  return String((src.slice(i, end).match(/^  \{$/gm) ?? []).length);
+  const s = sliceArrayLiteral('scripts/new-gates.mutations.mjs', 'CASES');
+  if (!s) return '未知';
+  return String((s.body.match(/^  \{$/gm) ?? []).length);
 })();
 
 /**
@@ -510,6 +526,21 @@ const GATES = [
   'check-onboarding-doc.mjs', 'check-command-scripts.mjs', 'check-gate-list.mjs',
   'check-single-source.mjs', 'check-agents-doc.mjs', 'check-rule-levels.mjs',
   'check-agents-coverage.mjs', 'check-package-files.mjs', 'check-release.mjs',
+  /*
+   * ⚠️⚠️ **它原先不在这里——而它有两条变异**（2026-09-29 实测）。
+   *
+   * `GATES` 只在两处被用：「干净态检查」的遍历与收尾那句输出。
+   * **而变异本身靠 `target` 字段找**——所以那两条变异一直跑着，
+   * **只是它自己从没被验过「在干净态下是绿的」**。
+   *
+   * > **「跑过了」与「被检查过跑得对不对」在输出上完全一样。**
+   *
+   * ⚠️ 而它**没有独立的命令名**——它是 `npm run verify`
+   * （`bundle-and-verify.mjs`）**背后的实现**，而 `verify` 是编排第 4 步。
+   * 所以它既不在 `package.json` 的命令里、也不在编排里，
+   * **而这不是「没人用」**——它每天被 `verify` 跑着。
+   */
+  'verify-negotiation.mjs',
 ];
 
 const CASES = [
@@ -590,7 +621,7 @@ const CASES = [
     target: 'check-field-coverage.mjs',
   },
   {
-    why: 'check:agents-coverage — 某类声明「无门��认领」（空白归属比错的归属更隐蔽）',
+    why: 'check:agents-coverage — 某类声明「无门禁认领」（空白归属比错的归属更隐蔽）',
     file: 'scripts/check-agents-coverage.mjs',
     find: "    gate: 'check:field-coverage',",
     replace: "    gate: null, // MUTATION：这一类无门禁认领",
@@ -1124,8 +1155,8 @@ const CASES = [
     //   第一版写 `**共 56 条变异**`——而那个数**每次加变异就会变**（56 → 58），
     //   于是锚点失效；第二版只写 `**共 `——**文件里有 2 处**（另一处是 4g 那段表格）。
     // 现状：**锚前半 + 整条尾巴**，而**那个数在两边都不出现**。
-    find: '**共 ' + MUT_COUNT + ' 条变异** / 13 道门禁',
-    replace: '**共 43 条变异** / 13 道门禁',
+    find: '（**共 ' + MUT_COUNT + ' 条变异** / ' + GATE_COUNT + ' 道门禁）',
+    replace: '（**共 43 条变异** / ' + GATE_COUNT + ' 道门禁）',
     target: 'check-gate-list.mjs',
   },
   {
@@ -1150,6 +1181,55 @@ const CASES = [
     // 锚点必须带上**只有原文才有的上下文**。
     find: '**有 ' + ACTUAL_STEPS + ' 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
     replace: '**有 33 步**，而 CI 的 `build` job 只显式调用了其中 **7 个**',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4g 扩出来的第四类（`GATES` 里的门禁数）。**
+     *
+     * 2026-09-29 实测：`GATES` 从 15 变成 16（加进 `verify-negotiation.mjs`），
+     * **而「15」这个字面量散在四个地方，一个都不会提醒我**。
+     * 4g 当时已经在核「命令数 / 变异条数 / 编排步数」——
+     * **同一种病，第四处不在它的范围内。**
+     *
+     * ⚠️ 而这一类的特殊之处：**它有一个「数字写进描述」的诱惑**
+     * （`gate: '（一批：GATES 里的 15 道）'`）——
+     * 那正是本项目反复栽的形状，**所以数字从描述里删掉了**，
+     * 台账那一行则由 4g 核。
+     */
+    why: 'check:gate-list — 台账里 GATES 的门禁数漂了（4g 扩出来的第四类）',
+    covers: ['4g'],
+    file: 'knowledge/gate-negatives.md',
+    // ⚠️ **锚点必须够长到唯一**：台账里「共 16 道」出现 **2 次**
+    //   （一次在新增那节的标题下、一次在「处置」那行），
+    //   而 `mutate()` 断言锚点**恰好 1 次**——「2 次」与「0 次」一样是注入无效。
+    //   所以带上「处置」那行的前半句，而**那个数只在这一处出现**。
+    find: '处置：加进 `GATES`（`共 ' + GATE_COUNT + ' 道`）',
+    replace: '处置：加进 `GATES`（`共 ' + (Number(GATE_COUNT) + 1) + ' 道`）',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4g 那条判据的「数法」，而不只是「它会红」。**
+     *
+     * 4g 的第 4 类前两版都错，而**两版都量出了完全合法的数**：
+     * 按行计数出 **1**（三行并排写三个条目）、`indexOf` 找到**自己**数出 **20**。
+     *
+     * > **「量法错了」不产生红，只产生另一个数**——
+     * > 而那三个数（1 / 20 / 16）**没有一个会报错**。
+     * > 这是形态十二的第四种形态：**连「绿」都没有，只有「一个数」**。
+     *
+     * 所以这条变异**不注入「错数」，而是把数法改回按行计**——
+     * 4g 于是拿 1 去比台账里的 16，**必须报红**。
+     *
+     * ⚠️ **这正是「判据自己也要先被验一遍」的最小形态**：
+     * 它验的不是「产品有没有问题」，是**「我这把尺子准不准」**。
+     */
+    why: 'check:gate-list — 4g 数 GATES 的数法退回「按行计」（量出 1，必须报红）',
+    covers: ['4g'],
+    file: 'scripts/check-gate-list.mjs',
+    find: "        return { total: (s.body.match(/'[\\w.-]+\\.mjs'/g) ?? []).length };",
+    replace: "        return { total: (s.body.match(/^\\s*'[\\w.-]+\\.mjs',?$/gm) ?? []).length };",
     target: 'check-gate-list.mjs',
   },
   {

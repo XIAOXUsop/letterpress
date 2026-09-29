@@ -33,6 +33,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { checkCiWiring } from './ci-wiring.mjs';
+import { sliceArrayLiteral } from './lib/array-literal.mjs';
 
 const ROOT = process.cwd();
 const problems = [];
@@ -559,9 +560,9 @@ const GATES_WITH_MUTATIONS = [
      * ⚠️ 它**不能**按「门禁 ↔ 变异脚本」的一对一登记（它验的是**十几道**门禁），
      * 所以那一栏写的是它自己；**理由要写明「它验的是一批、不是一道」。
      */
-    gate: '（一批：GATES 里的 15 道）',
+    gate: '（一批：`GATES` 数组里那一批）',
     mutations: 'scripts/new-gates.mutations.mjs',
-    why: '**它验的不是一道门禁，是一批**（`GATES` 数组里那 15 道）——'
+    why: '**它验的不是一道门禁，是一批**（`GATES` 数组里那一批）——'
       + '所以一对一登记在这里不成立，那一栏写的是它自己。'
       + '⚠️ **而它是唯一一个「判定别人有没有被验」的脚本**，'
       + '**它自己有没有效同样要有人核**——见 `new-gates.mutations.mjs` 文件头的记述'
@@ -667,7 +668,7 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
    *
    * ⚠️⚠️ **第一版不过滤，于是 `export` / `function` / `string` / `readonly`
    * 全被当关键词**——而它们**在任何 JS 文件里都存在**。
-   * 于是「15 个关键词都找到了」**也是巧合**，只是换了一种巧合。
+   * 于是「那一堆关键词都找到了」**也是巧合**，只是换了一种巧合。
    *
    * > **「匹配到了」与「匹配到了有意义的东西」在输出上完全一样。**
    *
@@ -1027,7 +1028,7 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
    * 而**那个文件名里就有「不存在」三个字**。
    *
    * > **豁免词可以藏在被豁免的对象里**，而那正是豁免最危险的形态：
-   * > 一个叫「不存在」的文件，永远不需要解释自己为什么不存���。
+   * > 一个叫「不存在」的文件，永远不需要解释自己为什么不存在。
    *
    * 所以判据改成：**先把所有路径从那一行里摘掉，再看剩下的文字**。
    * ⚠️ 而「解释」通常写在**结果列或门禁列**（那一行的散文部分），
@@ -1282,6 +1283,62 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
       // （台账写的是 `` `verify:all` **有 43 步** ``），所以那几样要一并容许。
       re: /(?:共|全部|现有|目前是)\s*(\d+)\s*步|verify:all`?\s*\**\s*有\s*\**(\d+)\s*步/g,
       actual: () => ({ total: steps.length }),
+      keys: ['total'],
+    },
+    {
+      /*
+       * ⚠️ **2026-09-29 加——因为「GATES 里有几道门禁」也被人手抄进了多处。**
+       *
+       * 我在 `GATES_WITH_MUTATIONS` 那一栏写「GATES 里的 15 道」，
+       * 在 4b 的注释里写「15 个关键词」——**而 `GATES` 一直在变**
+       *（上一轮就从 15 变到 16：加进了 `verify-negotiation.mjs`）。
+       *
+       * > **「15」这个字面量出现在三个文件里，而它们都不会提醒我它漂了。**
+       * > 而 4g 已经在核「命令数 / 变异条数 / 编排步数」了——
+       * > **同一种病，第三处不在核的范围内。**
+       *
+       * ⚠️ **数法必须与 `new-gates.mutations.mjs` 报的一致**：
+       * 它打印的是 `GATES.length`，所以权威值是**那个数组的元素个数**，
+       * 而**不是**「行尾有多少个字符串」。
+       *
+       * ⚠️ **而 `check-gate-list.mjs` 自己就在 `GATES_WITH_MUTATIONS` 的那一栏里**，
+       * 所以这个正则若匹配到的是**注释里的历史记录**，就会自己把自己判红。
+       * 因此 `re` **只认现状标志**（与上面三条同一处置），
+       * 且**排掉「关键词」那处**——它是 4b 内部算法的一个中间量，
+       * **与「有几道门禁」无关**（同一批数字里的另一个数）。
+       */
+      what: 'GATES 里的门禁数',
+      re: /(?:共|全部|现有|目前是)\s*(\d+)\s*道|带\s*\**`?GATES`?\**\s*的\s*(\d+)\s*道/g,
+      actual: () => {
+        /*
+         * ⚠️⚠️⚠️ **这个数法前两版都错，而两版都量出了「完全合法的数」。**
+         *
+         * ① **`indexOf` 找到了它自己**——本文件里另有一处
+         *    `sliceArrayLiteral(...)` 的调用，而那个变量名是**字符串字面量**。
+         *    `indexOf('const GATES = [')` 命中的是**那一行**，
+         *    于是量出 **20**（而真值 16）。
+         *    ⚠️ 而**同一个陷阱在 `new-gates.mutations.mjs` 里早被记过**
+         *    （`MUT_COUNT` 用 `lastIndexOf`，注释写着「自省代码自己就含它」）——
+         *    **同一个仓库里两处，一处记着，一处没记。**
+         *
+         * ② **「剔注释」用正则剔，会吃掉真实内容**——
+         *    `check-single-literal.mjs` 这个**字符串**里含块注释的开头记号，
+         *    于是那条剔注释的正则从那里一路吃到下一个块注释结束记号，
+         *    **`GATES` 的后半段被当成注释删了**，
+         *    而前半段（`GATE_COUNT` 那几行里的字面量）**被算成了条目**。
+         *
+         *    > **三个数（1 / 20 / 16）没有一个会报错**——
+         *    > 而本文件记着的形态十二说「绿也可能是量法错了」；
+         *    > **这里连绿都没有，只有三个数，而它们都长得像实测值。**
+         *
+         * 处置：共用 `lib/array-literal.mjs` 的 `sliceArrayLiteral`（用
+         * **`lastIndexOf`**），数法是**数条目字面量**——
+         * **不剔注释**，因为**注释里没有 `'*.mjs'` 这种形状的字面量**。
+         */
+        const s = sliceArrayLiteral('scripts/new-gates.mutations.mjs', 'GATES');
+        if (!s) return null;
+        return { total: (s.body.match(/'[\w.-]+\.mjs'/g) ?? []).length };
+      },
       keys: ['total'],
     },
   ];
