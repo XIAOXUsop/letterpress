@@ -177,8 +177,24 @@ const STAGED_STEP_LINE = "  ['npm run check:staged', '**暂存区与工作区一
  * 而那行里的中文与换行经过几层转义全变了，报「锚点出现 0 次」。
  */
 const FORMATS_CMD_LINE = "\"verify:formats\": \"node scripts/check-formats.mjs\"";
-/** README 里「门禁编排 | **N 步**」那一行（**含 N**，因为 N 会变**）。 */
-const README_STEPS_LINE = "| 门禁编排 | **45 步**";
+/**
+ * README 里「门禁编排 | **N 步**」那一行（**含 N**）——**从 README 里切出来**。
+ *
+ * ⚠️⚠️ **2026-09-29 实测到它第二次失效。**
+ * 第一版硬写 `| 门禁编排 | **45 步**`；我给编排加了第 46 步（`check:worktree-assert`）、
+ * 改完 README 就忘了这条，**变异脚本报「锚点在 README.md 里出现 0 次」**。
+ *
+ * > **而那正是本文件头写着的那条**：「锚点里出现「会变的数」，锚点迟早会失效。」
+ * > **同一个文件里，`ACTUAL_CMDS` / `ACTUAL_STEPS` / `GATE_COUNT` 都改成运行时算了，
+ * > 而这一处漏了**——**改一处漏一处，全靠记性。**
+ *
+ * 所以：**从 README 里用正则切出那一行**，而正则**不写死那个数**。
+ */
+const README_STEPS_LINE = (() => {
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+  const m = readme.split('\n').find((l) => /^\|\s*门禁编排\s*\|/.test(l));
+  return m ?? `| 门禁编排 | **${ACTUAL_STEPS} 步**`;
+})();
 
 const MUT_COUNT = (() => {
   // ⚠️ **`lastIndexOf`**：这段自省代码**自己就含** `const CASES = [`，
