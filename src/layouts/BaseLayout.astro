@@ -21,6 +21,7 @@ import { site } from '../config.js';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import CodeCopy from '../components/CodeCopy.astro';
+import Mermaid from '../components/Mermaid.astro';
 import { path, absolute } from '../lib/url.js';
 // 顺序有讲究：
 // fonts.css 必须先于 tokens.css —— 它定义 @font-face，而令牌里的字体栈引用这些族名
@@ -199,5 +200,6 @@ const shareImage = site.url ? absolute(ogImage ?? '/og.png', site.url) : null;
     </main>
     <SiteFooter />
     <CodeCopy />
+    <Mermaid />
   </body>
 </html>

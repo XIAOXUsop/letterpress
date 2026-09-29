@@ -1,7 +1,7 @@
 {
   "name": "letterpress",
   "type": "module",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A static blog template that gets Chinese typography right — and serves markdown to AI agents.",
   "license": "MIT",
   "files": [
@@ -85,8 +85,7 @@
     "check:package-files": "node scripts/check-package-files.mjs",
     "verify:package-files": "node scripts/check-package-files.mjs --full",
     "prepublishOnly": "node scripts/prepublish-guard.mjs",
-    "check:release": "node scripts/check-release.mjs"
-,
+    "check:release": "node scripts/check-release.mjs",
     "check:worktree-assert": "node scripts/check-worktree-assert.mjs"
   },
   "dependencies": {

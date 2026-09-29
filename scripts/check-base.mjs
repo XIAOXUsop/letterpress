@@ -20,6 +20,13 @@
 import { runAstro } from './lib/astro.mjs';
 import { cleanBuildState } from './lib/clean.mjs';
 import { readFile, readdir } from 'node:fs/promises';
+/*
+ * ⚠️ **同步的三个是 2026-09-29 那条新判据用的**——
+ * 而本文件其余部分一律用 `node:fs/promises`。
+ * 混用是刻意的：**这段遍历是纯 CPU 的、逐个 `await` 反而更慢**，
+ * 而它**跑在构建之后**（dist 已在磁盘上），不存在与构建竞争的问题。
+ */
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** 用这个假 base 构建。选它是因为长度与真实的仓库名接近。 */
@@ -414,6 +421,92 @@ for (const rel of required) {
   } catch {
     console.log(`  ✗ ${rel} 缺失`);
     problems.set(rel, ['(缺失)']);
+  }
+}
+
+// ── remark 管线有没有被某个组件静默掐断（2026-09-29 加）────────────
+/*
+ * ⚠️⚠️ **这条是 2026-09-29 加 mermaid 时被逼出来的——46 步门禁全绿，
+ * 而项目的核心功能 `[[wiki 链接]]` 已经静默失效了。**
+ *
+ * 触发经过：`<script is:inline define:vars={…}>` 那个组件
+ * （`src/components/Mermaid.astro` 第一版）**让整站 `.md` 的 remark 管线不执行**，
+ * `[[中文排版]]` 原样留在产物里——**而 `npm run build` 报 EXIT=0**。
+ *
+ * > **「构建通过」与「功能生效」在输出上完全一样**——
+ * > 而那次**没有一道门禁发现它**，因为 46 步里**没有一条看 `[[` 有没有被解析**。
+ *
+ * 判据：**产物里不许出现未解析的 `[[…]]`**。
+ *
+ * ⚠️ **为什么扫全站而不是某几页**：`[[` 可能出现在任何一页，
+ * **而抽几页去验等于「只看自己写的那几页」**（形态十一）。
+ * 代价是遍历 `dist` 全部 HTML——**实测 1 秒出头**，比一条门禁便宜。
+ *
+ * ⚠️ **而产物里本来就有合法的 `[[`**：那在 `llms.txt` / `content-manifest.json` 里，
+ * **不在 HTML 里**——所以只扫 `dist` 下面**以 `.html` 结尾的文件**。
+ *
+ * ⚠️⚠️ 而这一段的注释里**第一版写了带星号的 glob 路径**——
+ * 那串「块注释结束记号」**当场闭合了注释**，后面的话被当成代码解析，
+ * 报错指向一个毫不相干的位置（`SyntaxError: Unexpected token '*'`）。
+ * **这是本项目记过六次以上的那个坑，而我又栽了一次。**
+ * 所以注释里不写它。
+ */
+{
+  const pages = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      const st = statSync(p);
+      if (st.isDirectory()) walk(p);
+      else if (name.endsWith('.html')) pages.push(p);
+    }
+  };
+  try {
+    walk(dist);
+  } catch {
+    // dist 不存在——上面 required 那段已经报过了，不重复报
+  }
+
+  const offenders = [];
+  for (const rel of pages) {
+    const html = readFileSync(rel, 'utf8');
+    /*
+     * ⚠️ **要剥掉的比我想的多一层。**
+     *
+     * 第一版只剥 `<script>` 与 `<style>`，于是报出 3 处——
+     * 而**三处全是讲这个功能本身的文章**：
+     * 「用 `[[方括号]]` 连起来」「引用它的 `[[链接]]` 变成断链」
+     * 「正文里的 `[[方括号]]` 是不是真的变成了链接」。
+     * **它们在 `<code>` 与反引号里，是举例，不是失效。**
+     *
+     * > **「产物里有 `[[`」与「有个链接没被解析」在输出上完全一样**——
+     * > 而本项目至少有 3 篇文章**必须**写着这个语法才能讲清楚它。
+     *
+     * 所以还要剥 **`<code>` 与 `<pre>`**——**正文里的链接语法从来不会出现在这两处**
+     * （markdown 渲染器不会把 `[[x]]` 放进 code）。
+     *
+     * ⚠️ **而这一层不是一开始就想到的**——**判据收紧必须先证它在正常状态下不误报**，
+     * 而这次是**跑出来之后才发现的**，所以那 3 篇文章是它的语料。
+     */
+    const body = html
+      .replace(/<script[\s\S]*?<\/script>/g, '')
+      .replace(/<style[\s\S]*?<\/style>/g, '')
+      .replace(/<code[\s\S]*?<\/code>/g, '')
+      .replace(/<pre[\s\S]*?<\/pre>/g, '')
+      .replace(/<nav class="toc[^"]*"[\s\S]*?<\/nav>/g, '');
+    const m = /(\[\[[^\]\n]{1,40}\]\])/g.exec(body);
+    if (m) {
+      offenders.push(`${rel.replace(dist, 'dist')}：${m[1]}`);
+    }
+  }
+  if (offenders.length > 0) {
+    for (const o of offenders.slice(0, 8)) console.log(`  ✗ ${o}`);
+    problems.set(
+      '产物里有未解析的 `[[…]]` 链接——remark 管线没有执行',
+      offenders,
+    );
+  } else {
+    console.log(`  ✓ ${pages.length} 个 HTML 里没有未解析的 [[…]]（remark 管线在跑）`);
   }
 }
 

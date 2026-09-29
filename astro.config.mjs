@@ -12,6 +12,7 @@ import { collectFrontmatterProblems } from './src/lib/wiki/frontmatter.ts';
 import { checkVerifyClaims, formatVerifyProblems } from './src/lib/wiki/verify-run.ts';
 import { rehypeTableWrap } from './src/lib/rehype-table-wrap.ts';
 import { rehypeHeadingLinks } from './src/lib/rehype-heading-links.ts';
+import { rehypeMermaid } from './src/lib/rehype-mermaid.ts';
 
 /**
  * ── frontmatter 写法校验：必须在**这里**，不能放在 remark 插件里 ──────────
@@ -184,7 +185,7 @@ export default defineConfig({
        * 实测：一张三列对照表在 375px 视口下宽 383px。
        * 详见 rehype-table-wrap.ts 里关于「为什么不直接用 CSS」的说明。
        */
-      rehypePlugins: [rehypeTableWrap, rehypeHeadingLinks],
+      rehypePlugins: [rehypeMermaid, rehypeTableWrap, rehypeHeadingLinks],
     }),
     shikiConfig: {
       // 双主题：Shiki 会输出 CSS 变量，由页面样式决定用哪套。

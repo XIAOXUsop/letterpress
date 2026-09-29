@@ -257,6 +257,39 @@ font-family: 'Archivo', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-se
 这些细节单独看都很小。但它们同时出现时，读者的感受就是「这个站读起来舒服」
 而说不出为什么——那正是排版该有的样子。
 
+上面那张表把「参数 → 取值」列全了，但它看不出**这些参数各自在解决哪一类视觉问题**。
+把它们按「改动哪一个 CSS 属性」归位，会发现行高与行宽其实是同一个问题
+（**竖向与横向的节奏**），而中西文间距与字体栈顺序是同一个问题（**字符怎么落到网格上**）：
+
+```mermaid
+flowchart TD
+  subgraph 节奏["节奏：读者一次能看多少"]
+    LH["line-height<br/>1.6–1.8"]
+    LW["max-inline-size<br/>34em"]
+  end
+  subgraph 字符["字符：字形怎么落到网格上"]
+    TS["text-autospace<br/>中西文自动间距"]
+    FS["font-family<br/>拉丁字体在前"]
+  end
+  subgraph 强调["强调：中文没有斜体"]
+    SW["font-synthesis-weight: none<br/>+ 用加粗代替"]
+  end
+
+  LH --> R1["纵向密度"]
+  LW --> R2["横向密度"]
+  TS --> C1["西文/汉字的间隙不匀"]
+  FS --> C2["标点与括号对不齐"]
+  SW --> E1["斜体会被伪造"]
+
+  R1 & R2 --> OK["读起来不累"]
+  C1 & C2 --> OK
+  E1 --> OK
+```
+
+⚠️ **这张图的价值恰恰在「分组」上**：`line-height` 与 `max-inline-size` 看似无关，
+但它们要一起调——**只调一个，页面的密度就不均匀**，
+而那种不均匀**很难用语言描述，只能看出来**。
+
 相关条目：[[中文排版]]、[[内容协商]]。
 
 ## 参考

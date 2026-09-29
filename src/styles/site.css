@@ -1217,3 +1217,44 @@
     }
   }
 }
+
+/* ── mermaid 图 ────────────────────────────────────────────────────────
+ *
+ * 由 src/lib/rehype-mermaid.ts 把 ```mermaid 代码块转成 <pre class="mermaid">，
+ * 由 src/components/Mermaid.astro 在客户端调 mermaid 渲染成 SVG。
+ *
+ * ⚠️ **必须重置代码块的样式**：`.prose pre` 有背景、内边距与圆角，
+ * 而那些是给「代码」准备的——图表不是代码，套上去会多出一圈框、
+ * 且 `overflow-x: auto` 让宽图在窄屏上被裁掉一半。
+ *
+ * ⚠️ **而 `text-align: center` 是为了 SVG 不左对齐**：
+ * mermaid 生成的 SVG 自带 `max-width` 与 `display: block`，
+ * 桌面端居中比左对齐更像「图」而不像「代码」。
+ */
+.prose pre.mermaid {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0.5rem 0;
+  overflow-x: auto;
+  text-align: center;
+  line-height: normal;
+}
+
+/*
+ * ⚠️ **JS 没跑或 CDN 挂掉时的样子**——
+ * 那时 `<pre class="mermaid">` 里是**纯文本源码**，
+ * 而它会继承上面的透明背景，于是**一段没有背景的文字浮在页面上**。
+ * 所以「没渲染成功」要显式长得像代码块：
+ * mermaid 渲染成功后会给元素加 `data-processed`。
+ */
+.prose pre.mermaid:not([data-processed]) {
+  background: var(--surface-code, rgb(0 0 0 / 0.04));
+  border: 1px solid var(--border, rgb(0 0 0 / 0.1));
+  border-radius: 6px;
+  padding: 0.875rem 1rem;
+  text-align: left;
+  white-space: pre-wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+}
