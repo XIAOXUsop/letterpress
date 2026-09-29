@@ -1502,8 +1502,32 @@ const CASES = [
     why: 'check:release — 改 package.json 的 version 而不打 tag（两份真值分叉）',
     covers: ['②'],
     file: 'package.json',
-    find: '  "version": "0.1.0",',
-    replace: '  "version": "0.2.0",',
+    /*
+     * ⚠️⚠️ **这一处硬写着 `"version": "0.1.0"`，而 2026-09-29 发 1.0.0 时它失效了。**
+     *
+     * 症状是变异脚本报「锚点出现 0 次」——
+     * **而那句话与「门禁有盲区」同义**（形态十二），
+     * 所以要花时间分辨「锚点漂了」与「门禁坏了」。
+     *
+     * ⚠️ **而 4m 拦不住它**：那条判据只抓 **4 位以上**的数字，
+     * `0.1.0` 里最大的段是 **1 位**——
+     * > **「版本号是最会变的那个数」与「它只有一位」在输出上完全一样。**
+     * > **而 4m 的门槛是按「实测值通常多大」定的，不是按「谁最会变」定的。**
+     *
+     * 修法：**从 `package.json` 里正则切出那一行**（版本号是唯一的
+     * `version` 字段），而 `replace` 把它换成一个**明显不同**的值。
+     *
+     * ⚠️ **而 `replace` 里的那个值也不能是「当前版本 + 1」**——
+     * 那样它也会漂。写死一个**语义上就是「错的」**的值：
+     * 判据②核的是「tag 的版本 ≠ package.json 的版本」，
+     * **任何一个不等于当前版本的值都成立**。
+     */
+    find: (() => {
+      const pkg = readFileSync(join(ROOT, 'package.json'), 'utf8');
+      return /^\s*"version":\s*"[^"]+",?\s*$/m.exec(pkg)?.[0]
+        ?? '  "version": "0.0.0-MUTATION-ANCHOR-MISSING",';
+    })(),
+    replace: '  "version": "0.0.0-mutation",',
     target: 'check-release.mjs',
   },
   {

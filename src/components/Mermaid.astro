@@ -33,8 +33,12 @@
  *
  * ⚠️ **而版本要钉住**：不钉版本 = 每次构建可能拿到不同的 mermaid，
  * 而图忽然不渲染时**报错信息一个字都不提 mermaid**——极难反推。
+ *
+ * ⚠️ **而版本号只写在下面那个脚本里**（`MERMAID_CDN`），
+ * **不要在 frontmatter 再声明一个常量**——第一版那样写过，
+ * 改用 `define:vars` 之后它没人用了，`astro check` 一直报
+ * 「declared but its value is never read」，**而那会让编排第 1 步失败**。
  */
-const MERMAID_VERSION = '11';
 ---
 
 <script is:inline>

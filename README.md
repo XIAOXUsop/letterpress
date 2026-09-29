@@ -28,7 +28,7 @@
   send `Accept: text/markdown`; this template answers with markdown
   (RFC 9110 + RFC 7763). Edge shims for Cloudflare Pages, Netlify and Vercel are
   included — the part two existing Astro integrations explicitly skip.
-  Estimated saving: **59.4% / 56.5%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
+  Estimated saving: **61.6% / 56.3%** of tokens (heuristic estimate, not a real tokenizer — see the note in the docs). → [details](docs/content-negotiation.md)
 - **CJK typography, not Western defaults.** Line-height `1.75`, a `35em` measure
   (≈34 Chinese chars ≈ 68 Latin — **approximate**; what's guaranteed is that the
   column tracks font-size, not how many characters fit), native `text-autospace`,
@@ -100,7 +100,7 @@ Markdown for Agents 要 Pro 及以上套餐、Vercel 的实现只在自己平台
 现有的两个 Astro 集成，一个**只在 dev server 里生效**，一个**完全不做协商**。
 
 本项目补上它们跳过的那一段：**三个平台的边缘函数**，转换在构建期完成。
-按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **59.4% / 56.5%** 的 token。**这是估算不是真实用量**；用真实词表 `o200k_base` 在同一批文本上复算是 **62.1% / 59.1%**（估算在 HTML 侧稳定偏低 8–14%）。两组数不能混着用。
+按本项目的启发式估算，同一页面的 markdown 比 HTML 省 **61.6% / 56.3%** 的 token。**这是估算不是真实用量**；用真实词表 `o200k_base` 在同一批文本上复算是 **62.1% / 59.1%**（估算在 HTML 侧稳定偏低约 5%）。两组数不能混着用。
 
 需要长期同步内容的 Agent / RAG 管线还可以读取
 [`/content-manifest.json`](https://xiaoxusop.github.io/letterpress/content-manifest.json)：
@@ -208,7 +208,7 @@ review:
 | 构建 | 32 页；`astro build` 自报 **1.21 / 1.21 / 1.23 秒**（三次），整条 `npm run build` **2.94 / 2.98 / 2.96 秒**；Pagefind 自己报 0.136 秒、单独跑 `npx pagefind` 共 0.66 秒。**差值约 1.5 秒是 npm 起 node、连跑两条 npm script 的开销**（本机 Windows 实测；原表写的 1.1 / 2.6 秒偏低，且把差值的成因写成"npm 启动开销 + Pagefind 0.14 秒"，量级对、口径没有出处） |
 | 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
 | 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind 1.5.2，实测运行时资源 **6 个 js**、未压缩共 **431 KB**（441271 bytes；`npm run measure` 的口径，全部 6 个 gzip 合计 **105 KB**）；**访问者真正会加载的是 5 个 js**：`pagefind.js` + `pagefind-worker.js` + 三个 UI 包，未压缩 387 KB、**gzip 93 KB**；其中三个 UI 包单独算是 302 KB / gzip 69 KB。复测日期 2026-09-24；此前写的「17 个文件、146 KB gzip」在当前环境**已无法复现**（pagefind 版本未变而产物结构对不上），故改为可复现的口径 |
-| CSS | 单文件 **24.1 KB / gzip 5.1 KB** |
+| CSS | 单文件 **24.4 KB / gzip 5.2 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |
 

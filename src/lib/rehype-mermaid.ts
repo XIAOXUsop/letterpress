@@ -127,7 +127,16 @@ export function rehypeMermaid(options: { enabled?: boolean } = {}) {
  */
 function toPlainText(node: RootContent | Element): string {
   if (node.type === 'text') return node.value;
-  if (node.type === 'element' || node.type === 'root') {
+  /*
+   * ⚠️ **只能判 `element`**——`RootContent` 的判别联合里**没有 `root`**，
+   * 而 `astro check` 会把它报成 `ts(2367): 类型没有重叠`，
+   * **那会让 `npm run check` 整条失败**（`check` 是编排第 1 步）。
+   *
+   * ⚠️ 而上面那三个警告里另有一条同类：**`Mermaid.astro` 里那个
+   * `MERMAID_VERSION` 常量在我改写 `define:vars` 之后没人用了**——
+   * **改写法时留下的残骸，而 `astro check` 会一直提醒**。
+   */
+  if (node.type === 'element') {
     return node.children.map((c) => toPlainText(c as RootContent)).join('');
   }
   return '';

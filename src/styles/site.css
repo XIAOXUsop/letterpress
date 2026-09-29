@@ -1249,12 +1249,12 @@
  * mermaid 渲染成功后会给元素加 `data-processed`。
  */
 .prose pre.mermaid:not([data-processed]) {
-  background: var(--surface-code, rgb(0 0 0 / 0.04));
-  border: 1px solid var(--border, rgb(0 0 0 / 0.1));
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0.875rem 1rem;
   text-align: left;
   white-space: pre-wrap;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
 }
