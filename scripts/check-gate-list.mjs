@@ -2492,7 +2492,8 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
         .map((l) => l.replace(/^#+\s*/, ''));
       const noVerdict = CANDIDATES.filter(
         (c) => !SECTIONS.some((s) => s.includes(c)),
-      );      if (unhandled.length === 0 && noVerdict.length === 0) {
+      );
+      if (unhandled.length === 0 && noVerdict.length === 0) {
         console.log(`  ✓ ${CANDIDATES.length} 条调研候选都有处置结论（做或否决）`);
       } else {
         problems.push(
@@ -2503,6 +2504,75 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
           + '    而下一个人会**指着调研那张表格再来提一次**。',
         );
         console.log('  ✗ 有候选没有处置结论');
+      }
+    }
+
+    /*
+     * ── 4p. 每一条判据都要有**常驻变异**守着 ────────────────────────────
+     *
+     * ⚠️ **2026-09-29 实测**：14 条判据（4b–4o）里**有 4 条一条常驻变异都没有**
+     * （4b / 4j / 4l / 4o）——**而那 4 条里有 2 条是我当天刚加的**。
+     *
+     * > **「我手动验过」与「CI 每次都验」在输出上完全一样**——
+     * > 而**手动验过的那一次不会重跑**。判据写完、变异跑过一次，就成了「已覆盖」；
+     * > **半年后没有人记得它被验过，更没有人知道它现在还成不成立。**
+     *
+     * **判据：从变异脚本自身读出 `covers:` 声明过的判据号，与本文件实际存在的逐一比对。**
+     *
+     * ⚠️ **必须从变异脚本读、不能手写名单**——手写的那份就是形态九
+     * （手写的名单必然漏），**而它要守的正是「有没有漏」**。
+     */
+    console.log('');
+    console.log('每条判据都有常驻变异（4p）');
+    console.log('─'.repeat(64));
+    {
+      const mutSrc = readFileSync(join(ROOT, 'scripts', 'new-gates.mutations.mjs'), 'utf8');
+      /*
+       * ⚠️⚠️ **必须排除「出现在 `find:` / `replace:` 字符串里的那个」**。
+       *
+       * 我实测到的：删掉 `covers: ['4l']` 那一行之后，
+       * `4p` 报「✓ 15 条都有」——而文件里**还有 3 处**写着它：
+       *   ① 注释里解释「4l 是哪条」的那段
+       *   ② 4p 自己的 `find` 字符串（`covers: [\'4l\']`，**带转义**）
+       *   ③ 另一条变异的注释
+       *
+       * > **「文件里出现过」与「有一条真的声明生效」在输出上完全一样**——
+       * > 而形态十三记的正是这件事（我以为的代码 vs 它真在跑的代码），
+       * > **这里同一个陷阱落在了字符串字面量上。**
+       *
+       * 所以：**只认「独立成行、且行首就是 `covers:`」的那些**
+       * ——注释里的（行首是 `*` 或 `//`）与 `find:` 之后的（行首有缩进但前面有 `find:`）
+       * **都匹配不上**。
+       * ⚠️ 而 `find:` 后面那处**确实也是行首缩进的 `covers:`**——
+       * **所以还要排除「处在某个 `find:` / `replace:` 字符串字面量里」的**。
+       * **最省的做法：先按行去掉块注释与行注释，再按行匹配。**
+       */
+      const mutLines = mutSrc
+        .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+        .split('\n')
+        .filter((l) => /^\s*covers:\s*\[/.test(l));
+      const declared = new Set(
+        mutLines.flatMap((l) => l.match(/[0-9a-z]+/gi) ?? []),
+      );
+      /** ⚠️ **每加一条判据要往这里加一个编号**——
+       * 而**忘了加的后果是它永远不被要求有变异**（形态九）。 */
+      const CRITERIA = ['4b', '4c', '4d', '4e', '4f', '4g', '4h', '4i',
+        '4j', '4k', '4l', '4m', '4n', '4o', '4p'];
+      const uncovered = CRITERIA.filter((c) => !declared.has(c));
+      if (uncovered.length === 0) {
+        console.log(
+          `  ✓ ${CRITERIA.length} 条判据都至少有一条常驻变异守着`
+          + `（已声明 ${CRITERIA.filter((c) => declared.has(c)).length} 条）`,
+        );
+      } else {
+        problems.push(
+          '这些判据**没有常驻变异**守着：\n'
+          + uncovered.map((c) => `        ${c}`).join('\n') + '\n'
+          + '    → 「我手动验过」与「CI 每次都验」在输出上完全一样，\n'
+          + '    **而手动验的那一次不会重跑**。\n'
+          + '    → 在 `new-gates.mutations.mjs` 里加一条带 `covers: [这条]` 的变异。',
+        );
+        console.log(`  ✗ ${uncovered.length} 条没有常驻变异：${uncovered.join('、')}`);
       }
     }
   }
