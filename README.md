@@ -155,6 +155,33 @@ npm run sync:content -- --origin=https://example.com --output=.verify/content-mi
 「66ch ≈ 33 字」则额外依赖「0 字形约 0.5em」这个未实测的假设。
 **被保证的是容器宽度，不是每行字数。**
 
+<details>
+<summary>这些不是自我评价：2026-09-29 对 6 个同类项目做的源码级统计</summary>
+
+拿 `fuwari` / `astro-paper` / `Firefly` / `retypeset` / `erudite` / `Frosti`
+六个同类项目的**全部 CSS/SCSS 源码**（约 44 万字符）做属性级检索：
+
+| 属性 | 6 个项目里命中的 | 本项目 |
+|---|---|---|
+| `text-autospace`（中西文自动间距） | **1/6** | ✅ |
+| `text-spacing-trim`（标点挤压） | **0/6** | ✅ |
+| `line-break: strict`（标点避头尾） | **0/6** | ✅ |
+| `font-synthesis`（禁合成斜体） | **0/6** | ✅ |
+| CJK 字体名（Noto SC / 思源 / 苹方 / 雅黑…） | **0/6** | ✅ |
+| 覆盖 CJK 的 `unicode-range` | **0/6** | ✅ |
+
+**唯一命中的那个**（retypeset）是一行 `text-autospace: normal`，
+而它的 `unicode-range` 只覆盖 `U+0020-007E` 等**纯拉丁区段**。
+
+这也解释了同一批项目里那些 CJK issue 的形态：**28 条中文相关 issue 里，
+绝大多数是「字体加载失败」而不是「排版难看」**
+（`astro-paper#644` / `#349` / `#499`、`Firefly#654`）——
+**根因是这些项目的中文走系统 fallback，字形与度量都不可控。**
+
+> 统计方法与原始数据见本仓库 `knowledge/` 下的调研记录；
+> 检索口径只覆盖 `.css` / `.scss`，**未覆盖文档里的排版说明**。
+
+</details>
 
 ### 三、知识层，断链会让构建失败
 
