@@ -32,6 +32,10 @@
 import { readFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
+
+/** 跑之前的工作区——收尾断言要与它比，而不是与「空」比。 */
+const WORKTREE = captureWorktree();
 
 const ROOT = process.cwd();
 const GATE = join(ROOT, 'scripts/check-second-site-real.mjs');
@@ -263,6 +267,18 @@ if (runGate().red) {
   process.exit(1);
 }
 console.log('  ✓ 恢复后：绿（fixture 已还原）\n');
+/*
+ * 收尾断言见 `lib/worktree-assert.mjs` 的文件头。
+ *
+ * ⚠️ 而这一道**把坏数据写进 `knowledge/fixtures/second-site`**（已跟踪目录），
+ * 所以「工作区没变」在这里是真有牙齿的判据，不是走过场。
+ * `rmSync` 只删它自己造的那份，**别的残留它看不见**。
+ */
+{
+  const { ok, report } = diffWorktree(WORKTREE);
+  if (!ok) { console.log(report); allGood = false; }
+  else console.log(report);
+}
 console.log(
   allGood
     ? `${MUTATIONS.length} 种破坏都真的以预期的方式报了出来——这些断言测的是契约，不是巧合。`

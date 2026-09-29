@@ -26,6 +26,10 @@
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
+
+/** 跑之前的工作区——收尾断言要与它比，而不是与「空」比。 */
+const WORKTREE = captureWorktree();
 
 const ROOT = process.cwd();
 /*
@@ -196,6 +200,15 @@ for (const [i, m] of MUTATIONS.entries()) {
 
 rmSync(TMP, { force: true });
 console.log('');
+/* 收尾断言见 `lib/worktree-assert.mjs` 的文件头——
+ * ⚠️ 这一道**把坏数据写进 `knowledge/fixtures/`（已跟踪目录）**，
+ * 所以「工作区没变」在这里是真有牙齿的判据，而不是走过场。
+ * 而 `rmSync(TMP)` 只删它自己那个临时文件，**别的残留它看不见**。 */
+{ const { ok, report } = diffWorktree(WORKTREE);
+  if (!ok) { console.log(report); allGood = false; }
+  else console.log(report); }
+console.log('');
+
 /*
  * ⚠️ **只跑一条时不能说「全部坏法都……」**——
  * 那是本项目反复出现的「结论行比实际判定的多」。

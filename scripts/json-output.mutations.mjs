@@ -29,6 +29,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
+
+/** 跑之前的工作区——收尾断言要与它比，而不是与「空」比。 */
+const WORKTREE = captureWorktree();
 
 const ROOT = process.cwd();
 const GATE = join(ROOT, 'scripts/check-json-output.mjs');
@@ -140,6 +144,12 @@ if (runGate().red) {
   process.exit(1);
 }
 console.log('  ✓ 恢复后：绿（源码已还原）\n');
+/* 收尾断言见 `lib/worktree-assert.mjs` 的文件头。 */
+{
+  const { ok, report } = diffWorktree(WORKTREE);
+  if (!ok) { console.log(report); allGood = false; }
+  else console.log(report);
+}
 console.log(
   allGood
     ? '三类违约都真的以预期的方式报了出来——这道门禁是尺子，不是装饰。'

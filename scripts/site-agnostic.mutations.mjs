@@ -32,6 +32,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
+
+/** 跑之前的工作区——收尾断言要与它比，而不是与「空」比。 */
+const WORKTREE = captureWorktree();
 
 const ROOT = process.cwd();
 const GATE = join(ROOT, 'scripts/check-site-agnostic.mjs');
@@ -244,6 +248,19 @@ if (runGate().red) {
   process.exit(1);
 }
 console.log('  ✓ 恢复后：绿（源码已还原）\n');
+/*
+ * 收尾断言见 `lib/worktree-assert.mjs` 的文件头。
+ *
+ * ⚠️ **本脚本此前只问「被测门禁还绿吗」，不问「我改了什么」**——
+ * 而这两件事在输出上完全一样。
+ * 所以上面那句「源码已还原」**只对 `graph.ts` / `lint.ts` 成立**，
+ * 而「我顺手在别处留下的东西」它永远看不见。
+ */
+{
+  const { ok, report } = diffWorktree(WORKTREE);
+  if (!ok) { console.log(report); allGood = false; }
+  else console.log(report);
+}
 console.log(
   allGood
     ? `${MUTATIONS.length} 次变异都真的报出来了——这道门禁是尺子，不是装饰。`

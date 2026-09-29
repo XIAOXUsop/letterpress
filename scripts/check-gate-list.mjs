@@ -16,7 +16,7 @@
  * | 编号 | 量什么 |
  * |---|---|
  * | `1`–`5` | 步骤数量与顺序、脚本存在、豁免理由、文档转述的步数 |
- * | `4b`–`4h` | 负向验证覆盖、台账可复现性与会漂的数字、扫源码的门禁的排除规则 |
+ * | `4b`–`4k` | 负向验证覆盖、台账可复现性与会漂的数字、扫源码的门禁的排除规则、变异脚本自身的收尾断言 |
  *
  * ⚠️ **没有 `4a`**——而这行注释原先写着「4a 到 4g 各是一条」。
  * **「文档里写的编号」与「实际编号」对不上**，而那是本项目栽过多次的形状。
@@ -1924,6 +1924,55 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
       console.log(`  ✗ ${missing.length} 个变异脚本没在册：${missing.join('、')}`);
     } else {
       console.log(`  ✓ 磁盘上 ${onDisk.length} 个变异脚本都在册里`);
+    }
+
+    /*
+     * ── 4k. 每道变异脚本都必须有「跑完之后工作区没变」那条断言 ────────────
+     *
+     * ⚠️ **2026-09-29 实测：七道里只有一道有**——
+     * `new-gates.mutations.mjs`（2026-09-28 加的，因为那次「2 条一直假红」）。
+     * 另外六道的收尾只问「被测门禁还绿吗」，**不问「我改了什么」**，
+     * **而这两件事在输出上完全一样**。
+     *
+     * ⚠️ **而代价最高的那一道恰恰没有**：
+     * `retrieval-gates.mutations.mjs` 改的是**生产源码**
+     * `src/lib/wiki/retrieve.ts`——七道里唯一一个碰 `src/` 的。
+     *
+     * ⚠️ **判据不能只搜「那句断言的字面」**——七道接的是
+     * `lib/worktree-assert.mjs` 的 `diffWorktree(...)`，
+     * 而**共用一个实现**正是这里想要的（一份逻辑、七处调用）。
+     * 所以判据问的是**「有没有调那个共用函数」**。
+     *
+     * ⚠️ **而「调用了」不等于「结果被采用了」**——
+     * `if (!ok) …` 少写一个分支，那道脚本照样报「干净」。
+     * 所以一并核**返回值有没有进失败分支**（`if (!ok)` 那一形）。
+     * **这仍是代理指标**（真要确定，得把断言弄坏一次看它红不红），
+     * **而漏比误报便宜**——判据太宽会逼人改本来正确的脚本。
+     */
+    const noWorktree = [];
+    for (const f of onDisk) {
+      const src = readFileSync(join(ROOT, 'scripts', f), 'utf8');
+      if (!/diffWorktree\s*\(/.test(src)) { noWorktree.push(f); continue; }
+      if (!/if\s*\(\s*!\s*ok\s*\)/.test(src)) {
+        noWorktree.push(`${f}（调了但没进失败分支）`);
+      }
+    }
+    console.log('');
+    console.log('每道变异脚本都有「工作区没变」断言（4k）');
+    console.log('─'.repeat(64));
+    if (noWorktree.length > 0) {
+      problems.push(
+        `这些变异脚本**没有「跑完之后工作区没变」那条断言**：\n`
+        + noWorktree.map((f) => `        scripts/${f}`).join('\n') + '\n'
+        + '    → **「门禁绿了」与「我没把工作区改脏」在输出上完全一样**。\n'
+        + '    → 而残留的后果是**结论作废**：门禁红是真的红，'
+        + '**而那红可能来自上一次没还原干净的文件**。\n'
+        + '    → 接 `lib/worktree-assert.mjs` 的 `diffWorktree(WORKTREE)`，'
+        + '**并把 `!ok` 接进失败分支**。',
+      );
+      console.log(`  ✗ ${noWorktree.length} 个没有：${noWorktree.join('、')}`);
+    } else {
+      console.log(`  ✓ ${onDisk.length} 道都有，且都接进了失败分支`);
     }
   }
 }

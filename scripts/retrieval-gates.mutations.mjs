@@ -23,6 +23,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
+
+/** 跑之前的工作区——收尾断言要与它比，而不是与「空」比。 */
+const WORKTREE = captureWorktree();
 
 const ROOT = process.cwd();
 const RETRIEVE = join(ROOT, 'src', 'lib', 'wiki', 'retrieve.ts');
@@ -115,6 +119,17 @@ if (runGold().status !== 0) {
   process.exit(1);
 }
 console.log('\n  ✓ 恢复后：绿（源码已还原）\n');
+/*
+ * 收尾断言见 `lib/worktree-assert.mjs` 的文件头。
+ *
+ * ⚠️ 而这道脚本改的是 `src/lib/wiki/retrieve.ts`（**生产源码**），
+ * 它是七道里**唯一碰 `src/` 的**——所以「没还原」的代价最高。
+ */
+{
+  const { ok, report } = diffWorktree(WORKTREE);
+  if (!ok) { console.log(report); bad++; }
+  else console.log(report);
+}
 
 if (bad === 0) {
   console.log('五道闸**各自**都被金标量到了——README 那句声称成立。\n');

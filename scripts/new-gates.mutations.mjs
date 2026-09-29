@@ -34,19 +34,29 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sliceArrayLiteral } from './lib/array-literal.mjs';
+import { captureWorktree, diffWorktree } from './lib/worktree-assert.mjs';
 
 const ROOT = process.cwd();
 const problems = [];
 
 /**
- * 跑之前的 `git status --porcelain`——**收尾断言要与它比，而不是与「空」比。**
+ * 跑之前的工作区——**收尾断言要与它比，而不是与「空」比。**
  *
  * ⚠️ 提交前工作区本来就可能有改动（2026-09-28 那一轮就带着 5 个未提交的文件），
  * 而「跑完之后必须是空的」会把**「本来就有改动」与「我弄脏了」混成一条**。
+ *
+ * ⚠️ **2026-09-29 换成共用的那一份**（`lib/worktree-assert.mjs`）——
+ * 而换的**不是**因为这段写错了，**是因为它核不到一类残留**：
+ * `git status --porcelain` **默认把未跟踪目录折叠成一行**，
+ * 于是「我往 `.verify/` 里留了三个临时文件」**在输出上是干净的**。
+ * 共用那一份会**再比一次 `--untracked-files=all`**，并把
+ * 「已跟踪」与「未跟踪」分开报——**这两类残留的成因完全不同**。
+ *
+ * 顺带：这也把 2026-09-29 实测到的那件事落成了代码——
+ * **七道脚本里只有本文件有这条断言**，另外六道的收尾只跑一遍门禁，
+ * **而其中一道改的是生产源码 `src/lib/wiki/retrieve.ts`**。
  */
-const ENTRY_STATUS = spawnSync('git', ['status', '--porcelain'], {
-  cwd: ROOT, encoding: 'utf8', timeout: 60_000,
-}).stdout ?? '';
+const WORKTREE = captureWorktree();
 
 console.log('2026-09-28 新增门禁的负向验证');
 console.log('─'.repeat(64));
@@ -1185,7 +1195,29 @@ const CASES = [
   },
   {
     /*
-     * ⚠️ **这一条守着 4g 扩出来的第四类（`GATES` 里的门禁数）。**
+     * ⚠️ **这一条守着 4k（每道变异脚本都要有「工作区没变」那条断言）。**
+     *
+     * 2026-09-29 实测：七道脚本里**只有一道**有收尾断言（`new-gates` 自己），
+     * 而**代价最高的那一道没有**——`retrieval-gates` 改的是**生产源码**
+     * `src/lib/wiki/retrieve.ts`。
+     *
+     * 所以把 `retrieval-gates` 那道断言摘掉，4k 必须点名报它。
+     *
+     * ⚠️ **而这一条与别的变异方向相反**：
+     * 别的注入「产品有缺陷」，这一条注入「**这套工具有洞**」。
+     * **同一个 `CASES` 装两种用途**——而 `mutate()` 的字段自检
+     * （`why` / `file` / `find` / `replace` / `target`）对两者一视同仁。
+     */
+    why: 'check:gate-list — 某道变异脚本没有「工作区没变」断言（4k 必须点名报它）',
+    covers: ['4k'],
+    file: 'scripts/retrieval-gates.mutations.mjs',
+    find: '  if (!ok) { console.log(report); bad++; }\n  else console.log(report);',
+    replace: '  if (false) { console.log(report); bad++; }\n  else console.log(report);',
+    target: 'check-gate-list.mjs',
+  },
+  {
+    /*
+     * ⚠️ **这一条守着 4g 的第四类（`GATES` 里的门禁数）。**
      *
      * 2026-09-29 实测：`GATES` 从 15 变成 16（加进 `verify-negotiation.mjs`），
      * **而「15」这个字面量散在四个地方，一个都不会提醒我**。
@@ -1798,28 +1830,27 @@ console.log(`\n${ok}/${CASES.length} 条变异都被抓住。`);
  * ⚠️ **要比较「前」与「后」，不能只判「后」是空的**——
  * 提交前工作区本来就可能有改动（那一轮我就带着 5 个未提交的文件），
  * 而「空」会把「我弄脏了」与「本来就有改动」混成一条。
+ *
+ * ⚠️⚠️ **2026-09-29 换成 `lib/worktree-assert.mjs` 里那一份**——
+ * 而换的**不是**因为这段写错了，**是因为它核不到一类残留**：
+ * `git status --porcelain` **默认把未跟踪目录折叠成一行**，
+ * 于是「我往 `.verify/` 里留了三个临时文件」**在输出上是干净的**。
+ * 共用那一份会**再比一次 `--untracked-files=all`**，并把
+ * 「已跟踪」与「未跟踪」分开报——**这两类残留的成因完全不同**。
  */
 {
-  const now = spawnSync('git', ['status', '--porcelain'], {
-    cwd: ROOT, encoding: 'utf8', timeout: 60_000,
-  }).stdout ?? '';
-  const norm = (s) => s.split('\n').filter(Boolean).sort().join('\n');
-  if (norm(now) !== norm(ENTRY_STATUS)) {
-    const added = norm(now).split('\n').filter((l) => !ENTRY_STATUS.includes(l));
-    const gone = ENTRY_STATUS.split('\n').filter((l) => l && !norm(now).includes(l));
+  const { ok, report } = diffWorktree(WORKTREE);
+  if (!ok) {
     problems.push(
       '**跑完之后工作区变了**——本轮变异留下了残留。\n'
-      + (added.length ? `    新出现的：\n${added.map((l) => `      ${l}`).join('\n')}\n` : '')
-      + (gone.length ? `    消失的：\n${gone.map((l) => `      ${l}`).join('\n')}\n` : '')
-      + '    → 每条变异都会还原它注入的那一处，**而这一条抓的是「我注入之外的改动」**。\n'
+      + report.split('\n').slice(1).map((l) => `  ${l}`).join('\n')
+      + '\n    → 每条变异都会还原它注入的那一处，**而这一条抓的是「我注入之外的改动」**。\n'
       + '    2026-09-28 那 2 条一直假红就是这类残留造成的'
       + '（`spawnSync` 返回 `status: null`，子进程压根没跑成）。',
     );
-    console.log(`  ✗ 跑完之后工作区变了（新增 ${added.length} 处、消失 ${gone.length} 处）`);
-    for (const l of added) console.log(`      + ${l}`);
-    for (const l of gone) console.log(`      - ${l}`);
+    console.log(report);
   } else {
-    console.log('  ✓ 跑完之后工作区与跑之前一致（无残留）');
+    console.log(report);
   }
 }
 
