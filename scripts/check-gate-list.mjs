@@ -511,8 +511,62 @@ for (const name of Object.keys(scripts)) {
  * > 那两个门禁的覆盖靠**它们各自的负向验证**（各 3 个变异），
  * > 以及**每次增删判据时人工同步**变异——这是现状，不是本检查提供的保证。
  */
+/*
+ * ⚠️⚠️ **这张表原先只有一道——而编排里有 7 个变异脚本。**
+ *
+ * 2026-09-29 实测：把 `package.json` 的 scripts 与这张表并排打出来，
+ * 看见「7 个变异脚本、1 条登记」——
+ * **而表外那六个不是「没人验」，是「没人登记」**：
+ * 它们的对应关系**在各自的文件名里自明**（`exit-codes.mutations` ↔ `check-exit-codes`）。
+ *
+ * > **「没人登记」与「没人验」在输出上完全一样**——
+ * > 而这一条本来是**「哪道门禁有负向验证」的权威清单**。
+ *
+ * ⚠️ **两条不对得自明，都写明依据**：
+ * - `migrate-manifest.mutations.mjs` 验的是**迁移诊断**——而它没有对应的
+ *   `check-migrate.mjs`（迁移的判据在 `src/lib/cli/migrate.ts` 里，
+ *   被 `verify:migrate` 自己检查）。**所以那一栏留空并写明原因**。
+ * - `retrieval-gates.mutations.mjs` 验的是 **`check-questions.mjs`**
+ *   （它自己文里写明：关掉一道检索闸，金标必须变红）。
+ */
 const GATES_WITH_MUTATIONS = [
   { gate: 'scripts/check-site-agnostic.mjs', mutations: 'scripts/site-agnostic.mutations.mjs' },
+  { gate: 'scripts/check-exit-codes.mjs', mutations: 'scripts/exit-codes.mutations.mjs' },
+  { gate: 'scripts/check-json-output.mjs', mutations: 'scripts/json-output.mutations.mjs' },
+  { gate: 'scripts/check-second-site-real.mjs', mutations: 'scripts/second-site-real.mutations.mjs' },
+  {
+    gate: 'scripts/check-questions.mjs',
+    mutations: 'scripts/retrieval-gates.mutations.mjs',
+    why: '**它验的是检索金标**——关掉五道检索闸中的任何一道，`check-questions` 的金标必须变红。'
+      + '（这两道是「闸」与「量闸的尺子」的关系，**不共用名字是故意的**。）',
+  },
+  {
+    gate: '（无对应门禁脚本）',
+    mutations: 'scripts/migrate-manifest.mutations.mjs',
+    why: '**它验的是迁移诊断的精确度**，而迁移的判据在 `src/lib/cli/migrate.ts` 里，'
+      + '**没有独立的 `check-migrate.mjs`**——所以这一行**故意留空**。',
+  },
+  {
+    /*
+     * ⚠️ **这一行是 2026-09-29 才补的——而补的正是「判定者自己」。**
+     *
+     * 把磁盘上的变异脚本与这张表并排打出来，发现 **7 个里有 1 个不在册**：
+     * `new-gates.mutations.mjs`——**也就是本检查自己那个脚本**。
+     *
+     * > 而本文件头写着：「`4b` 正是**决定别人有没有被验**的那一道」——
+     * > **而它自己没登记**，也就是**没人核「它有没有效」**。
+     *
+     * ⚠️ 它**不能**按「门禁 ↔ 变异脚本」的一对一登记（它验的是**十几道**门禁），
+     * 所以那一栏写的是它自己；**理由要写明「它验的是一批、不是一道」。
+     */
+    gate: '（一批：GATES 里的 15 道）',
+    mutations: 'scripts/new-gates.mutations.mjs',
+    why: '**它验的不是一道门禁，是一批**（`GATES` 数组里那 15 道）——'
+      + '所以一对一登记在这里不成立，那一栏写的是它自己。'
+      + '⚠️ **而它是唯一一个「判定别人有没有被验」的脚本**，'
+      + '**它自己有没有效同样要有人核**——见 `new-gates.mutations.mjs` 文件头的记述'
+      + '（那一层的自查至今**未验**，是已登记的空白）。',
+  },
 ];
 
 /**
@@ -1768,6 +1822,52 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     }
   } else {
     console.log('  ✓ 没有「零变异且明显不成比例」的门禁');
+  }
+
+  /*
+   * ── 4j. 磁盘上的**每个**变异脚本都必须在这张表里 ──────────────────────
+   *
+   * ⚠️ **2026-09-29 实测：7 个变异脚本里 1 个不在册**——
+   * 而那一个是 \`new-gates.mutations.mjs\`，**也就是本检查自己那个**。
+   *
+   * > 而本文件头写着「4b 正是**决定别人有没有被验**的那一道」——
+   * > **而它自己没登记**，也就是**没人核「它有没有效」**。
+   *
+   * 而上面那个循环对「gate 那一栏不是脚本路径」的行是
+   * \`if (!existsSync(gatePath)) continue;\`——
+   * **静默跳过**，**而「静默」与「核过了」在输出上完全一样**。
+   *
+   * 所以这一条单列：**从文件系统扫出全部 \`*.mutations.mjs\`，
+   * 逐个问「这张表里有没有它」**。
+   *
+   * ⚠️ **而这判的是「有没有登记」不是「有没有效」**——
+   * 后者至今**无人验证**（见 \`new-gates.mutations.mjs\` 文件头），
+   * **那是本项目已知最大的空白**。
+   */
+  {
+    const onDisk = readdirSync(join(ROOT, 'scripts'))
+      .filter((f) => f.includes('mutations') && f.endsWith('.mjs'));
+    const listed = new Set(
+      GATES_WITH_MUTATIONS.map((g) => g.mutations.replace(/^scripts\//, '')),
+    );
+    const missing = onDisk.filter((f) => !listed.has(f));
+    console.log('');
+    console.log('变异脚本是否都在 4b 的册子里（4j）');
+    console.log('─'.repeat(64));
+    if (missing.length > 0) {
+      problems.push(
+        `这些变异脚本**在磁盘上，却不在 4b 的册子里**：\n`
+        + missing.map((f) => `        scripts/${f}`).join('\n') + '\n'
+        + '    → **「没登记」与「没人验」在输出上完全一样**——\n'
+        + '    而这张表是**「哪道门禁有负向验证」的权威清单**，\n'
+        + '    **漏登记 = 那套验证在清单上不存在**。\n'
+        + '    → 加进 `GATES_WITH_MUTATIONS`（若它验的不是一道门禁，\n'
+        + '    **把那一栏写清它验的是谁/哪一批，并写明理由**）。',
+      );
+      console.log(`  ✗ ${missing.length} 个变异脚本没在册：${missing.join('、')}`);
+    } else {
+      console.log(`  ✓ 磁盘上 ${onDisk.length} 个变异脚本都在册里`);
+    }
   }
 }
 

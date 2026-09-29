@@ -1489,6 +1489,26 @@ const CASES = [
     target: 'check-command-scripts.mjs',
   },
   {
+    /*
+     * ⚠️ **这一条守着 4j：磁盘上的每个变异脚本都必须在 4b 的册子里。**
+     *
+     * 2026-09-29 实测：7 个变异脚本里 **1 个不在册**——
+     * 而那一个是 `new-gates.mutations.mjs`，**也就是本检查自己那个**。
+     * 而本文件头写着「4b 正是**决定别人有没有被验**的那一道」——
+     * **而它自己没登记**，也就是**没人核「它有没有效」**。
+     *
+     * ⚠️ 而 4b 那个循环对「gate 那一栏不是脚本路径」的行是 `continue`——
+     * **静默跳过**，而**「静默」与「核过了」在输出上完全一样**。
+     *
+     * 变异：把册子里的一条改成一个不存在的变异脚本名。
+     */
+    why: 'check:gate-list — 册子里的变异脚本名被改（4j 必须报「磁盘上有、册子里没有」）',
+    file: 'scripts/check-gate-list.mjs',
+    find: "  { gate: 'scripts/check-exit-codes.mjs', mutations: 'scripts/exit-codes.mutations.mjs' },",
+    replace: "  { gate: 'scripts/check-exit-codes.mjs', mutations: 'scripts/这个脚本不存在.mjs' },",
+    target: 'check-gate-list.mjs',
+  },
+  {
     why: 'check:two-paths — post 侧不再丢 declaredRelations',
     covers: ['②'],
     file: 'src/lib/wiki/page-to-doc.ts',
