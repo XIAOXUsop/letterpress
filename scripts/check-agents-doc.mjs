@@ -345,6 +345,86 @@ if (claims('更不会被 `wiki:ask`', '「草稿不进 CLI 检索」')) {
   }
 }
 
+/*
+ * ── ⑦ 那张「两类字段」的表必须与实际行为一致 ────────────────────────
+ *
+ * ⚠️ **2026-09-29 加。** `AGENTS.md` 里那条「不要发明新的 frontmatter 字段」
+ * 先前只说了一半：它说「加了字段要同步改 schema，否则会被静默忽略」，
+ * 而**那只对走 Astro 内容层的字段成立**。
+ *
+ * 实测（2026-09-29）：给一条 `verify:` 声明加一个任何 schema 里都没有的
+ * `bogusField`，构建**照常绿**——因为读 `verify:` 的是
+ * `lib/wiki/verify-run.ts` 的 `readFileSync`，**Zod 根本看不到它**。
+ *
+ * > 于是同一句禁令在**同一份文件的两个字段上，结论正好相反**，
+ * > 而文档只写了其中一条。下一个人照着它给 `verify:` 加字段会以为必须改 schema；
+ * > 反过来，给 post 加字段以为「反正 verify 那样也能用」则会**静默丢数据**。
+ *
+ * 判据是**真的去试**，不是查文档里有没有这句话：
+ *   ① schema 字段（`title`）加一个未声明的键 → Astro 内容层必须报错
+ *   ② `verify:` 加一个未声明的键 → 构建照常成立
+ *
+ * 两条都跑真文件、真构建太重，所以用**最强的轻量替身**：
+ * 直接问 Zod schema 会不会剥离未知键，以及 `verify-run.ts` 到底走哪条路。
+ */
+{
+  const cfg = readFileSync(join(ROOT, 'src', 'content.config.ts'), 'utf8');
+  const runner = readFileSync(join(ROOT, 'src', 'lib', 'wiki', 'verify-run.ts'), 'utf8');
+
+  // ① 文档必须点名**两条路**，而不是只说 schema 那一条
+  const namesZod = /静默剥离|静默忽略/.test(doc) && /content\.config\.ts/.test(doc);
+  /*
+   * ⚠️ **必须认整张表的那一行，不能只认「文档里出现过这几个词」。**
+   *
+   * 第一版写的是 `/readFileSync|绕开 schema|直读文件/.test(doc)`——
+   * 而它**恒真**：变异把表格里那一行整行换掉之后，
+   * 后半截 `| \`readFileSync\` 直读文件（…） |` 里那三个词还在。
+   *
+   * > 于是这条变异**没被抓住**（实测：89/90，而漏的正是这一条）。
+   * > 这正是本仓库反复记的那类：「**判据匹配到了别处的同一串文字**」——
+   * > 它看起来在核这件事，实际核的是**文档里有没有这几个字**。
+   */
+  const bypassRow = doc
+    .split('\n')
+    .find((l) => l.includes('|') && l.includes('readFileSync') && l.includes('verify:'));
+  const namesBypass = Boolean(bypassRow) && /Zod 根本看不到|不过 Zod|绕开 schema/.test(bypassRow);
+  if (!namesZod) {
+    problems.push(
+      'AGENTS.md 没有说清 **schema 字段会被静默剥离**（Zod 的行为）——'
+      + '照着它加字段的人会以为新字段能生效。',
+    );
+    console.log('  ✗ 文档没写 schema 那一条路');
+  }
+  if (!namesBypass) {
+    problems.push(
+      'AGENTS.md 没有说清**存在绕开 schema 的字段**（如 `verify:`，由 '
+      + '`readFileSync` 直读）。\n'
+      + '    只写 schema 那一条的话，「会不会被静默忽略」这个问题的答案就是错的——'
+      + '**它取决于谁读它**。',
+    );
+    console.log('  ✗ 文档没写「绕开 schema」那一条路');
+  }
+
+  // ② 那两条路**必须真的存在于代码里**，否则文档在描述一个不存在的架构
+  const zodPresent = /z\.object\(/.test(cfg);
+  const bypassPresent = /readFileSync/.test(runner) && /parseClaims/.test(runner);
+  if (!zodPresent) {
+    problems.push('AGENTS.md 说 schema 在 `src/content.config.ts`，而那里没有 `z.object(`。');
+    console.log('  ✗ content.config.ts 里没有 Zod schema');
+  }
+  if (!bypassPresent) {
+    problems.push(
+      'AGENTS.md 说 `verify:` 走 `readFileSync` 直读文件，'
+      + '而 `verify-run.ts` 里没有这条路径——**文档在描述一个不存在的架构**。',
+    );
+    console.log('  ✗ verify-run.ts 里没有直读文件的路径');
+  }
+
+  if (namesZod && namesBypass && zodPresent && bypassPresent) {
+    console.log('  ✓ 两类字段的两条路都写清了，且代码里确实各有一条');
+  }
+}
+
 if (problems.length > 0) {
   console.log('');
   for (const p of problems) console.log(`  ✗ ${p}`);

@@ -1306,10 +1306,11 @@ spawnSync('npm.cmd', ['run','build'])
 「五道检索闸每道有专属用例」那句话**曾经是假的**，由 `verify:retrieval-gates` 揭穿。
 
 **语料一扩、判据一改，遮住关系就变了。** 已固化为
-`scripts/new-gates.mutations.mjs`（**共 89 条变异** / 16 道门禁），每次 CI 都跑：
+`scripts/new-gates.mutations.mjs`（**共 90 条变异** / 16 道门禁），每次 CI 都跑：
 
 | 被测门禁 | 变异 |
 |---|---|
+| `check:agents-doc` | 规则表漏一条 / 多一条 / **文档里留一句「还欠着」的悬空承诺**（判据 ⑥）/ **两类字段那段只说 schema 一条路**（判据 ⑦） |
 | `check:two-paths` | post 侧不再丢 `declaredRelations` / 不再丢 `wikiKind` / 读路径不再读 `draft` |
 | `check:field-coverage` | `sources` 块解析失效 / `tags` 不再剥方括号 |
 | `check:single-literal` | 文档根清单在别处又写一份 |

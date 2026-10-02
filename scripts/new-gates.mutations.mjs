@@ -778,13 +778,31 @@ const CASES = [
      * > 文档就开始教人**去做一件已经做完的事**。
      *
      * 变异把那段「已经补上」的话换回原来的「下一步」措辞——
-     * ⑥ 若真在跑，必红。
      */
     why: 'check:agents-doc — 文档里留了一句「还欠着」的悬空承诺（判据 ⑥）',
     covers: ['⑥'],
     file: 'AGENTS.md',
     find: '> **那个缺口已经补上了**（同一天）：',
-    replace: '> 这也是 `check:agents-doc` 的一个已知缺口，补上那一条断言是下一步。\n',
+    replace: '> 这也是 `check:agents-doc` 的一个已知缺口，补上那一条断言是下一步。' + String.fromCharCode(10),
+    target: 'check-agents-doc.mjs',
+  },
+  {
+    /*
+     * ⚠️ 这条守着**判据 ⑦**：`AGENTS.md` 那张「两类字段」的表必须同时写出
+     * **两条路**——schema 字段会被 Zod 静默剥离，而 `verify:` 这类
+     * 由 `readFileSync` 直读的字段**根本不过 Zod**。
+     *
+     * 实测（2026-09-29）：给一条 `verify:` 声明加一个任何 schema 里都没有的
+     * `bogusField`，构建**照常绿**。而文档此前只写了 Zod 那一条，
+     * 于是同一句禁令在两个字段上结论正好相反，而只写了其中一半。
+     *
+     * 变异把那一段换回只说一半的旧写法——⑦ 若真在跑，必红。
+     */
+    why: 'check:agents-doc — frontmatter 字段那一段只说 schema 一条路（判据 ⑦）',
+    covers: ['⑦'],
+    file: 'AGENTS.md',
+    find: '  | **绕开 schema 的字段** | `verify:` |',
+    replace: '  | （文档只说了一半） | |',
     target: 'check-agents-doc.mjs',
   },
   {
