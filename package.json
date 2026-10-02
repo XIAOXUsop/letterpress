@@ -5,11 +5,11 @@
   "description": "一个把中文排版做对、同时写给人和 AI 读的静态博客主题",
   "license": "MIT",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.18.0 || >=24.0.0"
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && pagefind --site dist",
+    "build": "astro build && node scripts/build-search.mjs",
     "build:noindex": "astro build",
     "preview": "astro preview",
     "test": "vitest run --reporter=default --reporter=json --outputFile.json=.verify/vitest-report.json",

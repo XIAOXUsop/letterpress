@@ -155,6 +155,12 @@ original:
 | 错误 | `broken-wikilink` | 引用了不存在的页面。**会让构建失败** |
 | 错误 | `duplicate-slug` | 两个文档抢同一个 URL，后构建的会静默覆盖先构建的 |
 | 错误 | `reserved-post-slug` | 文章占用了 `/about/`、`/wiki/` 等系统路由，HTML 会被静默跳过 |
+| 错误 | `ambiguous-wikilink` | 链接引用了同名标题，无法确定目标；请改用明确的 slug |
+| 错误 | `unknown-source` | 来源未登记，或引用了来源中不存在的版本 |
+| 错误 | `review-missing-date` | 标了 reviewed，却没有填写 checkedAt |
+| 错误 | `review-missing-digest` | 标了 reviewed，却没有填写 contentDigest |
+| 错误 | `review-stale` | 正文已改变，与复核时的摘要不一致；需要重新复核或改回 pending |
+| 警告 | `ambiguous-title` | 存在同名标题，尚未有人引用；预先提醒改用明确的 slug |
 | 警告 | `orphan-page` | 没有任何页面指向它。读者只能靠直接输 URL 找到 |
 | 警告 | `missing-summary` | 缺摘要，agent 只能靠标题猜内容 |
 | 警告 | `empty-body` | 空正文。没写完就加 `draft: true` |

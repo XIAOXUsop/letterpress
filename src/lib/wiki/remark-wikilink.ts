@@ -161,10 +161,11 @@ export function splitWikilinks(text: string, lookup: Lookup): Segment[] {
  * `contentRoot` 默认取当前工作目录下的 `src/content`——Astro 构建时
  * cwd 就是项目根，所以不需要额外传参。
  */
-export function remarkWikilink(options: { contentRoot?: string; base?: string } = {}) {
+export function remarkWikilink(options: { contentRoot?: string; base?: string; enabled?: boolean } = {}) {
   let lookup: Lookup | null = null;
 
   return (tree: Root) => {
+    if (options.enabled === false) return;
     /**
      * 防御：`tree` 不是合法节点时直接返回。
      *

@@ -1,9 +1,10 @@
 // @ts-check
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
+import { rm } from 'node:fs/promises';
+import { site as siteConfig } from './src/config.ts';
 import { unified } from '@astrojs/markdown-remark';
 import { remarkWikilink } from './src/lib/wiki/remark-wikilink.ts';
 // 直接从它所在的模块拿——remark-wikilink 只是**导入**它，没有**再导出**，
@@ -30,7 +31,9 @@ import { rehypeHeadingLinks } from './src/lib/rehype-heading-links.ts';
  * 那比原来的"链接静默指错"更糟。所以挪到配置加载期：
  * 这时什么都还没渲染，抛出去就是整个构建失败、原因一眼可见。
  */
-const frontmatterProblems = collectFrontmatterProblems(join(process.cwd(), 'src', 'content'));
+const frontmatterProblems = siteConfig.wiki.enabled
+  ? collectFrontmatterProblems(join(process.cwd(), 'src', 'content'))
+  : [];
 if (frontmatterProblems.length > 0) {
   throw new Error(
     `有 ${frontmatterProblems.length} 处 frontmatter 用了 [[链接]] 查找表不支持的写法：\n\n` +
@@ -56,7 +59,7 @@ if (frontmatterProblems.length > 0) {
  * **在 remark 里抛错，Astro 不会让构建失败**（实测：错误打印 22 次、
  * 页面退化、而 `Build exit code: 0`）。
  */
-const verifyResults = checkVerifyClaims(join(process.cwd(), 'src', 'content'));
+const verifyResults = checkVerifyClaims(join(process.cwd(), 'src', 'content', siteConfig.wiki.enabled ? '' : 'posts'));
 const verifyProblems = formatVerifyProblems(verifyResults);
 if (verifyProblems.length > 0) {
   throw new Error(
@@ -78,21 +81,9 @@ if (claimCount > 0) {
  * 站点根地址从 `src/config.ts` 读——那里是用户唯一要改的文件，
  * 不该再让他们到这里改第二遍。
  *
- * 用正则做一次最小提取而不是 import：配置文件是 TS，astro.config 在
- * 加载阶段还没有 TS 转译。提取失败时退回空串，构建照常进行
- * （只是 RSS / sitemap 里没有绝对地址）。
+ * 与页面直接共享配置对象，避免正则提取对引号、注释和表达式产生不同结果。
  */
-function readSiteUrl() {
-  try {
-    const source = readFileSync(new URL('./src/config.ts', import.meta.url), 'utf8');
-    const match = /^\s*url:\s*['"]([^'"]*)['"]/m.exec(source);
-    return (match?.[1] ?? '').replace(/\/$/, '');
-  } catch {
-    return '';
-  }
-}
-
-const siteUrl = readSiteUrl();
+const siteUrl = siteConfig.url.replace(/\/$/, '');
 
 /**
  * 部署子路径。默认 `/`（域名根）。
@@ -126,6 +117,15 @@ export default defineConfig({
   },
 
   integrations: [
+    {
+      name: 'letterpress-feature-output',
+      hooks: {
+        'astro:build:done': async ({ dir }) => {
+          if (!siteConfig.wiki.enabled) await rm(new URL('wiki/', dir), { recursive: true, force: true });
+          if (!siteConfig.search.enabled) await rm(new URL('search/', dir), { recursive: true, force: true });
+        },
+      },
+    },
     /*
      * ── MDX 必须在这里注册，否则它是「假的」────────────────────────
      *
@@ -148,7 +148,13 @@ export default defineConfig({
       ? [
           sitemap({
             // 草稿不该出现在 sitemap 里
-            filter: (page) => !page.includes('/draft/'),
+            filter: (page) => {
+              const pathname = new URL(page).pathname;
+              const logicalPath = pathname.slice(base === '/' ? 0 : base.replace(/\/$/, '').length);
+              return !page.includes('/draft/')
+                && (siteConfig.wiki.enabled || !logicalPath.startsWith('/wiki/'))
+                && (siteConfig.search.enabled || logicalPath !== '/search/');
+            },
           }),
         ]
       : []),
@@ -178,7 +184,7 @@ export default defineConfig({
      * 而那个报错里一个字都不会提到 unified，极难反推。
      */
     processor: unified({
-      remarkPlugins: [[remarkWikilink, { base }]],
+      remarkPlugins: [[remarkWikilink, { base, enabled: siteConfig.wiki.enabled }]],
       /*
        * 宽表格必须包一层可滚动容器，否则在窄屏上会把整页撑出横向滚动条。
        * 实测：一张三列对照表在 375px 视口下宽 383px。

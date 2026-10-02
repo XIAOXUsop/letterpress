@@ -81,6 +81,41 @@ function claims(fragment, what, kind = 'phrase') {
 const { lint } = await import(pathToFileURL(join(ROOT, 'src/lib/wiki/lint.ts')).href);
 const { buildGraph } = await import(pathToFileURL(join(ROOT, 'src/lib/wiki/graph.ts')).href);
 
+// The table promises to list every build diagnostic, including content validation.
+const ruleLevels = new Map();
+for (const file of ['src/lib/wiki/lint.ts', 'src/lib/content.ts']) {
+  const source = readFileSync(join(ROOT, file), 'utf8');
+  for (const match of source.matchAll(/rule:\s*'([\w-]+)',\s*level:\s*'(error|warn|info)'/g)) {
+    ruleLevels.set(match[1], match[2]);
+  }
+}
+function checkRuleTable(document) {
+  const levels = { 错误: 'error', 警告: 'warn', 提示: 'info' };
+  const rows = new Map();
+  const errors = [];
+  for (const match of document.matchAll(/^\|\s*(错误|警告|提示)\s*\|\s*`([\w-]+)`\s*\|/gm)) {
+    if (rows.has(match[2])) errors.push(`规则重复：${match[2]}`);
+    rows.set(match[2], levels[match[1]]);
+  }
+  for (const [rule, level] of ruleLevels) {
+    if (rows.get(rule) !== level) errors.push(`规则 ${rule} 应为 ${level}，文档为 ${rows.get(rule) ?? '缺失'}`);
+  }
+  for (const rule of rows.keys()) {
+    if (!ruleLevels.has(rule)) errors.push(`文档登记了不存在的规则：${rule}`);
+  }
+  return errors;
+}
+if (ruleLevels.size === 0) problems.push('没有读取到任何规则，无法核对体检表。');
+problems.push(...checkRuleTable(doc));
+if (checkRuleTable(doc).length === 0) ok(`体检表完整且级别正确（${ruleLevels.size} 条规则）`);
+for (const [name, mutant] of [
+  ['缺少错误规则', doc.replace(/^\| 错误 \| `ambiguous-wikilink`[^\n]*\n/m, '')],
+  ['级别错误', doc.replace('| 错误 | `unknown-source`', '| 警告 | `unknown-source`')],
+  ['不存在的规则', `${doc}\n| 错误 | \`invented-rule\` | 测试 |\n`],
+]) {
+  if (mutant === doc || checkRuleTable(mutant).length === 0) problems.push(`体检表负向验证失效：${name}`);
+}
+
 if (claims('redundant-relation', '「重复声明关系会报 redundant-relation」', 'ident')) {
   /*
    * ⚠️ **第一版例子造错了，而症状与「规则不存在」完全一样。**
@@ -133,9 +168,11 @@ if (claims('指的是同一个页面', '「写标题与写 slug 指向同一页�
     { kind: 'wiki', slug: 'real-slug', title: '中文标题', summary: 's', body: '甲页。', explicitSlug: true, draft: false },
     { kind: 'wiki', slug: 'zzz', title: '乙页', summary: 's', body: '见 [[中文标题]] 与 [[real-slug]]。', explicitSlug: true, draft: false },
   ];
-  const g = buildGraph(docs);
-  const viaTitle = (g.outbound.get('zzz') ?? new Set()).has('real-slug');
-  const viaSlug = (g.outbound.get('zzz') ?? new Set()).has('real-slug');
+  const via = (target) => buildGraph([
+    docs[0], { ...docs[1], body: `见 [[${target}]]。` },
+  ]).outbound.get('zzz')?.has('real-slug') ?? false;
+  const viaTitle = via('中文标题');
+  const viaSlug = via('real-slug');
   if (viaTitle && viaSlug) {
     ok('写标题与写 slug 确实解析到同一页');
   } else {

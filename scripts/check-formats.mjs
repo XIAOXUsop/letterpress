@@ -22,10 +22,13 @@ import { runAstro } from './lib/astro.mjs';
 import { cleanBuildState } from './lib/clean.mjs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const dist = join(root, 'dist');
 const probeDir = join(root, 'src', 'content', 'posts');
+const configFile = join(root, 'src', 'config.ts');
+const originalConfig = await readFile(configFile, 'utf8');
 
 /** 探针文件。slug 带前缀，避免与真实内容撞名。 */
 const PROBES = [
@@ -440,7 +443,42 @@ try {
   } else {
     console.log('  ✓ 系统路由冲突会阻断构建');
   }
+  await rm(join(probeDir, RESERVED_ROUTE_PROBE.file), { force: true });
+
+  // Test the published artifacts, not merely the navigation filter.
+  const disabledConfig = originalConfig
+    .replace(/(wiki:\s*\{\s*enabled:)\s*true/, '$1 false')
+    .replace(/(search:\s*\{\s*enabled:)\s*true/, '$1 false');
+  if (disabledConfig === originalConfig || !/wiki:\s*\{\s*enabled:\s*false/.test(disabledConfig)
+    || !/search:\s*\{\s*enabled:\s*false/.test(disabledConfig)) {
+    problems.push('无法关闭 wiki/search，功能开关探针没有执行。');
+  } else {
+    await writeFile(configFile, disabledConfig, 'utf8');
+    await cleanBuildState(root);
+    console.log('\n关闭知识库和搜索，检查真实输出…');
+    const disabledCode = await runAstro(['build']);
+    if (disabledCode !== 0) {
+      problems.push(`关闭功能后构建失败（${disabledCode}）。`);
+    } else {
+      const indexing = spawnSync(process.execPath, ['scripts/build-search.mjs'], { cwd: root, encoding: 'utf8' });
+      if (indexing.status !== 0) problems.push(`关闭搜索后索引步骤失败：${indexing.stderr}`);
+      for (const relative of ['wiki/index.html', 'search/index.html', 'pagefind/pagefind.js']) {
+        if (await readFile(join(dist, relative)).then(() => true, () => false)) problems.push(`关闭功能仍发布了 ${relative}`);
+      }
+      const manifest = JSON.parse(await readFile(join(dist, 'content-manifest.json'), 'utf8'));
+      if (manifest.documents.some((doc) => doc.kind === 'wiki')) problems.push('关闭知识库仍进入内容清单。');
+      for (const relative of await readdir(dist, { recursive: true })) {
+        if (!relative.endsWith('.html')) continue;
+        const html = await readFile(join(dist, relative), 'utf8');
+        if (/<a\b[^>]*href="\/(?:wiki|search)\//.test(html)) problems.push(`关闭功能仍有入口或正文死链：${relative}`);
+      }
+      const sitemap = await readFile(join(dist, 'sitemap-0.xml'), 'utf8');
+      if (/<loc>[^<]*\/(?:wiki|search)\//.test(sitemap)) problems.push('关闭功能仍进入 sitemap。');
+      console.log('  ✓ 已检查功能关闭后的页面、索引、链接、清单与 sitemap');
+    }
+  }
 } finally {
+  await writeFile(configFile, originalConfig, 'utf8');
   // 无论如何都要清掉探针，别把它们留在仓库里
   for (const probe of PROBES) {
     await rm(join(probeDir, probe.file), { force: true });
