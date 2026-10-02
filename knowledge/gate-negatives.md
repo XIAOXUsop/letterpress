@@ -1306,7 +1306,7 @@ spawnSync('npm.cmd', ['run','build'])
 「五道检索闸每道有专属用例」那句话**曾经是假的**，由 `verify:retrieval-gates` 揭穿。
 
 **语料一扩、判据一改，遮住关系就变了。** 已固化为
-`scripts/new-gates.mutations.mjs`（**共 88 条变异** / 16 道门禁），每次 CI 都跑：
+`scripts/new-gates.mutations.mjs`（**共 89 条变异** / 16 道门禁），每次 CI 都跑：
 
 | 被测门禁 | 变异 |
 |---|---|
