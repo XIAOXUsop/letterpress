@@ -13,7 +13,7 @@ original:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: bc9455b89a7368a6ac1f194a4bf589124586ba026f68fec093f891f53662d992
+  contentDigest: 5456e0ac44763538e2579fe16babcc1d8870af08678c5afe22509c5a86a3fc2a
 # related 整行删除：正文「相关条目」一行已经链接了它。
 # 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---

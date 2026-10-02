@@ -184,7 +184,7 @@ export default defineConfig({
      * 而那个报错里一个字都不会提到 unified，极难反推。
      */
     processor: unified({
-      remarkPlugins: [[remarkWikilink, { base, enabled: siteConfig.wiki.enabled }]],
+      remarkPlugins: [[remarkWikilink, { base, enabled: siteConfig.wiki.enabled, includeDrafts: process.argv.includes('dev') }]],
       /*
        * 宽表格必须包一层可滚动容器，否则在窄屏上会把整页撑出横向滚动条。
        * 实测：一张三列对照表在 375px 视口下宽 383px。

@@ -1,3 +1,4 @@
+import { parseMarkdown, trimBlankLines } from './markdown.ts';
 /**
  * 面向 agent 的检索：从知识层里挑出**该给模型看的那几段**，而不是整站。
  *
@@ -57,7 +58,7 @@ export interface Ranked extends Passage {
 // ── 分词 ────────────────────────────────────────────────────────────
 
 const CJK = /[㐀-䶿一-鿿豈-﫿]/;
-const ASCII_RUN = /[a-z0-9]+(?:[.+#-][a-z0-9]+)*/g;
+const ASCII_RUN = /[a-z0-9]+(?:[.+#/-][a-z0-9]+)*/g;
 
 /**
  * 把文本切成检索词。
@@ -76,6 +77,10 @@ export function tokenize(text: string): string[] {
   const flushCjk = () => {
     if (cjkRun.length === 1) out.push(cjkRun);
     else for (let i = 0; i + 1 < cjkRun.length; i++) out.push(cjkRun.slice(i, i + 2));
+    // A package is a named compound, not merely its broad subject (e.g. 语言包).
+    for (let i = 2; i < cjkRun.length; i++) {
+      if (cjkRun[i] === '包') out.push(cjkRun.slice(i - 2, i + 1));
+    }
     cjkRun = '';
   };
 
@@ -102,27 +107,25 @@ export function tokenize(text: string): string[] {
  * 恰恰是最强的信号，扔掉它等于把最有用的一行丢了。
  */
 export function splitPassages(docId: string, body: string): Passage[] {
-  const lines = body.split('\n');
   const out: Passage[] = [];
+  let start = 0;
   let heading = '';
-  let buf: string[] = [];
-  let n = 0;
-
-  const flush = () => {
-    const text = buf.join('\n').trim();
-    if (text !== '') out.push({ docId, id: `${docId}#${n++}`, heading, text });
-    buf = [];
+  const flush = (end: number) => {
+    const text = trimBlankLines(body.slice(start, end));
+    if (text) out.push({ docId, id: docId + '#' + out.length, heading, text });
   };
-
-  for (const line of lines) {
-    const h = /^#{2,3}\s+(.*)$/.exec(line);
-    if (h) {
-      flush();
-      heading = h[1].trim();
-    }
-    buf.push(line);
+  // Only top-level headings delimit sections; code and nested examples stay intact.
+  for (const node of parseMarkdown(body).children) {
+    if (node.type !== 'heading' || (node.depth !== 2 && node.depth !== 3)) continue;
+    const offset = node.position?.start.offset;
+    if (offset === undefined) continue;
+    flush(offset);
+    start = offset;
+    const plain = (item: { type: string; value?: string; children?: readonly unknown[] }): string =>
+      item.value ?? (item.children ?? []).map((child) => plain(child as typeof item)).join('');
+    heading = plain(node).trim();
   }
-  flush();
+  flush(body.length);
   return out;
 }
 
@@ -184,7 +187,7 @@ export function isAsciiTerm(term: string): boolean {
  * 「多」「少」「要」「会」「用」这类**一律不收**——它们在技术文里常常是实义。
  */
 const FUNCTION_CHARS = new Set(
-  '的是了不在和与这那什么怎哪吗呢吧啊我你他她它们之其而或及且若则就也都还被把从由于因所但却又再很更最太没无非未每个谁您'.split(''),
+  '的是了不在和与这那什么怎哪些吗呢吧啊我你他她它们之其而或及且若则就也都还被把从由于因所但却又再很更最太没无非未每个谁您'.split(''),
 );
 
 /**
@@ -258,6 +261,7 @@ export function termWeight(
   const seen = df.get(term);
   if (seen !== undefined) return idf(df, docCount, term);
   if (isAsciiTerm(term)) return Math.log(1 + docCount / 1);
+  if (term.length >= 3) return Math.log(1 + docCount / 1);
   if (junctions.has(term)) return 0;
   if (isSubjectTerm(term)) return medianKnownIdf;
   return 0;
@@ -339,6 +343,8 @@ export interface RankOptions {
   readonly limit?: number;
   /** 每篇文档最多贡献几段。默认 2——**这是防止单页霸榜**。 */
   readonly perDoc?: number;
+  /** A primary document and its explicitly cited neighbours, supplied by the graph. */
+  readonly prioritizedDocs?: readonly string[];
 }
 
 /**
@@ -386,18 +392,23 @@ export function rank(
 
   // 同分时的次序必须是确定的，否则金标会随机地红。
   // 先按分数，再按覆盖度，再按 id —— id 唯一，因此结果是全序。
-  scored.sort((a, b) => b.score - a.score || b.coverage - a.coverage || (a.id < b.id ? -1 : 1));
+  const asksReferences = /参考|来源|文献|reference|bibliography|citation/i.test(query);
+  const referencePenalty = (item: Ranked) => !asksReferences && /^(参考(?:文献)?|references?|sources?|bibliography)$/i.test(item.heading.trim()) ? 1 : 0;
+  scored.sort((a, b) => referencePenalty(a) - referencePenalty(b) || b.coverage - a.coverage || b.score - a.score || (a.id < b.id ? -1 : 1));
 
   const used = new Map<string, number>();
   const out: Ranked[] = [];
-  for (const s of scored) {
-    if (s.score <= 0) break;
+  const take = (s: Ranked) => {
     const n = used.get(s.docId) ?? 0;
-    if (n >= perDoc) continue;
+    if (s.score <= 0 || n >= perDoc || out.length >= limit || out.includes(s)) return;
     used.set(s.docId, n + 1);
     out.push(s);
-    if (out.length >= limit) break;
+  };
+  for (const [index, docId] of (options.prioritizedDocs ?? []).entries()) {
+    const candidates = scored.filter((item) => item.docId === docId);
+    for (const item of candidates.slice(0, index === 0 ? perDoc : 1)) take(item);
   }
+  for (const s of scored) take(s);
   return out;
 }
 

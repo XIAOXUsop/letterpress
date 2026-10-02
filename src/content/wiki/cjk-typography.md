@@ -31,7 +31,7 @@ sources:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: 09f622894e176ff22a9d65a51480e5c2155d5a165b46c397e5be97d0932bb3f8
+  contentDigest: 222eb0aa7269f9ffa0bac97da9ec149e54b2f81211b3be0f810cb15e24b9134d
 ---
 
 中文网页排版最常见的病因：**参数沿用了西文的值。**

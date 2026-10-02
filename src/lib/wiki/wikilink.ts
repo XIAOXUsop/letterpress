@@ -17,9 +17,13 @@
  * 也当成链接，这些文章会被 lint 报一堆断链——于是用户学会忽略 lint，
  * 那 lint 就白做了。
  *
- * 因此扫描时先切出代码区间并跳过。这是**确定性**的（不需要理解语义），
+ * 因此按 Markdown AST 的文本节点提取引用。这是**确定性**的（不需要理解语义），
  * 也因此可以被测试。
  */
+
+import { visit, SKIP } from 'unist-util-visit';
+import { parseMarkdown } from './markdown.ts';
+import { decodeString } from 'micromark-util-decode-string';
 
 /** 一条从文本中抽出的 wiki 链接引用。 */
 export interface WikiLinkRef {
@@ -35,110 +39,16 @@ export interface WikiLinkRef {
   readonly end: number;
 }
 
-/**
- * 匹配围栏代码块的一行：缩进不超过 3 空格，然后是 3 个及以上同种字符
- * （反引号或波浪号）。返回字符与长度，因为**闭合围栏必须用同种字符
- * 且不少于同样的长度**——这是 CommonMark 的规定。
- */
-const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-
-interface Fence {
-  readonly char: '`' | '~';
-  readonly length: number;
-  /** 开围栏后跟的信息串；闭围栏要求为空（反引号围栏尤其如此） */
-  readonly info: string;
-}
-
-function matchFence(line: string): Fence | null {
-  const m = FENCE_PATTERN.exec(line);
-  if (!m) return null;
-  const marker = m[1] ?? '';
-  return {
-    char: marker[0] as '`' | '~',
-    length: marker.length,
-    info: (m[2] ?? '').trim(),
-  };
-}
-
-/**
- * 找出所有「代码区间」——围栏代码块与行内代码——的偏移范围。
- *
- * 返回的区间是 `[start, end)`，按 start 升序且互不重叠。
- *
- * 围栏配对遵循 CommonMark：开围栏 `N` 个字符，只有同种字符且**不少于 N 个**
- * 的围栏能闭合它。少了这条，```` 开的块会被 ` ``` ` 提前闭合，
- * 后面本该是代码的内容就会被当成正文——而技术博客里演示嵌套代码块
- * 恰恰会写出这种结构。
- */
+/** Source intervals of actual Markdown code nodes, including nested containers. */
 export function findCodeSpans(text: string): Array<readonly [number, number]> {
   const spans: Array<readonly [number, number]> = [];
-  const lines = text.split('\n');
-
-  let offset = 0;
-  let open: (Fence & { readonly start: number }) | null = null;
-
-  for (const line of lines) {
-    const lineStart = offset;
-    const lineEnd = offset + line.length;
-    const fence = matchFence(line);
-
-    if (open === null) {
-      if (fence) {
-        open = { ...fence, start: lineStart };
-      } else {
-        // 行内代码：在非围栏行里逐对找出反引号
-        for (const span of findInlineCodeSpans(line, lineStart)) spans.push(span);
-      }
-    } else if (
-      fence &&
-      fence.char === open.char &&
-      fence.length >= open.length &&
-      (open.char === '~' || fence.info === '')
-    ) {
-      spans.push([open.start, lineEnd]);
-      open = null;
-    }
-
-    offset = lineEnd + 1; // +1 是换行符
-  }
-
-  // 未闭合的围栏延伸到文末：按 CommonMark，未闭合代码块一直持续到文档结束
-  if (open !== null) spans.push([open.start, text.length]);
-
+  visit(parseMarkdown(text), (node) => {
+    if (node.type !== 'code' && node.type !== 'inlineCode') return;
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (start !== undefined && end !== undefined) spans.push([start, end]);
+  });
   return spans.sort((a, b) => a[0] - b[0]);
-}
-
-/** 找出一行里的行内代码区间（反引号配对）。 */
-function findInlineCodeSpans(line: string, baseOffset: number): Array<readonly [number, number]> {
-  const spans: Array<readonly [number, number]> = [];
-  let open = -1;
-  let openTicks = 0;
-  let i = 0;
-
-  while (i < line.length) {
-    if (line[i] !== '`') {
-      i++;
-      continue;
-    }
-    // 数一数连续多少个反引号——`` 与 ` 是不同的定界符
-    let ticks = 0;
-    while (line[i + ticks] === '`') ticks++;
-
-    if (open === -1) {
-      open = i;
-      openTicks = ticks;
-    } else if (ticks === openTicks) {
-      spans.push([baseOffset + open, baseOffset + i + ticks]);
-      open = -1;
-    }
-    i += ticks;
-  }
-
-  return spans;
-}
-
-function isInside(offset: number, spans: ReadonlyArray<readonly [number, number]>): boolean {
-  return spans.some(([start, end]) => offset >= start && offset < end);
 }
 
 /**
@@ -147,7 +57,22 @@ function isInside(offset: number, spans: ReadonlyArray<readonly [number, number]
  * 代码区间内的方括号会被跳过——见文件头说明。
  */
 export function parseWikiLinks(text: string): WikiLinkRef[] {
-  const codeSpans = findCodeSpans(text);
+  const refs: WikiLinkRef[] = [];
+  visit(parseMarkdown(text), (node) => {
+    if (node.type === 'link' || node.type === 'linkReference') return SKIP;
+    if (node.type !== 'text') return;
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (start === undefined || end === undefined) return;
+    for (const ref of parseWikiLinkText(text.slice(start, end))) {
+      refs.push({ ...ref, offset: start + ref.offset, end: start + ref.end });
+    }
+  });
+  return refs;
+}
+
+/** Parse literal bracket syntax inside an already identified Markdown text node. */
+export function parseWikiLinkText(text: string): WikiLinkRef[] {
   const refs: WikiLinkRef[] = [];
   let i = 0;
 
@@ -165,10 +90,13 @@ export function parseWikiLinks(text: string): WikiLinkRef[] {
       continue;
     }
 
-    if (!isInside(open, codeSpans)) {
-      const ref = parseBody(body, open, close + 2);
-      if (ref) refs.push(ref);
+    const decoded = decodeString(body);
+    if (/[\[\]\r\n]/.test(decoded)) {
+      i = close + 2;
+      continue;
     }
+    const ref = parseBody(decoded, open, close + 2);
+    if (ref) refs.push(ref);
 
     i = close + 2;
   }
@@ -223,7 +151,8 @@ export function renderWikiLinks(
 
     const withAnchor = ref.anchor ? `${href}#${encodeURIComponent(ref.anchor)}` : href;
     result += text.slice(cursor, ref.offset);
-    result += `[${ref.label}](${withAnchor})`;
+    const label = ref.label.replace(/[\\`*_[\]<>]/g, '\\$&');
+    result += `[${label}](${withAnchor})`;
     cursor = ref.end;
   }
 

@@ -98,27 +98,21 @@ export async function negotiate(
    * 换句话说，**这条功能的失败必须是静默的**。它是一次增强，不是主路径；
    * 让增强失败拖垮主路径是本末倒置。
    */
-  let twin: Response | null = null;
   try {
-    twin = await options.fetchAsset(twinPath(pathname));
+    const twin = await options.fetchAsset(twinPath(pathname));
+    if (!twin || twin.status !== 200) return null;
+    const mediaType = (twin.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    // Static hosts commonly serve .md as plain text or an octet stream.
+    if (mediaType && !['text/markdown', 'text/x-markdown', 'text/plain', 'application/octet-stream'].includes(mediaType)) {
+      return null;
+    }
+    const body = await twin.text();
+    // Some rewrites omit Content-Type; reject a recognisable HTML fallback too.
+    if (/^\s*(?:<!doctype\s+html\b|<html\b)/i.test(body)) return null;
+    const representationPath = twinPath(pathname);
+    const headers = markdownResponseHeaders(body, pathname, representationPath);
+    return new Response(request.method === 'HEAD' ? null : body, { headers });
   } catch {
     return null;
   }
-
-  /**
-   * 没有孪生文件时同样回落，不能返回 404。
-   *
-   * 想象一个 agent 请求 `/some-page/`，而那一页恰好没有 .md 版本
-   * （比如是 404 页或某个特殊路由）。直接 404 会让它以为页面不存在，
-   * 而实际上 HTML 版本好好的。**回落是正确行为，不是兜底。**
-   */
-  if (!twin || !twin.ok) return null;
-
-  const body = await twin.text();
-
-  const representationPath = twinPath(pathname);
-  const headers = markdownResponseHeaders(body, pathname, representationPath);
-
-  // HEAD 请求不该带 body
-  return new Response(request.method === 'HEAD' ? null : body, { headers });
 }

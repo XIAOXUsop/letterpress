@@ -15,7 +15,7 @@ original:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: 148005aecd560399fb55ac65fe6e037f9216fb3cd4dc07b44e694b6b233e243b
+  contentDigest: 422a50ea234de50cc6e0052e2d7cc817ef5c77f548f5e64e05e9d7dfcaf08edc
 # related 整行删除：正文里的 [[中文排版]] 与 [[letterpress]] 已覆盖全部关系。
 # 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---

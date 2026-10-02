@@ -10,28 +10,26 @@
  * `[[foo]]` 自动不会被处理——不需要写「找出代码区间再跳过」那套逻辑，
  * 也就不会有那套逻辑写错的可能。
  *
- * 纯函数版的解析器（wikilink.ts）必须自己做这件事，因为它拿到的是字符串；
+ * 字符串入口（wikilink.ts）也先解析同样的 Markdown AST；
  * 但在构建管线里，AST 已经替我们做完了。
  *
  * ── 查找表怎么来 ────────────────────────────────────────────────────
  *
- * 直接扫内容目录，按与 content.ts **同一套优先级**（显式 slug > 文件名 > 标题）
+ * 通过 readContentPage 读取内容，再由 buildGraph 按生产或开发的草稿策略
  * 建立「slug → URL」和「标题 → URL」两张表。
  *
- * 这里确实与 content.ts 有少量重复。之所以接受，是因为 remark 插件在管线里
- * 是纯函数、拿不到 Astro 的内容集合；而把两者强行统一需要引入一层
- * 「构建期生成查找表文件」的机制，那会引入时序问题，代价更大。
- * 重复的部分被 `slug.test.ts` 与端到端构建测试同时覆盖。
+ * Astro 内容集合和源码读取的入口不同，但 slug、名字解析和草稿过滤共用核心。
+ * 查找表不读取正文关系，避免构建期重复做全文链接分析。
  */
 
 import { join, relative, sep } from 'node:path';
-import { readFileSync } from 'node:fs';
 import type { Root, Text } from 'mdast';
-import { visit } from 'unist-util-visit';
-import { normalizeTarget } from './wikilink.js';
-import { resolveSlug } from './slug.js';
-import { urlFor } from './graph.js';
-import { frontmatterField, collectFiles } from './frontmatter.js';
+import { visit, SKIP } from 'unist-util-visit';
+import { decodeString } from 'micromark-util-decode-string';
+import { normalizeTarget, parseWikiLinkText } from './wikilink.js';
+import { buildGraph, urlOf, type Doc } from './graph.js';
+import { collectFiles } from './frontmatter.js';
+import { readContentPage } from './read-page.ts';
 
 interface Lookup {
   readonly byName: ReadonlyMap<string, string>;
@@ -45,56 +43,24 @@ interface Lookup {
  * 拿不到 Astro 的 `import.meta.env.BASE_URL`，而链接少了前缀
  * 在本地开发时完全看不出来。
  */
-export function buildLookup(contentRoot: string, base = '/'): Lookup {
+export function buildLookup(contentRoot: string, base = '/', options: { includeDrafts?: boolean } = {}): Lookup {
+  const docs: Doc[] = [];
+  for (const kind of ['post', 'wiki'] as const) {
+    const dir = join(contentRoot, kind === 'post' ? 'posts' : 'wiki');
+    for (const file of collectFiles(dir)) {
+      const rel = relative(dir, file).split(sep).join('/');
+      const page = readContentPage(dir, rel);
+      docs.push({ kind, slug: page.slug, title: page.title, body: '', summary: page.summary,
+        explicitSlug: page.explicitSlug, draft: page.draft });
+    }
+  }
+  const graph = buildGraph(docs, options);
+  const prefix = base.endsWith('/') ? base.slice(0, -1) : base;
   const byName = new Map<string, string>();
-  const basePrefix = base.endsWith('/') ? base.slice(0, -1) : base;
-
-  // 前缀**不手写**：与链接图、内容清单共用 `urlFor` 这一份规则。
-  // 手写的那一版在这里躺了很久——`urlOf` 一改它就静默对不上。
-  const collect = (subdir: string, kind: 'post' | 'wiki') => {
-    const out: Array<{ slug: string; title: string; url: string }> = [];
-    for (const file of collectFiles(join(contentRoot, subdir))) {
-      const source = readFileSync(file, 'utf8');
-      const title = frontmatterField(source, 'title') ?? '';
-      const explicit = frontmatterField(source, 'slug');
-
-      // 相对内容根、去掉扩展名的路径，与 Astro 的 entry.id 一致
-      const rel = relative(join(contentRoot, subdir), file).replace(/\.mdx?$/, '');
-      const fileId = rel.split(sep).join('/');
-
-      const slug = resolveSlug(title, explicit, fileId);
-      if (slug === '') continue;
-      out.push({ slug, title, url: `${basePrefix}${urlFor(kind, slug)}` });
-    }
-    return out;
-  };
-
-  const all = [...collect('posts', 'post'), ...collect('wiki', 'wiki')];
-
-  // ── 先数标题，再建表：同名标题**不进查找表** ─────────────────────
-  //
-  // 原先这里是 `if (!byName.has(title)) byName.set(title, url)`——先到先得。
-  // 与 `graph.ts` 是同一个 bug：`[[那个标题]]` 指向谁取决于文件枚举顺序，
-  // 而两处各自算一遍，还可能算出不一样的结果。
-  //
-  // 现在两处都改成"同名就不注册"。于是 `[[Shared]]` 渲染成原样的方括号，
-  // 而 `lint` 的 `ambiguous-wikilink` 会报错并列出候选——**构建会停下来**。
-  const titleCount = new Map<string, number>();
-  for (const { title } of all) {
-    if (title === '') continue;
-    const key = normalizeTarget(title);
-    titleCount.set(key, (titleCount.get(key) ?? 0) + 1);
+  for (const [name, slug] of graph.lookup) {
+    const doc = graph.bySlug.get(slug);
+    if (doc) byName.set(name, prefix + urlOf(doc));
   }
-
-  for (const { slug, title, url } of all) {
-    byName.set(normalizeTarget(slug), url);
-    if (title === '') continue;
-    const key = normalizeTarget(title);
-    if ((titleCount.get(key) ?? 0) === 1 && !byName.has(key)) {
-      byName.set(key, url);
-    }
-  }
-
   return { byName };
 }
 
@@ -109,48 +75,14 @@ interface Segment {
 export function splitWikilinks(text: string, lookup: Lookup): Segment[] {
   const segments: Segment[] = [];
   let cursor = 0;
-  let i = 0;
-
-  while (i < text.length) {
-    const open = text.indexOf('[[', i);
-    if (open === -1) break;
-    const close = text.indexOf(']]', open + 2);
-    if (close === -1) break;
-
-    const body = text.slice(open + 2, close);
-    // 链接体里不应再有方括号或换行
-    if (body.includes('[') || body.includes(']') || body.includes('\n')) {
-      i = open + 2;
-      continue;
-    }
-
-    const pipe = body.indexOf('|');
-    const rawTarget = pipe === -1 ? body : body.slice(0, pipe);
-    const rawLabel = pipe === -1 ? null : body.slice(pipe + 1);
-
-    const hash = rawTarget.indexOf('#');
-    const target = (hash === -1 ? rawTarget : rawTarget.slice(0, hash)).trim();
-    const anchor = hash === -1 ? null : rawTarget.slice(hash + 1).trim();
-
-    const url = target === '' ? undefined : lookup.byName.get(normalizeTarget(target));
-
-    // 断链：**保持原样**。渲染成链接会指向 404，静默删除则读者与作者都不知道。
-    // 保持 `[[原文]]` 最诚实——而 lint 会在构建时报出来。
-    if (url !== undefined) {
-      if (open > cursor) segments.push({ type: 'text', value: text.slice(cursor, open) });
-      const label = rawLabel !== null && rawLabel.trim() !== '' ? rawLabel.trim() : target;
-      segments.push({
-        type: 'link',
-        value: '',
-        url: anchor ? `${url}#${encodeURIComponent(anchor)}` : url,
-        label,
-      });
-      cursor = close + 2;
-    }
-
-    i = close + 2;
+  for (const ref of parseWikiLinkText(text)) {
+    const url = lookup.byName.get(normalizeTarget(ref.target));
+    if (url === undefined) continue;
+    if (ref.offset > cursor) segments.push({ type: 'text', value: text.slice(cursor, ref.offset) });
+    segments.push({ type: 'link', value: text.slice(ref.offset, ref.end),
+      url: ref.anchor ? url + '#' + encodeURIComponent(ref.anchor) : url, label: ref.label });
+    cursor = ref.end;
   }
-
   if (cursor < text.length) segments.push({ type: 'text', value: text.slice(cursor) });
   return segments;
 }
@@ -161,10 +93,10 @@ export function splitWikilinks(text: string, lookup: Lookup): Segment[] {
  * `contentRoot` 默认取当前工作目录下的 `src/content`——Astro 构建时
  * cwd 就是项目根，所以不需要额外传参。
  */
-export function remarkWikilink(options: { contentRoot?: string; base?: string; enabled?: boolean } = {}) {
+export function remarkWikilink(options: { contentRoot?: string; base?: string; enabled?: boolean; includeDrafts?: boolean } = {}) {
   let lookup: Lookup | null = null;
 
-  return (tree: Root) => {
+  return (tree: Root, file?: { value?: unknown }) => {
     if (options.enabled === false) return;
     /**
      * 防御：`tree` 不是合法节点时直接返回。
@@ -182,6 +114,7 @@ export function remarkWikilink(options: { contentRoot?: string; base?: string; e
     lookup ??= buildLookup(
       options.contentRoot ?? join(process.cwd(), 'src', 'content'),
       options.base ?? '/',
+      { includeDrafts: options.includeDrafts },
     );
     const table = lookup;
 
@@ -197,7 +130,9 @@ export function remarkWikilink(options: { contentRoot?: string; base?: string; e
      */
     const targets: Array<{ parent: { children: unknown[] }; index: number; value: string }> = [];
 
-    visit(tree, 'text', (node: Text, index, parent) => {
+    visit(tree, (node, index, parent) => {
+      if (node.type === 'link' || node.type === 'linkReference') return SKIP;
+      if (node.type !== 'text') return;
       if (index === undefined || parent === undefined) return;
       if (!node.value.includes('[[')) return; // 绝大多数文本节点没有链接，快速跳过
       targets.push({ parent: parent as { children: unknown[] }, index, value: node.value });
@@ -207,7 +142,26 @@ export function remarkWikilink(options: { contentRoot?: string; base?: string; e
       const target = targets[i];
       if (target === undefined) continue;
 
-      const segments = splitWikilinks(target.value, table);
+      let segments = splitWikilinks(target.value, table);
+      // Entity decoding must not create wiki syntax absent from the authored text.
+      // The graph and Markdown export recognise literal bracket syntax only.
+      const source = typeof file?.value === 'string' ? file.value : undefined;
+      const node = target.parent.children[target.index] as Text;
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (source !== undefined && start !== undefined && end !== undefined) {
+        const raw = source.slice(start, end);
+        const allowed = new Set(parseWikiLinkText(raw).map((ref) => decodeString(raw.slice(0, ref.offset)).length));
+        // Match occurrence order: Markdown removes container indentation from text
+        // values, so source offsets cannot be compared to decoded-node offsets.
+        const candidates = parseWikiLinkText(decodeString(raw)).filter((ref) => table.byName.has(normalizeTarget(ref.target)));
+        segments = segments.map((segment) => {
+          if (segment.type !== 'link') return segment;
+          const candidate = candidates.shift();
+          if (!candidate || !allowed.has(candidate.offset)) return { type: 'text', value: segment.value };
+          return segment;
+        });
+      }
       // 整段都是普通文本 = 没有解析出链接，原样保留
       if (segments.length <= 1 && (segments[0]?.type ?? 'text') === 'text') continue;
 

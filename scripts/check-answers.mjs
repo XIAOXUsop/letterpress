@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parseQuestions } from './lib/questions.mjs';
 /**
  * 阶段 3 退出条件 ③ 的门禁：
  * 「**固定问题集中的每个答案都能定位到证据，或明确返回未知**」。
@@ -31,7 +32,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
-import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { readPublishedContentDirs as readContentDirs } from '../src/lib/wiki/read-page.ts';
 
 const ROOT = process.cwd();
 const QUESTIONS = join(ROOT, 'knowledge', 'questions.md');
@@ -52,41 +53,7 @@ if ([...counts.values()].some((n) => n === 0)) {
  * 复用 `check-questions.mjs` 的解析口径（三连行 + 跳过代码块）——
  * **两份解析器必然漂移**，而漂移的表现是「这个检查量的是另一批问题」。
  */
-const raw = readFileSync(QUESTIONS, 'utf8');
-const text = raw.replace(/^```[\s\S]*?^```$/gm, '');
-const listOf = (r) => r.split(/[、,，]/).map((s) => s.trim()).filter(Boolean);
-
-const cases = [];
-let current = null;
-for (const line of text.split('\n')) {
-  const h = /^##\s+/.test(line);
-  const q = /^###\s+(.*)$/.exec(line);
-  if (h) {
-    current = null;
-    continue;
-  }
-  if (q) {
-    current = { question: q[1].trim(), expect: [], noAnswer: false, hasSpec: false };
-    cases.push(current);
-    continue;
-  }
-  if (!current) continue;
-  const e = /^期望命中：(.*)$/.exec(line);
-  if (e) {
-    current.expect = listOf(e[1]);
-    current.hasSpec = true;
-    continue;
-  }
-  const v = /^期望判定：(.*)$/.exec(line);
-  if (v) {
-    current.noAnswer = v[1].trim() === '无依据';
-    current.hasSpec = true;
-  }
-  // 「已知局限」是**故意不过**的用例，它登记的是「这里有个已知的坏」，
-  // 不是「答案应该定位到证据」。**不跳过它，这个门禁会对着自己的
-  // 已知局限报红**——第一次跑就报了三条，全是这类。
-  if (/^已知局限：/.test(line)) current.knownLimit = true;
-}
+const cases = parseQuestions(readFileSync(QUESTIONS, 'utf8'));
 
 const usable = cases.filter((c) => c.hasSpec && !c.knownLimit);
 if (usable.length === 0) {
@@ -106,7 +73,7 @@ console.log(
 // ── 逐条量 ──────────────────────────────────────────────────────────
 let okCount = 0;
 for (const c of usable) {
-  const pack = buildContextPack(pages, c.question, { limit: 6, perDoc: 2 });
+  const pack = buildContextPack(pages, c.question);
 
   if (c.noAnswer) {
     // 「明确返回未知」：supported 为 false **且**给了理由
@@ -125,13 +92,13 @@ for (const c of usable) {
 
   // 「能定位到证据」：**主命中段落**必须带来源版本或复核状态
   const top = pack.passages[0];
-  if (!top) {
+  if (!pack.supported || !top) {
     problems.push(`「${c.question}」期望有依据，却一个段落都没返回。`);
     continue;
   }
   const hasEvidence =
-    (top.sources && top.sources.length > 0) ||
-    (top.review && top.review.status !== undefined);
+    top.sources.some((source) => source.sourceId && source.revision) ||
+    top.review?.status === 'reviewed';
   if (!hasEvidence) {
     problems.push(
       `「${c.question}」的主命中是 ${top.docId}` +

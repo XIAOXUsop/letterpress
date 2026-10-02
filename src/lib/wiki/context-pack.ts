@@ -21,7 +21,7 @@
  * 这一点是「可复现构建」那条契约成立的前提（见 `check-reproducible.mjs`）。
  */
 
-import { assess, MIN_COVERAGE, splitPassages, type Passage } from './retrieve.ts';
+import { assess, rank, MIN_COVERAGE, splitPassages, type Passage } from './retrieve.ts';
 import { buildGraph, type LinkGraph } from './graph.ts';
 import { normalizeTarget } from './wikilink.ts';
 
@@ -44,7 +44,7 @@ export interface PackOptions {
   /** 返回多少段。`--all` 时调大。 */
   readonly limit?: number;
   readonly perDoc?: number;
-  /** 不截断正文（`--all`）。 */
+  /** 兼容旧调用方；选中的章节始终完整返回，`--all` 只增加章节数。 */
   readonly fullText?: boolean;
 }
 
@@ -91,7 +91,7 @@ export function buildContextPack(
   question: string,
   options: PackOptions = {},
 ): ContextPack {
-  const { limit = 6, perDoc = 2, fullText = false } = options;
+  const { limit = 6, perDoc = 2 } = options;
   const bySlug = new Map(docs.map((d) => [d.slug, d]));
   // 与发布链接图共用解析口径：标题、别名、小节、代码区间和歧义均一致。
   const graph = buildGraph(docs.map((doc) => ({
@@ -100,7 +100,11 @@ export function buildContextPack(
   })));
   const passages = packPassages(docs);
 
-  const { passages: ranked, supported, reason } = assess(passages, question, { limit, perDoc });
+  const first = rank(passages, question, { limit: 1, perDoc: 1 })[0];
+  const neighbours = first ? [...(graph.outbound.get(first.docId) ?? [])] : [];
+  const { passages: ranked, supported, reason } = assess(passages, question, {
+    limit, perDoc, prioritizedDocs: first ? [first.docId, ...neighbours] : [],
+  });
   const primary = ranked[0]?.docId;
 
   return {
@@ -122,7 +126,7 @@ export function buildContextPack(
         updated: doc?.updated ?? '',
         review: doc?.review ?? null,
         sources: doc?.sources ?? [],
-        text: snippet(r.text, fullText),
+        text: r.text,
       };
     }),
   };
@@ -151,10 +155,4 @@ function relationTo(
   if (primary !== undefined && graph.outbound.get(primary)?.has(slug)) return `← ${primary} 正文`;
   if (primary !== undefined && graph.outbound.get(slug)?.has(primary)) return `→ 正文引用了 ${primary}`;
   return '无直接关系';
-}
-
-function snippet(text: string, full: boolean): string {
-  if (full) return text;
-  const lines = text.split('\n').filter((l) => l.trim() !== '');
-  return lines.slice(0, 6).join('\n');
 }

@@ -14,7 +14,7 @@ original:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: ad9e1ec0c299e812761d5949f0f372a81655642f0441106852440aa15c97d5e0
+  contentDigest: e72f97a238d046c186fa8f1fefadff7ab8cbe2f4f1bf3a8591c27e4b37df765d
 # related 整行删除：正文四个链接已覆盖全部关系。
 # 保留它不会让图算错（Set 去重），只会在改名时多一处要同步——见 lint 的 redundant-relation。
 ---

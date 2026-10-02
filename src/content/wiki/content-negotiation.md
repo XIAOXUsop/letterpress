@@ -14,7 +14,7 @@ sources:
 review:
   status: reviewed
   checkedAt: 2026-09-23
-  contentDigest: 704890dea66501c34dc71813cdc4be93929c5b59864cb8f81b2ad46fe3020752
+  contentDigest: 6104e8408171d1ccf8f2fc49b622c35bab4be29a39101ccb6bdc4a3c3b4dde0c
 ---
 
 同一个 URL，对人和对 agent 返回不同格式的同一份内容。

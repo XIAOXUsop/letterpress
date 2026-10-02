@@ -21,8 +21,9 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { splitPassages, assess } from '../src/lib/wiki/retrieve.ts';
-import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { packPassages, buildContextPack } from '../src/lib/wiki/context-pack.ts';
+import { parseQuestions } from './lib/questions.mjs';
+import { readPublishedContentDirs as readContentDirs } from '../src/lib/wiki/read-page.ts';
 
 const verbose = process.argv.includes('--verbose');
 const ROOT = process.cwd();
@@ -52,7 +53,7 @@ if (corpus.length === 0) {
   console.error(`${WIKI} 与 ${POSTS} 里一个条目都没有——这个检查什么都没量。`);
   process.exit(1);
 }
-const passages = corpus.flatMap((d) => splitPassages(d.slug, d.body.trim()));
+const passages = packPassages(corpus);
 const known = new Set(corpus.map((d) => d.slug));
 
 if (passages.length < corpus.length) {
@@ -62,69 +63,7 @@ if (passages.length < corpus.length) {
 
 // ── 解析金标 ────────────────────────────────────────────────────────
 
-const text = readFileSync(QUESTIONS, 'utf8');
-const listOf = (raw) =>
-  (raw ?? '').split(/[、,，]/).map((s) => s.trim()).filter(Boolean);
-
-const questions = [];
-let category = '';
-let current = null;
-// 围栏代码块要整段跳过。**这不是洁癖**：文件开头「怎么写一条」那一节里
-// 就有一份 `### 问题的原话` 的格式示例，不跳过的话它会被当成一条真题，
-// 而它点名的 `slug-a` / `slug-b` 根本不存在——于是金标自己把自己搞红。
-// （第一次跑就是这么红的。）
-let inFence = false;
-const flush = () => {
-  if (current) questions.push(current);
-  current = null;
-};
-
-for (const line of text.split('\n')) {
-  if (/^\s*```/.test(line)) {
-    inFence = !inFence;
-    continue;
-  }
-  if (inFence) continue;
-
-  const cat = /^##\s+(.*)$/.exec(line);
-  if (cat) {
-    flush();
-    category = cat[1].trim();
-    continue;
-  }
-  const q = /^###\s+(.*)$/.exec(line);
-  if (q) {
-    flush();
-    current = { category, question: q[1].trim(), expect: [], forbid: [], noAnswer: false, hasSpec: false, knownLimit: null };
-    continue;
-  }
-  if (!current) continue;
-  const expect = /^期望命中：(.*)$/.exec(line);
-  if (expect) {
-    current.expect = listOf(expect[1]);
-    current.hasSpec = true;
-    continue;
-  }
-  const forbid = /^不得出现：(.*)$/.exec(line);
-  if (forbid) {
-    current.forbid = listOf(forbid[1]);
-    current.hasSpec = true;
-    continue;
-  }
-  const verdict = /^期望判定：(.*)$/.exec(line);
-  if (verdict) {
-    current.noAnswer = verdict[1].trim() === '无依据';
-    current.hasSpec = true;
-    continue;
-  }
-  // 已知局限：这一条**期望就是过不了**。理由必须写下来。
-  const known = /^已知局限：(.*)$/.exec(line);
-  if (known) {
-    current.knownLimit = known[1].trim();
-    current.hasSpec = true;
-  }
-}
-flush();
+const questions = parseQuestions(readFileSync(QUESTIONS, 'utf8'));
 
 // ── 闸：先证明这把尺子量到了东西 ────────────────────────────────────
 
@@ -167,10 +106,7 @@ for (const q of questions) {
     lastCategory = q.category;
   }
 
-  const { passages: ranked, supported, reason } = assess(passages, q.question, {
-    limit: 8,
-    perDoc: 3,
-  });
+  const { passages: ranked, supported, reason } = buildContextPack(corpus, q.question);
   const got = new Set(ranked.map((r) => r.docId));
   const fails = [];
 
@@ -189,6 +125,9 @@ for (const q of questions) {
 
   for (const slug of q.forbid) {
     if (got.has(slug)) fails.push(`不该出现的 ${slug} 出现了`);
+  }
+  if (q.forbidHeading.includes(ranked[0]?.heading)) {
+    fails.push(`首段不应是「${ranked[0].heading}」`);
   }
 
   if (fails.length === 0) {

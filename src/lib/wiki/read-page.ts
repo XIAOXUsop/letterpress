@@ -22,6 +22,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseDocument } from 'yaml';
 import { resolveSlug } from './slug.ts';
+import { markdownBody } from './markdown.ts';
 
 /** 页面上一处来源引用。与 `Doc.sources` 同形。 */
 export interface PageSourceRef {
@@ -87,32 +88,13 @@ export function readContentPage(dir: string, file: string, options: ReadContentO
   readonly original?: { readonly reason: string };
   readonly docKind?: 'post' | 'wiki';
   readonly related: readonly string[];
-  /** frontmatter 之后的正文（不含 frontmatter）。**已 trim，与 Astro 的 `entry.body` 同口径。** */
+  /** frontmatter 之后的正文（不含 frontmatter）。保留 Markdown 缩进与行尾空格。 */
   readonly body: string;
 } {
   const source = readFileSync(join(dir, file), 'utf8');
   const end = source.indexOf('\n---', 3);
   const block = source.slice(3, end === -1 ? undefined : end).replace(/\r$/, '');
-  /*
-   * ⚠️ **`trim()` 不是可选的。**
-   *
-   * 2026-09-24 实测：不 trim 时正文以一个空行开头，
-   * 而 `scripts/wiki-review.mjs` 用它算 `contentDigest`——
-   * **三个知识页算出的摘要与 frontmatter 里写的完全不同**，
-   * 于是 `--list` 会把它们全报成 stale，看起来像「机制坏了」。
-   *
-   * 差异不止首尾：frontmatter 的 `---` 之后往往紧跟一个空行，
-   * 切出来就是 `\n` + 正文。
-   *
-   * > 这个 `trim()` 的必要性原先只写在 `wiki-review.mjs` 的注释里
-   * > （那份实现连同注释一起被删掉，换成了调用本模块）。
-   * > **约定写在调用方而不是被调用方，换实现时就丢了**——
-   * > 而丢失之后症状是「静默算错」，不是报错。
-   *
-   * 口径依据：实测 Astro 打印的 `entry.body` 长度 2166，
-   * 而直接从文件切出来是 2168（前后各一个换行）。
-   */
-  const body = end === -1 ? source : source.slice(source.indexOf('\n', end + 1) + 1).trim();
+  const body = markdownBody(source);
 
   // Astro 读取的是 YAML。结构字段也必须按 YAML 解析，否则合法的行内数组
   // 会被漏掉，且另一个顶层块的 revision/locator 会误覆盖上一条来源。
@@ -246,4 +228,10 @@ export function readContentDirs(dirs: readonly string[], options: ReadContentOpt
     for (const file of files) pages.push(readContentPage(dir, file, options));
   }
   return { pages, counts };
+}
+
+/** Production retrieval and its gates must use the same published corpus. */
+export function readPublishedContentDirs(dirs: readonly string[], options: ReadContentOptions = {}) {
+  const corpus = readContentDirs(dirs, options);
+  return { ...corpus, pages: corpus.pages.filter((page) => !page.draft) };
 }

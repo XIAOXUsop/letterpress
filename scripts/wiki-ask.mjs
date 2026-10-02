@@ -27,12 +27,12 @@
  * 用法：
  *   node scripts/wiki-ask.mjs "中文正文的理想行宽是多少"
  *   node scripts/wiki-ask.mjs --json "…"     # 给机器读
- *   node scripts/wiki-ask.mjs --all "…"      # 不截断，打全段
+ *   node scripts/wiki-ask.mjs --all "…"      # 返回更多完整章节
  */
 
 import { join } from 'node:path';
 import { MIN_COVERAGE } from '../src/lib/wiki/retrieve.ts';
-import { readContentDirs } from '../src/lib/wiki/read-page.ts';
+import { readPublishedContentDirs as readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { buildContextPack } from '../src/lib/wiki/context-pack.ts';
 import { EXIT_EMPTY_INPUT, EXIT_ENVIRONMENT, EXIT_USAGE } from '../src/lib/cli/exit-codes.mjs';
 import { failWithJson, jsonOk } from '../src/lib/cli/json-output.mjs';

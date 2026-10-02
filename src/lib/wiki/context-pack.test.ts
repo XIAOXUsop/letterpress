@@ -138,12 +138,12 @@ describe('context pack · 判定与形状', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 
-  it('fullText 关闭时截断正文、打开时给全段', () => {
+  it('选中的章节在默认模式和 fullText 模式均完整交付', () => {
     const long = doc('long', { body: `## 甲\n\n${'行\n'.repeat(30)}` });
     const short = buildContextPack([long], '甲', { fullText: false });
     const full = buildContextPack([long], '甲', { fullText: true });
-    expect(short.passages[0].text.split('\n').length).toBeLessThanOrEqual(6);
-    expect(full.passages[0].text.length).toBeGreaterThan(short.passages[0].text.length);
+    expect(short.passages[0].text).toBe(long.body.trim());
+    expect(full.passages[0].text).toBe(short.passages[0].text);
   });
 });
 

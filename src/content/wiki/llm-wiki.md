@@ -42,7 +42,7 @@ verify:
 review:
   status: reviewed
   checkedAt: 2026-09-24
-  contentDigest: a21303104278ccf858e4c1194d080a20a4c4cb897d5d9ef0f5a04f4adad4d336
+  contentDigest: f37e57db6c45490157be396281f507633ac5109d605ea7f155ad50bc5c53e6dc
 # 本页的模式出处与「10–15 页」那句的原文定位。
 # 注意 `google-ai-features` **不**在这里——它支撑的是 markdown-for-agents
 # 那篇 post 的论断，不支撑本页；来源登记按「哪一页用」记，不按「同一个话题」记。

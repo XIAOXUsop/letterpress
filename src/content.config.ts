@@ -12,7 +12,7 @@
  */
 
 import { defineCollection } from 'astro:content';
-import { glob } from 'astro/loaders';
+import { markdownGlob } from './lib/markdown-loader.js';
 import { z } from 'astro/zod';
 
 /**
@@ -26,7 +26,7 @@ import { z } from 'astro/zod';
  * `%E8%AE%BA...`）。想覆盖它就在 frontmatter 里写 `slug`。
  */
 const posts = defineCollection({
-  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/posts' }),
+  loader: markdownGlob({ pattern: '**/*.{md,mdx}', base: './src/content/posts' }),
   schema: z.object({
     title: z.string().min(1, '标题不能为空'),
     /**
@@ -119,7 +119,7 @@ const posts = defineCollection({
  * 两者都可以被 `[[wiki-link]]` 引用，在链接图里地位相同。
  */
 const wiki = defineCollection({
-  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/wiki' }),
+  loader: markdownGlob({ pattern: '**/*.{md,mdx}', base: './src/content/wiki' }),
   schema: z.object({
     title: z.string().min(1, '标题不能为空'),
     summary: z.string().min(1, '摘要不能为空——agent 靠它决定要不要读这一页'),

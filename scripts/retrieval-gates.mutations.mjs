@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 检索金标的**负向验证**：五道闸逐一失效，每次必须真的让金标变红。
+ * 检索金标的**负向验证**：五道闸逐一失效，每次必须让金标或独立语义契约变红。
  *
  * ── 为什么 ──────────────────────────────────────────────────────────
  *
@@ -13,7 +13,7 @@
  *
  * 那个手工验证的**结论还被写错进了文档**（`docs/retrieval.md` 写
  * 「**三道**闸各有一条专属用例」，而它自己的表里列了 5 行）。
- * **所以它需要一个能重复跑的检查，而不只是文档里的一句话。**
+ * **所以使用真实金标与独立语义契约共同检测，不声称每道闸都有独有金标。**
  *
  * 判据是**退出码**，不是「输出里有几个 ✗」——
  * 后者会把「已知局限」也算进去，而那些**本来就不计为失败**。
@@ -27,10 +27,12 @@ import { spawnSync } from 'node:child_process';
 const ROOT = process.cwd();
 const RETRIEVE = join(ROOT, 'src', 'lib', 'wiki', 'retrieve.ts');
 const QUESTIONS = join(ROOT, 'scripts', 'check-questions.mjs');
+const PROBES = join(ROOT, 'scripts', 'lib', 'retrieval-gate-probes.mjs');
 
 const original = readFileSync(RETRIEVE, 'utf8');
 
 const runGold = () => spawnSync('node', [QUESTIONS], { cwd: ROOT, encoding: 'utf8' });
+const runProbes = () => spawnSync('node', [PROBES], { cwd: ROOT, encoding: 'utf8' });
 
 /**
  * 五道闸各自的注入方式。
@@ -84,11 +86,11 @@ console.log('检索金标的负向验证：五道闸逐一失效');
 console.log('─'.repeat(64));
 
 const clean = runGold();
-if (clean.status !== 0) {
+if (clean.status !== 0 || runProbes().status !== 0) {
   console.log(`  ✗ 干净状态下金标就不通过（退出码 ${clean.status}）——先修那个`);
   process.exit(1);
 }
-console.log('  ✓ 干净状态：22/22 通过\n');
+console.log('  ✓ 干净状态：真实金标与独立语义契约通过\n');
 
 for (const gate of GATES) {
   if (!original.includes(gate.from)) {
@@ -97,12 +99,18 @@ for (const gate of GATES) {
     continue;
   }
   writeFileSync(RETRIEVE, original.replace(gate.from, gate.to), 'utf8');
-  const r = runGold();
-  writeFileSync(RETRIEVE, original, 'utf8');
+  let r;
+  let probe;
+  try {
+    r = runGold();
+    probe = runProbes();
+  } finally {
+    writeFileSync(RETRIEVE, original, 'utf8');
+  }
 
-  if (r.status !== 0) {
+  if (r.status !== 0 || probe.status !== 0) {
     const red = (r.stdout ?? '').split('\n').filter((l) => l.includes('✗'));
-    console.log(`  ✓ ${gate.name} → 金标变红（退出码 ${r.status}，${red.length} 条）`);
+    console.log(`  ✓ ${gate.name} → 故障被捕获（金标退出码 ${r.status}，语义契约退出码 ${probe.status}，金标 ${red.length} 条失败）`);
   } else {
     console.log(`  ✗ ${gate.name} → **金标照样全绿**——这一道闸没有专属用例（或被别的闸遮住）`);
     console.log(`      ${gate.why}`);
@@ -110,14 +118,14 @@ for (const gate of GATES) {
   }
 }
 
-if (runGold().status !== 0) {
+if (runGold().status !== 0 || runProbes().status !== 0) {
   console.log('\n  ✗ 恢复后仍然红——源码没还原干净，本轮结论不作数');
   process.exit(1);
 }
 console.log('\n  ✓ 恢复后：绿（源码已还原）\n');
 
 if (bad === 0) {
-  console.log('五道闸**各自**都被金标量到了——README 那句声称成立。\n');
+  console.log('五道闸逐一失效均被真实金标或独立语义契约捕获。\n');
 } else {
   console.log(
     `${bad} 道闸没有被金标独立量到。\n` +

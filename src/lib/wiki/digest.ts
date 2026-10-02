@@ -19,6 +19,7 @@
  *   - `title`、`summary`：对外呈现的结论
  *   - `body`：正文
  *   - `declaredRelations`：声明的关系是内容的一部分
+ *   - `sources` / `original.reason`：当前结论所绑定的来源版本、定位和原创依据
  *
  * **不覆盖**（改了不该触发重新复核）：
  *   - `slug`：URL 可以演化，知识身份不该因此断裂。改 slug 是搬家，不是改内容。
@@ -70,6 +71,14 @@ export function contentDigest(doc: Doc): string {
  * 而且出问题时 `diff` 一眼能看出是哪个字段变了。
  */
 export function digestInput(doc: Doc): string {
+  const provenance = {
+    sources: [...new Set((doc.sources ?? []).map((source) => JSON.stringify({
+      sourceId: toLf(source.sourceId).normalize('NFC'),
+      revision: toLf(source.revision).normalize('NFC'),
+      locator: toLf(source.locator ?? '').normalize('NFC'),
+    })))].sort().map((source) => JSON.parse(source)),
+    original: doc.original ? toLf(doc.original.reason).normalize('NFC') : null,
+  };
   return [
     `kind:${doc.wikiKind ?? ''}`,
     `title:${toLf(doc.title).normalize('NFC')}`,
@@ -77,6 +86,9 @@ export function digestInput(doc: Doc): string {
     `body:${toLf(doc.body).normalize('NFC')}`,
     // 排序去重：关系的**集合**才是语义，写的顺序不是
     `related:${[...new Set(doc.declaredRelations ?? [])].sort().join(',')}`,
+    // Keep source-free historical inputs stable; bind every recorded evidence field.
+    ...(provenance.sources.length || provenance.original !== null
+      ? [`provenance:${JSON.stringify(provenance)}`] : []),
   ].join('\n');
 }
 
