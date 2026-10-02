@@ -77,8 +77,8 @@ npm run verify:base
 **CSP 刻意没有开启。** 主题恢复脚本是同步内联的，要上严格 CSP 需要给它加 hash。
 一个开箱即用的模板不该在用户还没配好时就把自己的脚本拦掉。
 
-另外搜索的加载器要求 CSP 允许 `unsafe-eval`——原因见 [命令行](cli.md) 里
-关于 `__VITE_PRELOAD__` 的说明。
+搜索无需 JavaScript `unsafe-eval`；WebAssembly 与内联脚本的授权要求见
+[命令行](cli.md#搜索的加载器与-csp)。
 
 ---
 

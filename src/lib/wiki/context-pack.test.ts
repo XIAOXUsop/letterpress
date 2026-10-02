@@ -24,6 +24,48 @@ const CORPUS: PackDoc[] = [
   }),
 ];
 
+describe('context pack · 与发布链接图一致的关系', () => {
+  it.each([
+    ['标题链接', '见 [[目标页]]。', undefined, '← a 正文'],
+    ['别名与小节', '见 [[目标页#细节|阅读说明]]。', undefined, '← a 正文'],
+    ['归一化 slug', '见 [[ B ]]。', undefined, '← a 正文'],
+    ['按标题声明关系', '', ['目标页'], '← a 声明'],
+    ['行内代码不是引用', '示例 `[[b]]`。', undefined, '无直接关系'],
+    ['围栏代码不是引用', '\n```md\n[[b]]\n```', undefined, '无直接关系'],
+  ])('%s', (_name, link, related, expected) => {
+    const docs = [
+      doc('a', { body: `## 行宽\n\n34em 34em 34em。 ${link}`, related }),
+      doc('b', { title: '目标页', body: '## 行宽\n\n34em。' }),
+    ];
+    const pack = buildContextPack(docs, '34em');
+    expect(pack.passages[0].docId).toBe('a');
+    expect(pack.passages.find((p) => p.docId === 'b')?.relation).toBe(expected);
+  });
+
+  it('反向标题别名链接给出正确方向', () => {
+    const docs = [
+      doc('a', { title: '主页面', body: '## 行宽\n\n34em 34em 34em。' }),
+      doc('b', { body: '## 行宽\n\n34em。见 [[主页面#细节|链接]]。' }),
+    ];
+    const pack = buildContextPack(docs, '34em');
+    expect(pack.passages[0].docId).toBe('a');
+    expect(pack.passages.find((p) => p.docId === 'b')?.relation).toBe('→ 正文引用了 a');
+  });
+
+  it('歧义标题不建立虚假关系，明确 slug 仍能解析', () => {
+    const docs = [
+      doc('a', { body: '## 行宽\n\n34em 34em 34em。见 [[同名]]。' }),
+      doc('b', { title: '同名', body: '## 行宽\n\n34em。' }),
+      doc('c', { title: '同名', body: '## 行宽\n\n34em。' }),
+    ];
+    const pack = buildContextPack(docs, '34em');
+    expect(pack.passages[0].docId).toBe('a');
+    expect(pack.passages.filter((p) => p.docId !== 'a').every((p) => p.relation === '无直接关系')).toBe(true);
+    const explicit = buildContextPack([{ ...docs[0], body: docs[0].body.replace('[[同名]]', '[[b]]') }, ...docs.slice(1)], '34em');
+    expect(explicit.passages.find((p) => p.docId === 'b')?.relation).toBe('← a 正文');
+  });
+});
+
 describe('context pack · 路线图 §3 要的五样', () => {
   /*
    * §3 写的是「查询结果必须包含文档 ID、片段、来源版本、状态和关系路径」。

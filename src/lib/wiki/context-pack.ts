@@ -22,6 +22,8 @@
  */
 
 import { assess, MIN_COVERAGE, splitPassages, type Passage } from './retrieve.ts';
+import { buildGraph, type LinkGraph } from './graph.ts';
+import { normalizeTarget } from './wikilink.ts';
 
 /** 一篇可被组装进 pack 的页面。与 `readContentPage` 的返回同形。 */
 export interface PackDoc {
@@ -91,6 +93,11 @@ export function buildContextPack(
 ): ContextPack {
   const { limit = 6, perDoc = 2, fullText = false } = options;
   const bySlug = new Map(docs.map((d) => [d.slug, d]));
+  // 与发布链接图共用解析口径：标题、别名、小节、代码区间和歧义均一致。
+  const graph = buildGraph(docs.map((doc) => ({
+    kind: 'wiki', slug: doc.slug, title: doc.title, summary: '', body: doc.body,
+    declaredRelations: doc.related ?? [], explicitSlug: false, draft: false,
+  })));
   const passages = packPassages(docs);
 
   const { passages: ranked, supported, reason } = assess(passages, question, { limit, perDoc });
@@ -111,7 +118,7 @@ export function buildContextPack(
         score: Number(r.score.toFixed(4)),
         coverage: Number(r.coverage.toFixed(4)),
         matched: r.matched,
-        relation: relationTo(bySlug, primary, r.docId),
+        relation: relationTo(bySlug, graph, primary, r.docId),
         updated: doc?.updated ?? '',
         review: doc?.review ?? null,
         sources: doc?.sources ?? [],
@@ -129,6 +136,7 @@ export function buildContextPack(
  */
 function relationTo(
   bySlug: ReadonlyMap<string, PackDoc>,
+  graph: LinkGraph,
   primary: string | undefined,
   slug: string,
 ): string {
@@ -136,31 +144,13 @@ function relationTo(
   const a = primary === undefined ? undefined : bySlug.get(primary);
   const b = bySlug.get(slug);
 
-  // ⚠️ `a?.related` **只保护了 a 为空，没保护 related 为 undefined**
-  // ——后者会抛 `undefined.includes`。迭代 N 实测过同型崩溃
-  // （`computeImpact` 的 `undefined.some`），根因一模一样：
-  // 类型标必填、实际可为 undefined、而调用方都填了默认值把它掩盖住。
-  // `verify:portability` 现在会扫这个形状。
-  if (a?.related?.includes(slug)) return `← ${primary} 声明`;
-  if (primary !== undefined && b?.related?.includes(primary)) return `→ 声明了 ${primary}`;
-
-  // 正文互链（`[[…]]`）也算一条真实关系
-  if (a && new RegExp(`\\[\\[\\s*${escapeRe(slug)}\\s*\\]\\]`, 'i').test(a.body)) {
-    return `← ${primary} 正文`;
-  }
-  if (b && primary && new RegExp(`\\[\\[\\s*${escapeRe(primary)}\\s*\\]\\]`, 'i').test(b.body)) {
-    return `→ 正文引用了 ${primary}`;
-  }
+  const declares = (doc: PackDoc | undefined, target: string) =>
+    doc?.related?.some((name) => graph.lookup.get(normalizeTarget(name)) === target) ?? false;
+  if (declares(a, slug)) return `← ${primary} 声明`;
+  if (primary !== undefined && declares(b, primary)) return `→ 声明了 ${primary}`;
+  if (primary !== undefined && graph.outbound.get(primary)?.has(slug)) return `← ${primary} 正文`;
+  if (primary !== undefined && graph.outbound.get(slug)?.has(primary)) return `→ 正文引用了 ${primary}`;
   return '无直接关系';
-}
-
-/**
- * 正则里的字面量。slug 理论上只含 `[a-z0-9-]` 与 CJK，
- * 但**万一含有正则元字符就会让整段判定失真或抛错**——
- * 页面 slug 来自文件名与 frontmatter，两处都不是受控输入。
- */
-function escapeRe(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function snippet(text: string, full: boolean): string {

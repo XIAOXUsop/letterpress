@@ -1,14 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { Script, createContext } from 'node:vm';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 // Execute the page's real controller, rather than a second search implementation.
-const page = readFileSync(new URL('../../src/pages/search.astro', import.meta.url), 'utf8');
-const source = page.match(/<script>([\s\S]*?)<\/script>/)[1];
-const code = ts.transpileModule(source.replace('import.meta.env.BASE_URL', "'/'"), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-}).outputText;
+const source = readFileSync(new URL('../../src/scripts/search.js', import.meta.url), 'utf8');
+// Replace only the native module boundary; execute the real DOM controller.
+const code = source.replace('import(url)', '__importPagefind(url)').replace('export {};', '');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function deferred() {
   let resolve;
@@ -18,21 +15,22 @@ function deferred() {
 }
 function element() {
   return {
-    value: '', textContent: '', children: [], listeners: {}, html: '',
+    value: '', textContent: '', children: [], listeners: {}, html: '', dataset: { pagefindUrl: '/pagefind/pagefind.js' },
     get innerHTML() { return this.html; },
     set innerHTML(value) { this.html = value; this.children = []; },
     addEventListener(type, fn) { this.listeners[type] = fn; },
     append(...items) { this.children.push(...items); },
   };
 }
-function setup(load) {
+function setup(load, pagefindUrl = '/pagefind/pagefind.js') {
   const nodes = Object.fromEntries(['search-form', 'search-input', 'search-status', 'search-results']
     .map((id) => [id, element()]));
+  nodes['search-form'].dataset.pagefindUrl = pagefindUrl;
   let timer;
   const context = createContext({
     document: { getElementById: (id) => nodes[id], createElement: element },
     location: { search: '' }, URLSearchParams,
-    Function: function () { return load; },
+    __importPagefind: load,
     window: { clearTimeout() { timer = undefined; }, setTimeout(fn) { timer = fn; return 1; } },
   });
   new Script(code).runInContext(context);
@@ -50,6 +48,27 @@ const result = (title = '正确结果', excerpt = '<mark>排版</mark>') => ({
 });
 
 describe('search page asynchronous behavior', () => {
+  it('uses the configured deployment subpath for native module loading', async () => {
+    const urls = [];
+    const ui = setup(async (url) => { urls.push(url); return { search: async () => result() }; }, '/notes/pagefind/pagefind.js');
+    ui.submit('排版');
+    await tick();
+    expect(urls).toEqual(['/notes/pagefind/pagefind.js']);
+    expect(ui.status()).toBe('找到 1 条结果');
+  });
+  it('shows module download failure and allows a later retry', async () => {
+    let loads = 0;
+    const ui = setup(async () => {
+      if (++loads === 1) throw new Error('模块下载失败');
+      return { search: async () => result() };
+    });
+    ui.submit('排版');
+    await tick();
+    expect(ui.status()).toContain('搜索索引暂时不可用');
+    ui.submit('排版');
+    await tick();
+    expect(ui.status()).toBe('找到 1 条结果');
+  });
   it('does not restore results when cleared during index loading', async () => {
     const loading = deferred();
     let queries = 0;

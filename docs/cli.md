@@ -4,7 +4,7 @@
 |---|---|
 | `npm run dev` | 开发服务器（草稿可见） |
 | `npm run build` | 构建 + Pagefind 索引（含体检，有错误会中止） |
-| `npm test` | **498 项**单元测试，全部离线 |
+| `npm test` | **508 项**单元测试，全部离线 |
 | `npm run sync:content -- --origin=… --output=…` | 把公开内容同步成本地镜像：首次 NDJSON 导入，后续按 manifest 增量更新，详见[内容镜像同步](content-sync.md) |
 | `npm run verify` | 端到端：对着**真实构建产物**验证 201 项契约（条数由脚本自己打印） |
 | `npm run verify:base` | 子路径部署检查（属性 / 脚本 / 绝对 URL / 纯文本产物 / 内容清单 / NDJSON 全量导出） |
@@ -113,13 +113,17 @@ Astro 7 把内容集合持久化在 `node_modules/.astro/`，不清理会让你�
 而项目里的 import 写的是 `./accept.js`（TS + ESM 的标准写法）——
 于是 Node 找不到文件。esbuild 懂这个约定，打包就绕过了。
 
-## 搜索的加载器为什么要求 CSP 允许 `unsafe-eval`
+## 搜索的加载器与 CSP
 
-Vite 会把 `import()` 包成 `__vitePreload(…, __VITE_PRELOAD__)`，
-而 Pagefind 的索引是**构建之后**才生成的，Vite 替换不了那个占位符。
-结果是运行时报 `ReferenceError`，而且**不发出任何网络请求**——
-看起来像「搜索框永远转圈」，排查时不会怀疑到打包器头上。
+搜索控制器位于 `src/scripts/search.js`，作为 raw 文本内联进搜索页的原生
+`type="module"` 脚本。Pagefind 地址由页面提供，包含部署 base；仅在搜索时
+使用浏览器的 `import()` 加载，不经过 Vite 的动态导入转换，也不使用
+`new Function`。其他页面不会下载搜索运行时。
 
-绕开办法是用 `new Function` 构造导入（`src/pages/search.astro`），
-代价就是这条 CSP 要求。若你启用了严格 CSP，需要为搜索页开例外，
-或改用其他加载方式。
+旧实现曾绕过 Vite 8 的未替换预加载占位符，但依赖 JavaScript `unsafe-eval`。
+当前实现已经去掉这项要求。Pagefind 编译 WebAssembly 时仍需
+`wasm-unsafe-eval`；内联脚本需要匹配的 hash/nonce，或 `unsafe-inline`。
+这不等于站点默认启用了严格 CSP，托管平台应按自身策略配置并实测。
+
+参考：[Pagefind API](https://pagefind.app/docs/api/)、
+[CSP script-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/script-src)。
