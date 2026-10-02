@@ -21,6 +21,7 @@ import { runAstro } from './lib/astro.mjs';
 import { cleanBuildState } from './lib/clean.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { site } from '../src/config.ts';
 
 /** 用这个假 base 构建。选它是因为长度与真实的仓库名接近。 */
 const FAKE_BASE = '/letterpress';
@@ -59,6 +60,13 @@ async function scan(dir) {
 
     const html = await readFile(full, 'utf8');
     const rel = full.slice(dist.length + 1).replace(/\\/g, '/');
+    // 比完整地址而非计数 base 字符串：slug 可与 base 同名，中文会被 URL 编码。
+    if (site.url) {
+      const canonical = /<link\b[^>]*rel="canonical"[^>]*href="([^"]+)"/.exec(html)?.[1];
+      const route = rel === '404.html' ? '/' : '/' + rel.replace(/index\.html$/, '');
+      const expected = new URL(`${FAKE_BASE}${route}`, site.url).href;
+      if (canonical !== expected) problems.set(`canonical 应为 ${expected}，实际 ${canonical ?? '缺失'}`, [rel]);
+    }
 
     /*
      * 匹配**真实标签上的** `href` / `src` 属性，排除协议相对地址（//example.com）。

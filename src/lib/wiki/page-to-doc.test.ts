@@ -19,6 +19,24 @@ const page = {
 };
 
 describe('pageToDoc', () => {
+  it('默认保留读到的摘要、草稿和知识页治理信息，显式选项优先', () => {
+    const read = { ...page, summary: '实际摘要', draft: true,
+      review: { status: 'pending' as const }, original: { reason: '本站实践' } };
+    expect(pageToDoc(read)).toMatchObject({ summary: '实际摘要', draft: true,
+      review: read.review, original: read.original });
+    expect(pageToDoc(read, { summary: '', draft: false })).toMatchObject({ summary: '', draft: false });
+  });
+
+  it('文章不会继承知识页关系与治理字段，显式类型可覆盖读取选项', () => {
+    const read = { ...page, docKind: 'post' as const, related: ['x'],
+      review: { status: 'pending' as const }, original: { reason: '实践' } };
+    const post = pageToDoc(read);
+    expect(post).toMatchObject({ kind: 'post', declaredRelations: [] });
+    expect(post.wikiKind).toBeUndefined();
+    expect(post).not.toHaveProperty('review');
+    expect(post).not.toHaveProperty('original');
+    expect(pageToDoc(read, { docKind: 'wiki' }).declaredRelations).toEqual(['x']);
+  });
   it('给出与 Doc 契约一致的字段名', () => {
     const doc = pageToDoc(page, { summary: '摘要' });
     // ⚠️ `declaredRelations` **不是** `related`——传错键会被 `?? []`

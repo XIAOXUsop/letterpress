@@ -41,10 +41,15 @@ export interface ReadPage {
   readonly body: string;
   readonly sources: readonly { sourceId: string; revision: string; locator: string }[];
   readonly related: readonly string[];
+  readonly summary?: string;
+  readonly draft?: boolean;
+  readonly docKind?: 'post' | 'wiki';
+  readonly review?: { readonly status: 'pending' | 'reviewed' | 'stale'; readonly checkedAt?: string; readonly contentDigest?: string };
+  readonly original?: { readonly reason: string };
 }
 
 export interface PageToDocOptions {
-  /** 顶层 `summary:`。`readContentPage` 不返回它（四个站内调用方都不需要）。 */
+  /** 默认沿用读取器返回的摘要，显式选项优先。 */
   readonly summary?: string;
   /** `Doc.kind`：文档类型。默认 `'wiki'`。 */
   readonly docKind?: 'post' | 'wiki';
@@ -69,18 +74,21 @@ export interface PageToDocOptions {
  * 要用 id 的调用方（`content-manifest`）走构建期那条路，不走这里。
  */
 export function pageToDoc(page: ReadPage, options: PageToDocOptions = {}) {
+  const kind = options.docKind ?? page.docKind ?? 'wiki';
   return {
-    kind: options.docKind ?? 'wiki',
+    kind,
     slug: page.slug,
     title: page.title,
-    summary: options.summary ?? '',
+    summary: options.summary ?? page.summary ?? '',
     body: page.body,
     sources: page.sources,
-    wikiKind: page.kind,
+    wikiKind: kind === 'wiki' ? page.kind : undefined,
     // ⚠️ 字段名是 `declaredRelations`，**不是** `related`。
     // 传错键会被 `?? []` 静静兜成空数组——摘要照样算得出，只是永远对不上。
-    declaredRelations: options.relations ?? page.related,
+    declaredRelations: kind === 'wiki' ? (options.relations ?? page.related) : [],
+    ...(kind === 'wiki' && page.review ? { review: page.review } : {}),
+    ...(kind === 'wiki' && page.original ? { original: page.original } : {}),
     explicitSlug: options.explicitSlug ?? page.explicitSlug ?? false,
-    draft: options.draft ?? false,
+    draft: options.draft ?? page.draft ?? false,
   };
 }

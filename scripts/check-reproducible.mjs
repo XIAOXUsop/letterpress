@@ -96,6 +96,9 @@ async function snapshot(dir) {
       result.set(relative, {
         bytes: body.byteLength,
         sha256: createHash('sha256').update(body).digest('hex'),
+        // 只证明发布产物没有泄漏本机路径；不据此宣称跨目录构建哈希一致。
+        leaked: [root, root.replace(/\\/g, '/'), root.replace(/\\/g, '\\\\'), encodeURI(root.replace(/\\/g, '/'))]
+          .some((path) => body.includes(Buffer.from(path))),
       });
     }
   }
@@ -138,6 +141,12 @@ if (first.size === 0 || second.size === 0) {
   console.error('检查失败：至少一次构建没有产生任何文件。');
   process.exit(1);
 }
+const leaked = [...new Set([...first, ...second].filter(([, value]) => value.leaked).map(([path]) => path))];
+if (leaked.length > 0) {
+  console.error(`检查失败：发布产物包含本机仓库路径：${leaked.join('、')}`);
+  process.exit(1);
+}
+console.log('发布产物没有泄漏本机仓库路径。');
 if (differences.length > 0) {
   console.error(`检查失败：${differences.length} 个产物在 UTC 与 America/Los_Angeles 之间不同。`);
   for (const difference of differences.slice(0, 20)) {

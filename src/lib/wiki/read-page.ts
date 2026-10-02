@@ -32,7 +32,7 @@ export interface PageSourceRef {
 
 /** 页面上的复核记录。 */
 export interface PageReview {
-  readonly status: string;
+  readonly status: 'pending' | 'reviewed' | 'stale';
   readonly checkedAt?: string;
   /**
    * 复核当时的正文摘要。
@@ -54,8 +54,14 @@ export interface PageReview {
   readonly contentDigest?: string;
 }
 
+/** 调用方指定站点的关系字段和文档类型，核心不推断目录名称。 */
+export interface ReadContentOptions {
+  readonly relationField?: string;
+  readonly docKind?: 'post' | 'wiki';
+}
+
 /** 读一页内容，取出检索与影响分析共需要的字段。 */
-export function readContentPage(dir: string, file: string): {
+export function readContentPage(dir: string, file: string, options: ReadContentOptions = {}): {
   readonly slug: string;
   readonly explicitSlug: boolean;
   readonly title: string;
@@ -78,6 +84,8 @@ export function readContentPage(dir: string, file: string): {
    */
   readonly sources: readonly PageSourceRef[];
   readonly review?: PageReview;
+  readonly original?: { readonly reason: string };
+  readonly docKind?: 'post' | 'wiki';
   readonly related: readonly string[];
   /** frontmatter 之后的正文（不含 frontmatter）。**已 trim，与 Astro 的 `entry.body` 同口径。** */
   readonly body: string;
@@ -141,9 +149,23 @@ export function readContentPage(dir: string, file: string): {
   const review = rawReview && typeof rawReview === 'object' && !Array.isArray(rawReview)
     ? rawReview as Record<string, unknown>
     : null;
-  const related = data?.related;
+  const reviewStatus = review?.status;
+  if (rawReview != null && (!review || !['pending', 'reviewed', 'stale'].includes(String(reviewStatus)))) {
+    throw new Error(`${file} 的 review.status 必须是 pending、reviewed 或 stale。`);
+  }
+  const relationField = options.relationField ?? 'related';
+  const related = data[relationField];
   if (related != null && !Array.isArray(related)) {
-    throw new Error(`${file} 的 related 必须是数组。`);
+    throw new Error(`${file} 的 ${relationField} 必须是数组。`);
+  }
+  if (related?.some((item: unknown) => typeof item !== 'string')) {
+    throw new Error(`${file} 的 ${relationField} 条目必须是字符串。`);
+  }
+  const original = data.original;
+  const reason = original && typeof original === 'object' && !Array.isArray(original)
+    ? (original as Record<string, unknown>).reason : undefined;
+  if (original != null && (typeof reason !== 'string' || !reason.trim())) {
+    throw new Error(`${file} 的 original 必须包含非空 reason。`);
   }
 
   return {
@@ -186,11 +208,13 @@ export function readContentPage(dir: string, file: string): {
     updated: scalar('updated') ?? '',
     sources: refs,
     ...(review?.status ? { review: {
-      status: String(review.status),
+      status: reviewStatus as PageReview['status'],
       ...(review.checkedAt ? { checkedAt: String(review.checkedAt) } : {}),
       ...(review.contentDigest ? { contentDigest: String(review.contentDigest) } : {}),
     } } : {}),
     related: (related ?? []).map((item: unknown) => String(item)),
+    ...(typeof reason === 'string' ? { original: { reason } } : {}),
+    ...(options.docKind ? { docKind: options.docKind } : {}),
     body,
   };
 }
@@ -201,7 +225,7 @@ export function readContentPage(dir: string, file: string): {
  * 两个目录都要读（wiki 与 posts），且必须递归，与 Astro 的内容 glob 一致。
  * 否则文章或子目录里的来源会从影响分析与检索中消失。
  */
-export function readContentDirs(dirs: readonly string[]): {
+export function readContentDirs(dirs: readonly string[], options: ReadContentOptions = {}): {
   readonly pages: ReturnType<typeof readContentPage>[];
   readonly counts: ReadonlyMap<string, number>;
 } {
@@ -219,7 +243,7 @@ export function readContentDirs(dirs: readonly string[]): {
     walk('');
     files.sort();
     counts.set(dir, files.length);
-    for (const file of files) pages.push(readContentPage(dir, file));
+    for (const file of files) pages.push(readContentPage(dir, file, options));
   }
   return { pages, counts };
 }

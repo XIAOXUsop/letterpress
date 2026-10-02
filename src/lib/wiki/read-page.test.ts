@@ -90,10 +90,10 @@ describe('readContentPage', () => {
       expect(readContentPage(dir, 'a.md').review).toBeUndefined();
     });
 
-    it('review: 存在但没有 status 时也是 undefined', () => {
+    it('review: 存在但没有 status 时拒绝无效复核记录', () => {
       // 只有 status 是必填的（它是这条状态机的主键）
       write('a.md', ['---', 'review:', '  checkedAt: 2026-09-24', '---', '', '正文。', ''].join('\n'));
-      expect(readContentPage(dir, 'a.md').review).toBeUndefined();
+      expect(() => readContentPage(dir, 'a.md')).toThrow('review.status');
     });
 
     it('CRLF 换行同样能解析', () => {
@@ -294,6 +294,33 @@ describe('readContentPage', () => {
   });
 
   describe('readContentDirs', () => {
+    it('单页和递归读取都支持自定义关系字段及文档类型', () => {
+      mkdirSync(join(dir, 'nested'));
+      writeFileSync(join(dir, 'nested', 'entry.md'), '---\ntitle: 条目\nsummary: 摘要\naudience:\n  - "含,逗号"\n  - 另页\n---\n正文。');
+      const options = { relationField: 'audience', docKind: 'wiki' as const };
+      const single = readContentPage(dir, 'nested/entry.md', options);
+      const { pages } = readContentDirs([dir], options);
+      expect(pages).toEqual([single]);
+      expect(single.related).toEqual(['含,逗号', '另页']);
+      expect(single.docKind).toBe('wiki');
+      expect(readContentPage(dir, 'nested/entry.md').related).toEqual([]);
+    });
+
+    it('关系字段拒绝错误形状，不将对象或数字转换成假链接', () => {
+      for (const value of ['target', '[1]', '[{target: a}]']) {
+        write('a.md', `---\ntitle: 甲\naudience: ${value}\n---\n正文。`);
+        expect(() => readContentDirs([dir], { relationField: 'audience' })).toThrow('audience');
+      }
+    });
+
+    it('原创理由按 YAML 读取，拒绝空声明和无效复核状态', () => {
+      write('a.md', '---\ntitle: 甲\noriginal: {reason: "实践 # 不是注释"}\n---\n正文。');
+      expect(readContentDirs([dir]).pages[0].original).toEqual({ reason: '实践 # 不是注释' });
+      write('a.md', '---\ntitle: 甲\noriginal: {reason: ""}\n---\n正文。');
+      expect(() => readContentPage(dir, 'a.md')).toThrow('original');
+      write('a.md', '---\ntitle: 甲\nreview: {status: garbage}\n---\n正文。');
+      expect(() => readContentPage(dir, 'a.md')).toThrow('review.status');
+    });
     it('跨目录汇总，counts 按**目录**给出文档数', () => {
       // 传入的是内容目录；子目录也应参与汇总。
       // ⚠️ `counts` 的键是**目录**不是 slug——它的用途是

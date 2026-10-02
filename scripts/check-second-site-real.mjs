@@ -29,10 +29,7 @@
  *
  * ── 它第一次跑就抓到三件事 ──────────────────────────────────────────
  *
- * ① `readContentPage` **不返回 `summary`**（它是给检索用的，检索不需要摘要），
- *    而 `Doc.summary` 是**必填 `string`**、`lint` 直接 `.trim()` →
- *    不补就崩。**这是迭代 N 那个「类型说是必填、实际可能是 undefined」的同型复发**，
- *    而它在本站 467 条测试里从没出现过——因为站内两个调用方都老实填了。
+ * ① 旧读取器未提供摘要，适配层曾重复补字段。现在由共享读取器提供。
  *
  * ② 我第一版探针读了 `graph.ambiguous`（= 引用打向歧义标题的**引用**），
  *    而要看的是 `graph.ambiguousTitles`（= 同名标题本身）——
@@ -54,7 +51,7 @@ import { join } from 'node:path';
 import { buildGraph } from '../src/lib/wiki/graph.ts';
 import { lint } from '../src/lib/wiki/lint.ts';
 import { computeImpact, isDisjoint } from '../src/lib/wiki/impact.ts';
-import { readContentPage } from '../src/lib/wiki/read-page.ts';
+import { readContentPage, readContentDirs } from '../src/lib/wiki/read-page.ts';
 import { frontmatterField } from '../src/lib/wiki/frontmatter.ts';
 import { resolveSlug } from '../src/lib/wiki/slug.ts';
 import { pageToDoc } from '../src/lib/wiki/page-to-doc.ts';
@@ -67,44 +64,16 @@ const DIR = join(ROOT, 'knowledge', 'fixtures', 'second-site');
 console.log('第二份真实内容集（读文件，不是合成数组）');
 console.log('─'.repeat(64));
 
-const files = readdirSync(DIR).filter((f) => /\.mdx?$/.test(f));
+const files = readdirSync(DIR).filter((f) => /\.mdx?$/.test(f)).sort();
 if (files.length === 0) {
   console.error('fixture 目录里没有内容——这个检查没量到东西。');
   process.exit(1);
 }
 
-/*
- * ── 映射层：一个真实站点的适配器要做的事 ──────────────────────────
- *
- * **这就是阶段 4 第 5 项要验的那一步。**
- * 它需要两个读取器，因为字段分在两处：
- *   - `readContentPage` 解析**嵌套块**（`review:` / `sources:`）与正文；
- *   - `frontmatterField` 解析**顶层标量**（`summary:`）。
- * （迭代 AO 同一个结论：两个都要，一个都不够。）
- *
- * 而 `audience:` 是**这个站点自己的字段名**——核心不认识它，
- * 适配层负责翻译成 `related`。**这正是「剥离站点展示逻辑」要留的口子。**
- */
-const pages = files.map((file) => {
-  const page = readContentPage(DIR, file);
-  const source = readFileSync(join(DIR, file), 'utf8');
-  return {
-    page,
-    summary: frontmatterField(source, 'summary') ?? '',
-    // ⚠️ **这 5 行是这个适配层里唯一「站点专属」的部分。**
-    // 站点把关系声明叫 `audience`，核心只认 `related`。
-    // 其余的接线（补 summary、拼 Doc、填显式字段）由 `pageToDoc` 提供——
-    // **那不是适配，是每站都要重写一遍的接线**（迭代 AS 实测：27 行里 22 行是它）。
-    audience: (frontmatterField(source, 'audience') ?? '')
-      .replace(/^\[|\]$/g, '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-  };
-});
-
-const docs = pages.map(({ page, summary, audience }) =>
-  pageToDoc(page, { summary, relations: audience }));
+// 站点只提供目录和关系字段；YAML 解析、摘要及 Doc 组装沿用核心流程。
+const pages = readContentDirs([DIR], { relationField: 'audience', docKind: 'wiki' })
+  .pages.map((page) => ({ page }));
+const docs = pages.map(({ page }) => pageToDoc(page));
 
 console.log(`  读了 ${docs.length} 篇：${docs.map((d) => d.slug).join('、')}\n`);
 
@@ -218,7 +187,7 @@ if (!SLUG_PROBE.ok) {
  * **不是对着「跑起来没崩」**。
  */
 const checks = [
-  ['全部文档有 summary（映射层补的，不是 readContentPage 给的）',
+  ['全部文档有 summary（由共享 YAML 读取器提供）',
     docs.every((d) => typeof d.summary === 'string' && d.summary.length > 0)],
 
   /*
