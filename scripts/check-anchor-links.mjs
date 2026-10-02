@@ -81,13 +81,40 @@ for (const f of docs) {
 }
 
 // ── 逐个核实 ────────────────────────────────────────────────────────
+//
+// ⚠️ **两类锚点，此前只核了后一类**（2026-09-29 实测）：
+//
+//   ① **同页锚点** `](#深入)`——指向**本文件**里的某个标题。
+//      README 的主导航就靠它，而它**一处都没被核过**。
+//   ② **跨文件** `](./other.md#frag)`——指向另一份文档的标题。
+//
+// 只核 ② 的话，README 那行 `[文档](#深入)` 写错也**没有任何东西会红**，
+// 而它是**对外的门面**——读者点「文档」落到页面顶部，不会以为链接坏了，
+// 只会以为「这里没有文档」。
 const problems = [];
-let total = 0;
+let sameCount = 0;
+let crossCount = 0;
+
 for (const f of docs) {
   const text = readFileSync(f, 'utf8');
+  const selfAnchors = anchors.get(norm(relative(ROOT, f)));
+
   text.split('\n').forEach((line, i) => {
+    // 同页锚点：`](#frag)` —— 前面不能是别的路径（那样会被 ② 抓到）
+    for (const m of line.matchAll(/\]\(#([^)\s]+)\)/g)) {
+      sameCount++;
+      const frag = m[1].toLowerCase();
+      if (selfAnchors && selfAnchors.has(frag)) continue;
+      problems.push(
+        `${norm(relative(ROOT, f))}:${i + 1}  \`#${m[1]}\`（**同页锚点**）\n` +
+          `      本文件的标题锚点：` +
+          `${[...(selfAnchors ?? [])].filter((x) => !x.endsWith('-1')).join('、') || '（一个标题都没有）'}`,
+      );
+    }
+
+    // 跨文件锚点：`](path.md#frag)`
     for (const m of line.matchAll(/\]\(([^)#\s]+\.md)#([^)\s]+)\)/g)) {
-      total++;
+      crossCount++;
       const [, target, frag] = m;
       const p = norm(relative(ROOT, join(dirname(f), target)));
       const have = anchors.get(p);
@@ -101,9 +128,28 @@ for (const f of docs) {
   });
 }
 
+const total = sameCount + crossCount;
+
 console.log('文档里的锚点链接');
 console.log('─'.repeat(64));
-console.log(`  扫了 ${docs.length} 份文档、${total} 处锚点链接（slug 规则与 GitHub 一致）\n`);
+console.log(
+  `  扫了 ${docs.length} 份文档、${total} 处锚点链接` +
+    `（同页 ${sameCount} / 跨文件 ${crossCount}；slug 规则与 GitHub 一致）\n`,
+);
+
+/*
+ * ⚠️ **「一处都没扫到」必须失败**——与其它检查同一条原则。
+ *
+ * 2026-09-29 之前这里没有这条守卫，而那时的实际情况是
+ * **总数只有 1**（只有跨文件那一类）——一个印着「✓」的行，
+ * 底下是一个几近为零的覆盖面。**一个几乎不量东西的检查，
+ * 和没有这个检查是一回事，而它的绿还会让人以为有人管着。**
+ */
+if (total === 0) {
+  console.error('  ✗ 一处锚点链接都没扫到——这一步什么都没验证，不能报通过');
+  console.error('    若文档里确实一处都没有，请删掉这道门禁，而不是留着它报绿。');
+  process.exit(1);
+}
 
 if (problems.length > 0) {
   for (const p of problems) console.log(`  ✗ ${p}`);
