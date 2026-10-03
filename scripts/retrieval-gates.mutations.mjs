@@ -92,7 +92,24 @@ if (clean.status !== 0) {
   console.log(`  ✗ 干净状态下金标就不通过（退出码 ${clean.status}）——先修那个`);
   process.exit(1);
 }
-console.log('  ✓ 干净状态：22/22 通过\n');
+/*
+ * ⚠️ **这个数此前是手写的「22/22」**（2026-09-29 改）。
+ *
+ * 而金标在 2026-09-24 之后已经从 19 条长到 23 条、语料从 6 页到 11 页——
+ * **它没跟着动，而没有任何东西会红**：那是一行 `console.log`。
+ *
+ * > 与 `docs/retrieval.md` 里那句「红 2 条」是同一类：
+ * > **散文里的数，没有门禁盯着。**
+ *
+ * 现在从金标自己的输出里读——**它是权威的那一份**。
+ */
+const cleanOut = clean.stdout ?? '';
+const summaryLine = cleanOut.split('\n').find((l) => l.includes('条问题'));
+if (!summaryLine) {
+  console.log('  ✗ 读不到金标的汇总行——本轮的「干净状态」说法没有依据');
+  process.exit(1);
+}
+console.log(`  ✓ 干净状态：${summaryLine.trim()}`);
 
 for (const gate of GATES) {
   if (!original.includes(gate.from)) {
@@ -119,6 +136,36 @@ if (runGold().status !== 0) {
   process.exit(1);
 }
 console.log('\n  ✓ 恢复后：绿（源码已还原）\n');
+
+/*
+ * ── 顺带核一件事：文档里不许再出现**手抄的闸统计** ────────────────────
+ *
+ * ⚠️ **2026-09-29 加。** `docs/retrieval.md` 里曾有两张手抄表
+ * （「每道闸的专属用例是哪一条」），记的是 2026-09-24 那次手工统计。
+ * 而**没有任何门禁核它们**——正是那份文档自己反复警告的那类。
+ *
+ * 本次重跑实测：**闸一已经红 5 条，而文档写的是 2 条**。
+ *
+ * 处置是**删表改指路**（「去跑这条命令，它每次打印当场算的数」）。
+ * 这条判据守住那个处置：文档里若又长出一张「闸 → 专属用例」的表，
+ * 它必须同时写明「以命令输出为准」。
+ *
+ * > **不是禁止写表格，是禁止写一张没人核的表格。**
+ */
+{
+  const doc = readFileSync(join(ROOT, 'docs', 'retrieval.md'), 'utf8');
+  const rows = [...doc.matchAll(/^\|\s*(?:闸[一二三四五]|接缝识别|单字母权重|问句壳剔除)[^|]*\|/gm)];
+  const hasPointer = /每次打印|当场算|以.{0,12}命令.{0,12}为准/.test(doc);
+  if (rows.length > 0 && !hasPointer) {
+    console.log(`  ✗ docs/retrieval.md 有 ${rows.length} 行手抄的闸统计，而没有指向命令的说明`);
+    console.log('      那类表记的是**某一次**的手工统计，会漂——2026-09-29 实测就漂过（2 → 3 → 5）。');
+    bad++;
+  } else if (rows.length > 0) {
+    console.log(`  ✓ docs/retrieval.md 有闸统计表，且写明了以命令输出为准`);
+  } else {
+    console.log('  ✓ docs/retrieval.md 没有手抄的闸统计表');
+  }
+}
 /*
  * 收尾断言见 `lib/worktree-assert.mjs` 的文件头。
  *
