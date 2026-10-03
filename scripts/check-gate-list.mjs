@@ -141,6 +141,7 @@ const EXPECTED = [
   ['npm run verify:anchors', '锚点契约'],
   ['npm run verify:reproducible', '跨时区可复现构建'],
   ['npm run verify:base', '子路径部署'],
+  ['npm run verify:ndjson', '**`content.ndjson` 里的正文与 `.md` 逐字节一致**（bytes 按 UTF-8 算、sha256 同时匹配）。⚠️ **2026-09-29 新加**：`docs/content-export.md` 对消费端承诺了这一条，而此前**没有任何门禁核它**——`check-manifest-schema` 核 manifest 的 schema、`check-base` 核 NDJSON 的**链接前缀**，**正文本身没人核**'],
   ['npm run check:manifest-schema', '**产物符合 JSON Schema，且三处 version 一致**（自己先 build：不依赖前面步骤的副作用）'],
   ['npm run check:refs', '**文档里提到的路径都存在**（排在 `verify:formats` **之前**——后者跑完会清空 `dist`，而本检查要 dist 才判产物）。⚠️ **2026-09-29 挪的位置**：它此前排在 `verify:formats` **之后**，理由是「放最后才能判产物」——**而那与事实相反**：它每次都打印「无 dist」，产物那一类**从未被检查过**。同一个位置上 `check:manifest-schema` 早被修过，差别只在**一个报错、一个沉默**'],
   ['npm run verify:formats', '内容发布探针 + 产物级断言'],
@@ -1358,7 +1359,20 @@ for (const { gate, mutations } of GATES_WITH_MUTATIONS) {
   const RECOMPUTABLE = [
     {
       what: '命令数',
-      re: /(\d+)\s*个(?:单文件)?命令/g,
+      /*
+       * ⚠️ **2026-09-29 加了前缀限定**：这条正则原先是裸的 `(\d+)\s*个(?:单文件)?命令`，
+       * 于是台账里**三处历史叙述**（「一次性探针扫了 N 个」、
+       * 「N 个单文件脚本里有 8 个命令名与脚本名不同」）**全部被当成现状声明**——
+       * 而那是在记当时发生过的事，**核它们反而是错的**。
+       *
+       * > 本列表头部自己写着「每条正则都要**排除明显是历史的写法**」，
+       * > **而这一条没做**——同一个文件里，有的做了有的没做。
+       *
+       * 现在要求数字**紧跟在现状标志词后面**（「共 N 个命令」这种）。
+       * ⚠️ 而它**必然漏**：将来有人写一句不带标志的现状声明就核不到——
+       * 那是在「太宽变噪声」与「太窄漏报」之间选的后者，理由见上面那段。
+       */
+      re: /(?:共|全部|现有|目前是|现在有)\s*(\d+)\s*个(?:单文件)?命令/g,
       min: 10,   // 排除「4 个命令」这类举例
       actual: () => {
         const m = CMD_SCRIPTS_OUT();
@@ -2024,6 +2038,12 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
      * > 而**两种需要不同处置**：前者永久豁免，**后者是待办、该补变异**。
      * > **不写明是哪一类，这条豁免就变成了「永久忘了」的合法借口。**
      */
+    ['check:ndjson', '**【验不了】**与 `check:manifest-schema` 同因：'
+      + '它读的是**产物**（`dist/content.ndjson` 与 `dist/**.md`），'
+      + '而**变异改产物会被重建覆盖**。'
+      + '⚠️ 而这条**不是**「没人管它」：它的三条判据（正文与 .md 逐字节一致 / '
+      + 'bytes 是 UTF-8 字节数 / sha256 匹配）在加它那天**逐条手工注入验过**，'
+      + '三种坏法都会让它红——**只是那不能被固化成常驻变异**。'],
     ['verify:online', '**【验不了】**它对**线上 Demo** 跑，'
       + '而 Pages 上 7 项协商必然红（README 写明的限制）——'
       + '**没有可控的环境就注入不了缺陷**。它也不在 `verify:all` 里。'],
