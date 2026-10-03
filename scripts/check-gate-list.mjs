@@ -142,9 +142,9 @@ const EXPECTED = [
   ['npm run verify:reproducible', '跨时区可复现构建'],
   ['npm run verify:base', '子路径部署'],
   ['npm run check:manifest-schema', '**产物符合 JSON Schema，且三处 version 一致**（自己先 build：不依赖前面步骤的副作用）'],
+  ['npm run check:refs', '**文档里提到的路径都存在**（排在 `verify:formats` **之前**——后者跑完会清空 `dist`，而本检查要 dist 才判产物）。⚠️ **2026-09-29 挪的位置**：它此前排在 `verify:formats` **之后**，理由是「放最后才能判产物」——**而那与事实相反**：它每次都打印「无 dist」，产物那一类**从未被检查过**。同一个位置上 `check:manifest-schema` 早被修过，差别只在**一个报错、一个沉默**'],
   ['npm run verify:formats', '内容发布探针 + 产物级断言'],
   ['npm run check:anchors', '**文档里的锚点链接点得到**（slug 规则与 GitHub 一致）'],
-  ['npm run check:refs', '**文档里提到的路径都存在**（放最后：verify:formats 会清 dist，本检查要 dist 才判产物）'],
   ['npm run check:agents-doc', '**AGENTS.md 的可证伪声明还成立**（规则名 / 例子 slug / 行为声明）'],
   ['npm run check:onboarding-doc', '**接线文档里的实测数字与现在跑出来的一致**（判据从文档表格里解析数字，不核脚本里的常量）'],
   ['npm run check:two-paths', '**读路径与构建路径对「post 拿不到什么」同一口径**（`related` / `review` / `original` / `wikiKind`）——本站 posts 里 0 篇写这些字段，所以那处分歧从未发作过'],
@@ -1981,6 +1981,17 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
    * 写不出来就说明只是懒得写，那该补变异。
    */
   /*
+   * ⚠️ **2026-09-29：`verify:review` 也从这里移出去了**，理由是实测：
+   * 它那两条判据（状态一致 / 摘要一致）与**递归读子目录**
+   * 都已经有变异守着——**而递归那条登记在 `check:field-coverage` 名下**。
+   *
+   * > 台账里「递归这件事从未被破坏过」**是过时的**，
+   * > 而它的过时方式很值得记：**变异早在，只是登记在另一个门禁名下**，
+   * > 从 `verify:review` 那一行看不出来。
+   * >
+   * > **「这一道有没有变异」不能只在该门禁自己名下找。**
+   */
+  /*
    * ⚠️ **2026-09-29：`check:anchors` 从这里移出去了。**
    *
    * 它长期登记为「**【该验未验·待办】**——这一道从未被负向验证碰过」。
@@ -2016,10 +2027,6 @@ for (const docPath of DOCS_WITH_STEP_COUNT) {
     ['verify:online', '**【验不了】**它对**线上 Demo** 跑，'
       + '而 Pages 上 7 项协商必然红（README 写明的限制）——'
       + '**没有可控的环境就注入不了缺陷**。它也不在 `verify:all` 里。'],
-    ['verify:review', '**【该验未验·待办】**台账记「6 个知识页全部一致」，'
-      + '而**「全对」与「没看见」在输出上一样**（形态十一）。'
-      + '它已换成递归的 `listWikiFiles`，而**递归这件事从未被破坏过**——'
-      + '**这是待补的变异，不是豁免。**'],
     ['check:refs', '**【该验未验·待办】**它在 `check-doc-refs` 的'
       + '「刻意不校验登记」表里，**而那是一份「哪些路径刻意不查」的清单**，'
       + '**不是「验过会红」的记录**。**这是待补的变异，不是豁免。**'],

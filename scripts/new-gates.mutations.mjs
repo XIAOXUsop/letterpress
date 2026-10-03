@@ -1396,7 +1396,7 @@ const CASES = [
      * > 这也说明**锚点挑哪一条是有讲究的**：不能挑一条「随时会被修好」的登记，
      * > 否则修好它的那一刻，变异就静默失效了。
      */
-    find: "    ['verify:review', '**【该验未验·待办】**台账记「6 个知识页全部一致」，'",
+    find: "    ['check:refs', '**【该验未验·待办】**它在 `check-doc-refs` 的'",
     replace: "    // MUTATION：摘掉这一条登记",
     target: 'check-gate-list.mjs',
   },
