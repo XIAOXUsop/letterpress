@@ -631,6 +631,64 @@ const GATES = [
   'verify-negotiation.mjs',
 ];
 
+/*
+ * ── 自检：CASES 里不许有**重复的顶层键** ──────────────────────────────
+ *
+ * ⚠️ **2026-09-29 加，起因是一次真实的静默失效。**
+ *
+ * 两条变异各有一个**残留的第二个 `replace:` 键**（早先替换留下的）：
+ *
+ *     find: '…',
+ *     replace: '…',        ← 这个生效
+ *     replace: '…',        ← 覆盖上面那个，而它与 find 不匹配
+ *
+ * JavaScript 的对象字面量里**后者覆盖前者**，于是 `String.replace`
+ * 拿着一个不匹配的 `replace` 去替换——**找不到就原样返回，文件根本没变**。
+ * 而 `mutate()` 的锚点断言只检查 `find` 出现几次（**1 次，正常**），
+ * 于是注入「成功」了、门禁没红，**套件报「这道门禁对该缺陷没有覆盖」**。
+ *
+ * > **症状与「判据真有盲区」完全一样**——而真相是变异自己没生效。
+ * > 这与本文件反复记的那条同族：「**绿既可能是它没看见，也可能是压根没喂进去**」。
+ *
+ * 判据是**源码级**的：把 CASES 那块按对象切开，数每个对象里的顶层键。
+ * （`alsoEdit` 里的 `find` / `replace` 是**嵌套键**，不算重复——
+ * 所以只在**缩进为 4 空格**的层级上数。）
+ */
+{
+  const self = readFileSync(join(ROOT, 'scripts', 'new-gates.mutations.mjs'), 'utf8');
+  const s = sliceArrayLiteral('scripts/new-gates.mutations.mjs', 'CASES');
+  const body = s ? s.body : '';
+  // 顶层键的缩进是 4 空格；嵌套（alsoEdit 里）是 6 空格以上
+  const keys = [...body.matchAll(/^    (why|file|find|replace|target|covers):/gm)].map((m) => m[1]);
+  const seen = new Map();
+  const dupes = [];
+  // 每个对象以 `why:` 开头，用它切开
+  const chunks = body.split(/(?=^    why:)/m);
+  for (const c of chunks) {
+    const own = [...c.matchAll(/^    (why|file|find|replace|target|covers):/gm)].map((m) => m[1]);
+    const local = new Map();
+    for (const k of own) {
+      local.set(k, (local.get(k) ?? 0) + 1);
+      if (local.get(k) === 2) {
+        dupes.push(`${c.match(/why: '([^']+)'/)?.[1] ?? '（读不到 why）'} → 重复键 \`${k}\``);
+      }
+    }
+  }
+  if (dupes.length > 0) {
+    console.log('');
+    console.log(`  ✗ CASES 里有 ${dupes.length} 处**重复的顶层键**：`);
+    for (const d of dupes) console.log(`      ${d}`);
+    console.log('      JS 里后者覆盖前者，于是 `String.replace` 拿着一个不匹配的');
+
+    console.log('      `replace` 去替换——**文件根本没变，而锚点断言照样通过**。');
+    problems.push(
+      `CASES 里有 ${dupes.length} 处重复的顶层键（${dupes.join('；')}）。\n`
+      + '    JS 对象字面量里后者覆盖前者 → 注入静默失效，\n'
+      + '    而症状是「这道门禁对该缺陷没有覆盖」——**与判据真有盲区长得一样**。',
+    );
+  }
+}
+
 const CASES = [
   {
     /*
