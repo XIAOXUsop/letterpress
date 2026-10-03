@@ -634,6 +634,28 @@ const GATES = [
 const CASES = [
   {
     /*
+     * ⚠️ **守着 `verify:search` 新加的那条：README 的「站内 JS」那行
+     * 必须说明 UI 包从不请求。**
+     *
+     * 实测过的反例（2026-09-29）：那一行曾写「访问者真正会加载的是 5 个 js：
+     * `pagefind.js` + `pagefind-worker.js` + **三个 UI 包**」——
+     * **把「产物里有」当成了「访问者会加载」**。而本站自己写了搜索界面
+     * （不用 `@pagefind/default-ui`），那些 UI 包**一个都不请求**。
+     *
+     * > 这个分类**每天都被 `verify:search` 算出来并打印**，
+     * > 而 README 里的结论是反的，**没有任何东西会红**。
+     * > **「算出来了」与「有人拿它对过」是两件事。**
+     *
+     * 变异把那半句摘掉——新判据若真在跑，必红。
+     */
+    why: 'verify:search — README 的站内 JS 那行不再说明 UI 包从不请求',
+    file: 'README.md',
+    find: '其中 7 个 Pagefind 自带 UI 包（410 KB）**本站从不请求**——',
+    replace: '其中 7 个 Pagefind 自带 UI 包（410 KB）——',
+    target: 'check-search.mjs',
+  },
+  {
+    /*
      * ⚠️ **守着 `check:anchors`——它在台账里长期写着「从未被负向验证碰过」。**
      *
      * 变异模拟**真实**的漂移方式：**改标题、链接没跟着改**。

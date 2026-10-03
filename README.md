@@ -234,7 +234,7 @@ review:
 | 可复现构建 | UTC / America/Los_Angeles 两次完整构建，当前 **107 个文件跨时区逐字节一致**；另禁止生产源码读取构建时钟 |
 | 构建 | 32 页；`astro build` 自报 **1.21 / 1.21 / 1.23 秒**（三次），整条 `npm run build` **2.94 / 2.98 / 2.96 秒**；Pagefind 自己报 0.136 秒、单独跑 `npx pagefind` 共 0.66 秒。**差值约 1.5 秒是 npm 起 node、连跑两条 npm script 的开销**（本机 Windows 实测；原表写的 1.1 / 2.6 秒偏低，且把差值的成因写成"npm 启动开销 + Pagefind 0.14 秒"，量级对、口径没有出处） |
 | 外链 JS | **0 个**（内联也少：首页 2.5 KB） |
-| 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind 1.5.2，实测运行时资源 **6 个 js**、未压缩共 **431 KB**（441271 bytes；`npm run measure` 的口径，全部 6 个 gzip 合计 **105 KB**）；**访问者真正会加载的是 5 个 js**：`pagefind.js` + `pagefind-worker.js` + 三个 UI 包，未压缩 387 KB、**gzip 93 KB**；其中三个 UI 包单独算是 302 KB / gzip 69 KB。复测日期 2026-09-24；此前写的「17 个文件、146 KB gzip」在当前环境**已无法复现**（pagefind 版本未变而产物结构对不上），故改为可复现的口径 |
+| 站内 JS | 文章页 **0 个文件**；只有搜索页按需加载同源 Pagefind 1.5.2。**访问者真正会加载的是 `pagefind.js` + `pagefind-worker.js` + 三个 `wasm` 分词器**，未压缩 223 KB / **gzip 163 KB**（含按需取用的索引分片 12 个、71 KB，**不是一次性下完**）；`npm run measure` 报的 **6 个 js**、未压缩 **431 KB**（gzip 105 KB）是**产物体积**，其中 7 个 Pagefind 自带 UI 包（410 KB）**本站从不请求**——本站 「自己写了约 80 行搜索界面」而非用 `@pagefind/default-ui`，原因见 `src/pages/search.astro` 的文件头。⚠️ **2026-09-29 更正**：此前这里写「访问者真正会加载 5 个 js：`pagefind.js` + worker + **三个 UI 包**」——**把「产物里有」当成了「访问者会加载」**，而实际加载的是三个 wasm 分词器，UI 包一个都不请求。`npm run verify:search` 早就在按运行时文件集分类打印这件事，**而 README 没跟着它走** |
 | CSS | 单文件 **24.5 KB / gzip 5.2 KB** |
 | 字体 | **100 KB**（只含拉丁子集；中文走系统字体，零额外下载） |
 | 对比度 | 亮暗双模式，所有文字实测 **≥4.5:1** |

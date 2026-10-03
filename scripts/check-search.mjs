@@ -337,6 +337,35 @@ if (searchPages.length === 1) {
     if (unused.length > 0) {
       console.log(`      · 产物里另有 ${unused.length} 个 Pagefind 自带 UI 包本站**从不请求**：`
         + `${(sum(unused) / 1024).toFixed(0)} KB（只增加产物体积，不进任何访问者的带宽）`);
+
+      /*
+       * ⚠️ **README 说过反话，所以要在这里核它。**（2026-09-29 补）
+       *
+       * README 的「站内 JS」那一行曾写：
+       * 「访问者真正会加载的是 **5 个 js**：`pagefind.js` + `pagefind-worker.js`
+       *   + **三个 UI 包**」——**把「产物里有」当成了「访问者会加载」**。
+       *
+       * 而本站**自己写了搜索界面**（见 `src/pages/search.astro` 文件头：
+       * 不用 `@pagefind/default-ui`，因为它的圆角/阴影/间距与设计令牌冲突），
+       * 所以那些 UI 包**一个都不请求**；访问者实际加载的是
+       * `pagefind.js` + worker + **wasm 分词器**。
+       *
+       * > 这个数字**每天都被本检查算出来并打印**——
+       * > 而 README 里的结论是反的，没有任何东西会红。
+       * > **「算出来了」与「有人拿它对过」是两件事。**
+       */
+      const readme = await readFile(join(process.cwd(), 'README.md'), 'utf-8');
+      const uiRow = readme.split('\n').find((l) => l.startsWith('| 站内 JS |'));
+      if (uiRow && !uiRow.includes('从不请求')) {
+        problems.push(
+          'README 的「站内 JS」那一行没有说明 **UI 包从不请求**——'
+          + '而产物里确实有 ' + unused.length + ' 个（' + (sum(unused) / 1024).toFixed(0) + ' KB）。\n'
+          + '    2026-09-29 实测过一次反例：那一行曾写「访问者真正会加载 5 个 js：'
+          + 'pagefind.js + worker + **三个 UI 包**」，'
+          + '**把「产物里有」当成了「访问者会加载」**。',
+        );
+        console.log('  ✗ README 的站内 JS 那行没说 UI 包从不请求');
+      }
     }
   } else {
     const lack = missing.length > 0 ? missing : ['索引或分词器（wasm.*.pagefind / *.pf_meta）'];
