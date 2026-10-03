@@ -207,9 +207,48 @@ for (const q of questions) {
     console.log(`    ${mark} ${q.question}`);
     if (verbose || q.noAnswer) console.log(`        ${shown}`);
   } else if (q.knownLimit) {
+    /*
+     * ⚠️ **这一支此前把 `fails` 丢掉了**（2026-09-29 补）——
+     * 只打印登记的那条旧理由，**不看这次实际为什么失败**。
+     *
+     * 于是两种坏法都盖不住：
+     *   ① **失败原因变了**：原来因为 A 失败，现在因为 B——
+     *      而这里仍然复述 A，看起来「还是那条已知局限」；
+     *   ② **失败得更严重了**：原来「少 1 页」，现在「少 3 页」——
+     *      `fails` 里有几条它一条都不显示。
+     *
+     * > **「不计为失败」不等于「不用看」。** 已知局限是**一条被接受的现状**，
+     * > 而现状会变——不变的那部分才是豁免，变了的那部分是新信息。
+     */
+    /*
+     * ⚠️ **`sameShape` 的判据放宽过一次**（2026-09-29）。
+     *
+     * 第一版只认「**少了 X**」这一种形态，于是三条已知局限**每条**都打
+     * 「登记的理由还写得对吗？」——而其中两条的失败是
+     * 「**期望有依据却报了没有依据**」，那恰恰是这条局限的**本来含义**。
+     *
+     * > **提示语恒真，就等于没有提示语**——它会把真信号淹掉。
+     * > 这与本文件开头防的「一个会误报的检查训练人忽略输出」是同一条。
+     *
+     * 现在认两种**正常的**失败形态：
+     *   - 少了某页（`少了 X`）——召回不足；
+     *   - 期望有依据却报了没有依据——**这正是「已知局限」类的典型形态**
+     *     （覆盖度不够 → 判定为没有依据）。
+     * 只有条数 > 1（失败得更多了），或形态完全不在这两种里，才提示。
+     */
+    const FAIL_SHAPES = [
+      (f) => f.startsWith('少了 '),
+      (f) => f.startsWith('期望有依据') || f.startsWith('期望「没有依据」'),
+    ];
+    const sameShape = fails.length === 1 && FAIL_SHAPES.some((m) => m(fails[0]));
     knownLimits.push(`${q.question} —— ${q.knownLimit}`);
     console.log(`    ✗ ${q.question}`);
-    console.log(`        （已知局限，不计为失败）${q.knownLimit}`);
+    console.log(`        （已知局限，不计为失败）这是**登记的理由**：${q.knownLimit}`);
+    console.log(`        （**这次的实际情况**）${fails.join('；')}`);
+    if (!sameShape) {
+      console.log(`        ↑ 而这次的失败形态是**${fails.length} 条**，`
+        + '与常见的那种不同——**登记的理由还写得对吗？**');
+    }
   } else {
     console.log(`    ✗ ${q.question}`);
     for (const f of fails) console.log(`        ${f}`);
